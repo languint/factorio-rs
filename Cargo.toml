@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["crates/cargo-factorio"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-
+thiserror = "2.0.18"
 
 [workspace.lints.clippy]
 pedantic = { level = "deny", priority = -1 }
