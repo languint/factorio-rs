@@ -7,8 +7,45 @@ pub struct Symbol {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ModuleImport {
+    pub module: String,
+    pub local: String,
+    pub items: Vec<ImportedItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportedItem {
+    pub name: String,
+    pub local: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     pub name: String,
     pub body: Block,
     pub symbols: Vec<Symbol>,
+    pub imports: Vec<ModuleImport>,
+    pub submodules: Vec<String>,
+}
+
+impl Module {
+    pub fn imported_item_local(&self, type_name: &str) -> Option<&str> {
+        self.imports
+            .iter()
+            .flat_map(|import| import.items.iter())
+            .find_map(|item| {
+                if item.name == type_name {
+                    Some(item.local.as_str())
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn is_imported_type_extension(&self, struct_decl: &crate::structure::Struct) -> bool {
+        struct_decl.fields.is_empty()
+            && struct_decl.constants.is_empty()
+            && !struct_decl.methods.is_empty()
+            && self.imported_item_local(&struct_decl.name).is_some()
+    }
 }

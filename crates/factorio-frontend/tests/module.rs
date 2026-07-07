@@ -57,6 +57,8 @@ fn parses_module_with_private_helper_and_exported_handler() {
                     },
                 }),
             }],
+            imports: vec![],
+            submodules: vec![],
         }
     );
 }

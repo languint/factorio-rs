@@ -54,9 +54,9 @@ impl LuaGenerator {
     }
 
     /// Returns the module identifier that exported symbols will be attached to, e.g
-    /// `bound_detector` -> `boundDetector`.
+    /// `bound_detector` -> `boundDetector`, `player.extra_info` -> `playerExtraInfo`.
     fn module_identifier(module_name: &str) -> String {
-        heck::AsLowerCamelCase(module_name).to_string()
+        heck::AsLowerCamelCase(module_name.replace('.', "_")).to_string()
     }
 
     pub fn generate_module(&mut self, module: &Module) -> LuaGeneratorResult<String> {
@@ -67,8 +67,11 @@ impl LuaGenerator {
         self.output.push_str(&module_header);
         self.output.push('\n');
 
+        self.generate_imports(&module.imports);
+        self.generate_submodules(&module.submodules);
+
         for statement in &module.body.statements {
-            self.generate_statement(statement, None, Scope::Private)?;
+            self.generate_statement(statement, Some(module), None, Scope::Private)?;
         }
 
         let module_name = Self::module_identifier(&module.name);
@@ -76,12 +79,47 @@ impl LuaGenerator {
         self.write_line(&exporter_start);
 
         for symbol in &module.symbols {
-            self.generate_statement(&symbol.statement, Some(&module_name), symbol.scope)?;
+            self.generate_statement(
+                &symbol.statement,
+                Some(module),
+                Some(&module_name),
+                symbol.scope,
+            )?;
         }
 
         self.write_line(&exporter_end);
 
         Ok(self.output.clone())
+    }
+
+    fn generate_imports(&mut self, imports: &[factorio_ir::module::ModuleImport]) {
+        for import in imports {
+            self.write_line(&format!(
+                "local {} = require(\"{}\")",
+                import.local, import.module
+            ));
+
+            for item in &import.items {
+                self.write_line(&format!(
+                    "local {} = {}.{}",
+                    item.local, import.local, item.name
+                ));
+            }
+        }
+
+        if !imports.is_empty() {
+            self.output.push('\n');
+        }
+    }
+
+    fn generate_submodules(&mut self, submodules: &[String]) {
+        for submodule in submodules {
+            self.write_line(&format!("require(\"{submodule}\")"));
+        }
+
+        if !submodules.is_empty() {
+            self.output.push('\n');
+        }
     }
 
     /// Return the starting and ending lines for exporting symbols.
@@ -92,9 +130,9 @@ impl LuaGenerator {
         )
     }
 
-    fn generate_block(&mut self, block: &Block) -> LuaGeneratorResult<()> {
+    fn generate_block(&mut self, block: &Block, module: Option<&Module>) -> LuaGeneratorResult<()> {
         for statement in &block.statements {
-            self.generate_statement(statement, None, Scope::Private)?;
+            self.generate_statement(statement, module, None, Scope::Private)?;
         }
         Ok(())
     }
@@ -102,15 +140,16 @@ impl LuaGenerator {
     fn generate_statement(
         &mut self,
         statement: &Statement,
+        module: Option<&Module>,
         module_name: Option<&str>,
         scope: Scope,
     ) -> LuaGeneratorResult<()> {
         match statement {
             Statement::FunctionDecl(function) => {
-                self.generate_function(function, scope, module_name)?;
+                self.generate_function(function, module, scope, module_name)?;
             }
             Statement::StructDecl(struct_decl) => {
-                self.generate_struct(struct_decl, scope, module_name)?;
+                self.generate_struct(struct_decl, module, scope, module_name)?;
             }
             Statement::VariableDecl { name, value, .. } => {
                 let value = self.generate_expression(value);
@@ -137,7 +176,7 @@ impl LuaGenerator {
 
                 self.indent_level += 1;
                 for statement in then_block {
-                    self.generate_statement(statement, module_name, Scope::Private)?;
+                    self.generate_statement(statement, module, module_name, Scope::Private)?;
                 }
                 self.indent_level -= 1;
 
@@ -147,7 +186,7 @@ impl LuaGenerator {
                     self.write_line("else");
                     self.indent_level += 1;
                     for statement in else_block {
-                        self.generate_statement(statement, module_name, Scope::Private)?;
+                        self.generate_statement(statement, module, module_name, Scope::Private)?;
                     }
                     self.indent_level -= 1;
                     self.write_line("end");
@@ -171,6 +210,7 @@ impl LuaGenerator {
     fn generate_struct(
         &mut self,
         struct_decl: &Struct,
+        module: Option<&Module>,
         scope: Scope,
         module_name: Option<&str>,
     ) -> LuaGeneratorResult<()> {
@@ -178,6 +218,21 @@ impl LuaGenerator {
             return Err(LuaGeneratorError::StructLocalAndExported(
                 struct_decl.name.clone(),
             ));
+        }
+
+        if let Some(module) = module {
+            if module.is_imported_type_extension(struct_decl) {
+                let table_path = module
+                    .imported_item_local(&struct_decl.name)
+                    .expect("imported type extension must resolve to a local binding")
+                    .to_string();
+
+                for method in &struct_decl.methods {
+                    self.generate_table_method(method, &struct_decl.name, &table_path)?;
+                }
+
+                return Ok(());
+            }
         }
 
         let table_path = match (scope, module_name) {
@@ -243,7 +298,7 @@ impl LuaGenerator {
 
         self.struct_table_context = Some((struct_name.to_string(), table_path.to_string()));
         self.indent_level += 1;
-        self.generate_block(&func.body)?;
+        self.generate_block(&func.body, None)?;
         self.indent_level -= 1;
         self.struct_table_context = None;
 
@@ -255,6 +310,7 @@ impl LuaGenerator {
     fn generate_function(
         &mut self,
         func: &Function,
+        module: Option<&Module>,
         scope: Scope,
         module_name: Option<&str>,
     ) -> LuaGeneratorResult<()> {
@@ -301,7 +357,7 @@ impl LuaGenerator {
         self.write_line(&format!("{prefix}function {function_name}({params})"));
 
         self.indent_level += 1;
-        self.generate_block(&func.body)?;
+        self.generate_block(&func.body, module)?;
         self.indent_level -= 1;
 
         self.write_line("end");
@@ -319,7 +375,10 @@ impl LuaGenerator {
             }
             Expression::QualifiedPath { segments } => {
                 if let Some((struct_name, table_path)) = &self.struct_table_context {
-                    if segments.first().is_some_and(|segment| segment == struct_name) {
+                    if segments
+                        .first()
+                        .is_some_and(|segment| segment == struct_name)
+                    {
                         let suffix = segments
                             .get(1..)
                             .map_or_else(String::new, |rest| rest.join("."));
@@ -357,9 +416,7 @@ impl LuaGenerator {
             Expression::StructLiteral { fields } => {
                 let fields = fields
                     .iter()
-                    .map(|(name, value)| {
-                        format!("{name} = {}", self.generate_expression(value))
-                    })
+                    .map(|(name, value)| format!("{name} = {}", self.generate_expression(value)))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{{ {fields} }}")

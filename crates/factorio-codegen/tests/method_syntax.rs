@@ -13,6 +13,8 @@ fn generates_method_with_self_using_colon_syntax() {
     let module = Module {
         name: "player_util".to_string(),
         body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

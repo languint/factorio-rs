@@ -16,6 +16,8 @@ fn rewrites_associated_paths_inside_struct_methods() {
     let module = Module {
         name: "player".to_string(),
         body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::StructDecl(Struct {

@@ -30,6 +30,8 @@ pub fn add(a: i32, b: i32) -> i32 {
         Module {
             name: "math_util".to_string(),
             body: Block { statements: vec![] },
+            imports: vec![],
+            submodules: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {

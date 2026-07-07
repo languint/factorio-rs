@@ -61,10 +61,7 @@ pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
         source,
     })?;
 
-    write_file(
-        &cargo_manifest,
-        &cargo_toml_template(&package_name),
-    )?;
+    write_file(&cargo_manifest, &cargo_toml_template(&package_name))?;
     write_file(&config_path, FACTORIO_CONFIG)?;
     write_file(&lib_rs, LIB_RS)?;
     write_file(&on_init_rs, ON_INIT_RS)?;

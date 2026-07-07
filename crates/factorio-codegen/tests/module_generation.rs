@@ -25,6 +25,8 @@ fn generates_module_with_private_helper_and_exported_handler() {
                 },
             })],
         },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

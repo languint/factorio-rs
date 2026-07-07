@@ -35,6 +35,8 @@ fn parses_struct_with_methods() {
         Module {
             name: "player".to_string(),
             body: Block { statements: vec![] },
+            imports: vec![],
+            submodules: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::StructDecl(Struct {

@@ -16,6 +16,8 @@ fn generates_binary_ops_and_conditionals() {
     let module = Module {
         name: "math_util".to_string(),
         body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

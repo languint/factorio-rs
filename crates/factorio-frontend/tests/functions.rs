@@ -24,6 +24,8 @@ pub fn reset(&mut self, player: ()) {
         Module {
             name: "player_util".to_string(),
             body: Block { statements: vec![] },
+            imports: vec![],
+            submodules: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {

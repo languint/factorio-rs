@@ -26,6 +26,12 @@ pub enum CliError {
         source: std::io::Error,
     },
 
+    #[error("failed to remove `{path}`")]
+    RemoveDir {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
     #[error("`{path}` already exists")]
     AlreadyExists { path: PathBuf },
 
@@ -67,9 +73,10 @@ pub fn project_root(manifest_path: Option<&Path>) -> CliResult<PathBuf> {
     }
 
     if path.is_file() {
-        return path.parent().map(Path::to_path_buf).ok_or_else(|| CliError::InvalidProjectPath {
-            path,
-        });
+        return path
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| CliError::InvalidProjectPath { path });
     }
 
     Err(CliError::NotFound { path })

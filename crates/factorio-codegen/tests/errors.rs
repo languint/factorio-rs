@@ -12,6 +12,8 @@ fn rejects_exported_local_functions() {
     let module = Module {
         name: "broken".to_string(),
         body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Private,
             statement: Statement::FunctionDecl(Function {

@@ -15,6 +15,8 @@ fn generates_struct_as_table_with_methods() {
     let module = Module {
         name: "player".to_string(),
         body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::StructDecl(Struct {
@@ -32,12 +34,10 @@ fn generates_struct_as_table_with_methods() {
                             r#type: Type::Void,
                         }],
                         body: Block {
-                            statements: vec![Statement::Return(Some(
-                                Expression::FieldAccess {
-                                    base: Box::new(Expression::Identifier("self".to_string())),
-                                    field: "health".to_string(),
-                                },
-                            ))],
+                            statements: vec![Statement::Return(Some(Expression::FieldAccess {
+                                base: Box::new(Expression::Identifier("self".to_string())),
+                                field: "health".to_string(),
+                            }))],
                         },
                     },
                     Function {
@@ -103,6 +103,8 @@ fn generates_private_struct_as_local_table() {
                 }],
             })],
         },
+        imports: vec![],
+        submodules: vec![],
         symbols: vec![],
     };
 
