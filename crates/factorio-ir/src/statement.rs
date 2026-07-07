@@ -1,7 +1,8 @@
-use crate::{expression::Expression, r#type::Type};
+use crate::{expression::Expression, function::Function, r#type::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
+    FunctionDecl(Function),
     VariableDecl {
         name: String,
         ty: Type,

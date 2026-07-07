@@ -4,5 +4,6 @@ pub mod function;
 pub mod literal;
 pub mod module;
 pub mod operator;
+pub mod scope;
 pub mod statement;
 pub mod r#type;
