@@ -1,12 +1,16 @@
 use clap::Parser;
 
 mod build;
+mod cargo_manifest;
 mod cli;
 mod config;
 mod error;
 mod init;
+mod install;
+mod manifest;
+mod package;
 
-use cli::{BuildArgs, Cli, Command, InitArgs};
+use cli::{BuildArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs};
 use error::project_root;
 
 fn main() -> anyhow::Result<()> {
@@ -15,6 +19,8 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Init(args) => run_init(&args),
         Command::Build(args) => run_build(&args),
+        Command::Package(args) => run_package(&args),
+        Command::Install(args) => run_install(&args),
     }
 }
 
@@ -36,5 +42,24 @@ fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
         println!("Generated `{}`", output.display());
     }
 
+    if args.package {
+        let zip_path = package::create_archive(&project_root)?;
+        println!("Packaged mod archive `{}`", zip_path.display());
+    }
+
+    Ok(())
+}
+
+fn run_package(args: &PackageArgs) -> anyhow::Result<()> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let zip_path = package::package(&project_root, None)?;
+    println!("Packaged mod archive `{}`", zip_path.display());
+    Ok(())
+}
+
+fn run_install(args: &InstallArgs) -> anyhow::Result<()> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let dest = install::install(&project_root)?;
+    println!("Installed mod to `{}`", dest.display());
     Ok(())
 }

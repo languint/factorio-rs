@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     expression::Expression,
     function::{Function, Parameter},
@@ -18,6 +19,7 @@ use factorio_ir::{
 fn generates_binary_ops_and_conditionals() {
     let module = Module {
         name: "math_util".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -56,6 +58,7 @@ fn generates_binary_ops_and_conditionals() {
                 },
                 doc: None,
                 debug: None,
+                event: None,
             }),
         }],
     };

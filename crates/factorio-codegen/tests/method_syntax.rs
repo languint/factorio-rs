@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     function::{Function, Parameter},
     module::{Module, Symbol},
@@ -15,6 +16,7 @@ use factorio_ir::{
 fn generates_method_with_self_using_colon_syntax() {
     let module = Module {
         name: "player_util".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -39,6 +41,7 @@ fn generates_method_with_self_using_colon_syntax() {
                 },
                 doc: None,
                 debug: None,
+                event: None,
             }),
         }],
     };

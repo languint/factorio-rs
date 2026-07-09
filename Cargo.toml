@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/cargo-factorio",
     "crates/factorio",
+    "crates/factorio-macros",
     "crates/factorio-codegen",
     "crates/factorio-frontend",
     "crates/factorio-ir",

@@ -13,10 +13,10 @@ pub fn on_init() {
 }
 "#;
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains(r#"print("my_player health: " .. health)"#));
+    assert!(lua.contains(r#"game.print("my_player health: " .. health)"#));
 }
 
 #[test]
@@ -28,10 +28,10 @@ pub fn on_init() {
 }
 "#;
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains(r#"print("health: " .. health)"#));
+    assert!(lua.contains(r#"game.print("health: " .. health)"#));
 }
 
 #[test]
@@ -42,10 +42,10 @@ pub fn on_init() {
 }
 "#;
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains(r#"print("hello")"#));
+    assert!(lua.contains(r#"game.print("hello")"#));
 }
 
 #[test]
@@ -58,8 +58,8 @@ pub fn on_init() {
 }
 "#;
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains(r#"print(name .. " has " .. health .. " health")"#));
+    assert!(lua.contains(r#"game.print(name .. " has " .. health .. " health")"#));
 }

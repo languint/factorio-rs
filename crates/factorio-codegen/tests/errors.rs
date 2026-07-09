@@ -3,6 +3,7 @@ mod common;
 use common::must_err;
 use factorio_codegen::{LuaGenerator, LuaGeneratorError};
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     function::Function,
     module::{Module, Symbol},
@@ -14,6 +15,7 @@ use factorio_ir::{
 fn rejects_exported_local_functions() {
     let module = Module {
         name: "broken".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -25,6 +27,7 @@ fn rejects_exported_local_functions() {
                 body: Block { statements: vec![] },
                 doc: None,
                 debug: None,
+                event: None,
             }),
         }],
     };

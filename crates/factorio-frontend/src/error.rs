@@ -37,6 +37,12 @@ pub enum FrontendError {
         found: usize,
         location: String,
     },
+
+    #[error("module `{module}` must be marked with `factorio::control_mod!`, `#[factorio::control]`, or live under `src/control/`, `src/shared/`, or `src/data/`")]
+    InvalidModuleStage { module: String },
+
+    #[error("event handlers are only allowed in control-stage modules, found in `{module}`")]
+    EventOutsideControlStage { module: String },
 }
 
 pub type FrontendResult<T> = Result<T, FrontendError>;

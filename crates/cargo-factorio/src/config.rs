@@ -11,7 +11,25 @@ fn default_source() -> String {
 }
 
 fn default_output_dir() -> String {
-    "lua".to_string()
+    "dist".to_string()
+}
+
+/// Metadata written to generated `info.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ModConfig {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub factorio_version: Option<String>,
+}
+
+impl Default for ModConfig {
+    fn default() -> Self {
+        Self {
+            title: None,
+            description: None,
+            factorio_version: Some("2.0".to_string()),
+        }
+    }
 }
 
 /// Project configuration loaded from `Factorio.toml`.
@@ -22,6 +40,9 @@ pub struct Config {
 
     #[serde(default = "default_output_dir")]
     pub output_dir: String,
+
+    #[serde(default)]
+    pub r#mod: ModConfig,
 }
 
 impl Config {
@@ -59,7 +80,12 @@ mod tests {
             config,
             Config {
                 source: "src".to_string(),
-                output_dir: "lua".to_string(),
+                output_dir: "dist".to_string(),
+                r#mod: super::ModConfig {
+                    title: None,
+                    description: None,
+                    factorio_version: Some("2.0".to_string()),
+                },
             }
         );
     }

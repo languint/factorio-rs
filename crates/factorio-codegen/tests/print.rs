@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     expression::Expression,
     function::Function,
@@ -16,6 +17,7 @@ use factorio_ir::{
 fn generates_format_concat_for_println() {
     let module = Module {
         name: "on_init".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -33,7 +35,10 @@ fn generates_format_concat_for_println() {
                             value: Expression::Literal(Literal::Int(99)),
                         },
                         Statement::Expr(Expression::Call {
-                            func: Box::new(Expression::Identifier("print".to_string())),
+                            func: Box::new(Expression::FieldAccess {
+                                base: Box::new(Expression::Identifier("game".to_string())),
+                                field: "print".to_string(),
+                            }),
                             args: vec![Expression::FormatConcat {
                                 parts: vec![
                                     Expression::Literal(Literal::String("health: ".to_string())),
@@ -45,11 +50,12 @@ fn generates_format_concat_for_println() {
                 },
                 doc: None,
                 debug: None,
+                event: None,
             }),
         }],
     };
 
     let output = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(output.contains(r#"print("health: " .. health)"#));
+    assert!(output.contains(r#"game.print("health: " .. health)"#));
 }

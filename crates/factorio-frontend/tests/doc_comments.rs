@@ -12,7 +12,7 @@ fn parses_and_emits_function_doc_comments() {
 pub fn on_init() {}
 ";
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected function");
         return;
@@ -22,7 +22,7 @@ pub fn on_init() {}
 
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
     assert!(lua.contains("-- Called when the game starts."));
-    assert!(lua.contains("function onInit.on_init()"));
+    assert!(lua.contains("function controlOnInit.on_init()"));
 }
 
 #[test]
@@ -41,7 +41,7 @@ impl MyPlayer {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player"));
+    let module = must_ok_parse(parse_module(source, "shared.player"));
     let Statement::StructDecl(struct_decl) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected struct");
         return;
@@ -56,7 +56,7 @@ impl MyPlayer {
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
     assert!(lua.contains("-- The player type."));
     assert!(lua.contains("-- Returns the current health."));
-    assert!(lua.contains("function player.MyPlayer:get_health()"));
+    assert!(lua.contains("function sharedPlayer.MyPlayer:get_health()"));
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn emits_multiline_doc_comments() {
 pub fn on_init() {}
 ";
 
-    let module = must_ok_parse(parse_module(source, "on_init"));
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert!(lua.contains("-- Line one."));

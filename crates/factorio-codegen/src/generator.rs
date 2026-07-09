@@ -13,6 +13,7 @@ pub struct LuaGenerator {
     /// Rewrites `StructName.associated` paths while generating struct methods.
     struct_table_context: Option<(String, String)>,
     debug_level: Option<u8>,
+    mod_name: String,
 }
 
 impl Default for LuaGenerator {
@@ -23,22 +24,40 @@ impl Default for LuaGenerator {
 
 impl LuaGenerator {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
+        Self::with_mod_name("mod")
+    }
+
+    #[must_use]
+    pub fn with_mod_name(mod_name: impl Into<String>) -> Self {
         Self {
             output: String::new(),
             indent_level: 0,
             struct_table_context: None,
             debug_level: None,
+            mod_name: mod_name.into(),
         }
     }
 
     #[must_use]
-    pub const fn with_debug_level(debug_level: u8) -> Self {
+    pub fn with_debug_level(debug_level: u8) -> Self {
         Self {
             output: String::new(),
             indent_level: 0,
             struct_table_context: None,
             debug_level: Some(debug_level),
+            mod_name: "mod".to_string(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_mod_name_and_debug(mod_name: impl Into<String>, debug_level: u8) -> Self {
+        Self {
+            output: String::new(),
+            indent_level: 0,
+            struct_table_context: None,
+            debug_level: Some(debug_level),
+            mod_name: mod_name.into(),
         }
     }
 
@@ -90,6 +109,14 @@ impl LuaGenerator {
         heck::AsLowerCamelCase(module_name.replace('.', "_")).to_string()
     }
 
+    fn mod_require_path(&self, module_path: &str) -> String {
+        format!(
+            "__{}__/lua/{}",
+            self.mod_name,
+            module_path.replace('.', "/")
+        )
+    }
+
     /// Generate lua code for a single `module`.
     ///
     /// # Errors
@@ -115,7 +142,7 @@ impl LuaGenerator {
         if !module.submodules.is_empty() {
             self.write_line(&format!(
                 "package.loaded[\"{}\"] = {module_name}",
-                module.name
+                self.mod_require_path(&module.name)
             ));
         }
 
@@ -139,7 +166,8 @@ impl LuaGenerator {
         for import in imports {
             self.write_line(&format!(
                 "local {} = require(\"{}\")",
-                import.local, import.module
+                import.local,
+                self.mod_require_path(&import.module)
             ));
 
             for item in &import.items {
@@ -157,7 +185,10 @@ impl LuaGenerator {
 
     fn generate_submodules(&mut self, submodules: &[String]) {
         for submodule in submodules {
-            self.write_line(&format!("require(\"{submodule}\")"));
+            self.write_line(&format!(
+                "require(\"{}\")",
+                self.mod_require_path(submodule)
+            ));
         }
 
         if !submodules.is_empty() {

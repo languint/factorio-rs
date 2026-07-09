@@ -56,9 +56,12 @@ pub fn lower_macro_expression(
     let message = lower_format_template(&template, &lowered_args, location(mac))?;
 
     Ok(factorio_ir::expression::Expression::Call {
-        func: Box::new(factorio_ir::expression::Expression::Identifier(
-            "print".to_string(),
-        )),
+        func: Box::new(factorio_ir::expression::Expression::FieldAccess {
+            base: Box::new(factorio_ir::expression::Expression::Identifier(
+                "game".to_string(),
+            )),
+            field: "print".to_string(),
+        }),
         args: vec![message],
     })
 }

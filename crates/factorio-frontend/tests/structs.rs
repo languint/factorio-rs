@@ -22,7 +22,7 @@ impl MyPlayer {
 
 #[test]
 fn parses_struct_with_methods() {
-    let module = must_ok_parse(parse_module(PLAYER_SOURCE, "player"));
+    let module = must_ok_parse(parse_module(PLAYER_SOURCE, "shared.player"));
 
     let Statement::StructDecl(struct_decl) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected struct declaration");

@@ -50,6 +50,21 @@ pub enum CliError {
         source: toml::de::Error,
     },
 
+    #[error("failed to parse `{path}`")]
+    CargoManifestParse {
+        path: PathBuf,
+        source: toml::de::Error,
+    },
+
+    #[error("failed to serialize info.json")]
+    InfoJsonSerialize { source: serde_json::Error },
+
+    #[error("failed to write zip archive `{path}`")]
+    ZipWrite {
+        path: PathBuf,
+        source: zip::result::ZipError,
+    },
+
     #[error(transparent)]
     Frontend(#[from] factorio_frontend::FrontendError),
 

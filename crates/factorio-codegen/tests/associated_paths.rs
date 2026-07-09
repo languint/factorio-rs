@@ -9,6 +9,7 @@ use factorio_ir::{
     literal::Literal,
     module::{Module, Symbol},
     scope::Scope,
+    stage::Stage,
     statement::Statement,
     structure::{Struct, StructField},
     r#type::Type,
@@ -18,6 +19,7 @@ use factorio_ir::{
 fn rewrites_associated_paths_inside_struct_methods() {
     let module = Module {
         name: "player".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -38,22 +40,21 @@ fn rewrites_associated_paths_inside_struct_methods() {
                     name: "new".to_string(),
                     params: vec![],
                     body: Block {
-                        statements: vec![Statement::Return(Some(
-                            Expression::StructLiteral {
-                                fields: vec![(
-                                    "health".to_string(),
-                                    Expression::QualifiedPath {
-                                        segments: vec![
-                                            "MyPlayer".to_string(),
-                                            "DEFAULT_HEALTH".to_string(),
-                                        ],
-                                    },
-                                )],
-                            },
-                        ))],
+                        statements: vec![Statement::Return(Some(Expression::StructLiteral {
+                            fields: vec![(
+                                "health".to_string(),
+                                Expression::QualifiedPath {
+                                    segments: vec![
+                                        "MyPlayer".to_string(),
+                                        "DEFAULT_HEALTH".to_string(),
+                                    ],
+                                },
+                            )],
+                        }))],
                     },
                     doc: None,
                     debug: None,
+                    event: None,
                 }],
                 doc: None,
                 debug: None,

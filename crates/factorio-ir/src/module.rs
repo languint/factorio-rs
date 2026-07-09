@@ -1,4 +1,4 @@
-use crate::{block::Block, scope::Scope, statement::Statement};
+use crate::{block::Block, scope::Scope, stage::Stage, statement::Statement};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
@@ -22,6 +22,7 @@ pub struct ImportedItem {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     pub name: String,
+    pub stage: Stage,
     pub body: Block,
     pub symbols: Vec<Symbol>,
     pub imports: Vec<ModuleImport>,

@@ -14,9 +14,12 @@ pub struct MyPlayer {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player"));
+    let module = must_ok_parse(parse_module(source, "shared.player"));
 
-    assert_eq!(module.submodules, vec!["player.extra_info".to_string()]);
+    assert_eq!(
+        module.submodules,
+        vec!["shared.player.extra_info".to_string()]
+    );
 }
 
 #[test]
@@ -27,11 +30,11 @@ mod extra_info;
 pub fn on_init() {}
 ";
 
-    let module = must_ok_parse(parse_module(source, "player"));
+    let module = must_ok_parse(parse_module(source, "shared.player"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains("require(\"player.extra_info\")"));
-    assert!(lua.contains("package.loaded[\"player\"] = player"));
+    assert!(lua.contains("require(\"__mod__/lua/shared/player/extra_info\")"));
+    assert!(lua.contains("package.loaded[\"__mod__/lua/shared/player\"] = sharedPlayer"));
 }
 
 #[test]
@@ -44,18 +47,18 @@ pub struct MyPlayer {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player"));
+    let module = must_ok_parse(parse_module(source, "shared.player"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    let Some(player_table) = lua.find("local player = {}") else {
+    let Some(player_table) = lua.find("local sharedPlayer = {}") else {
         assert_eq!(1, 0, "module table not found");
         return;
     };
-    let Some(package_loaded) = lua.find("package.loaded[\"player\"] = player") else {
+    let Some(package_loaded) = lua.find("package.loaded[\"__mod__/lua/shared/player\"] = sharedPlayer") else {
         assert_eq!(1, 0, "early package.loaded registration not found");
         return;
     };
-    let Some(submodule_require) = lua.find("require(\"player.health\")") else {
+    let Some(submodule_require) = lua.find("require(\"__mod__/lua/shared/player/health\")") else {
         assert_eq!(1, 0, "submodule require not found");
         return;
     };
@@ -67,7 +70,7 @@ pub struct MyPlayer {
 #[test]
 fn submodule_extends_imported_type_without_new_table() {
     let source = r"
-use crate::player::MyPlayer;
+use crate::shared::player::MyPlayer;
 
 impl MyPlayer {
     pub const DEFAULT_HEALTH: u64 = 100;
@@ -78,10 +81,10 @@ impl MyPlayer {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player.health"));
+    let module = must_ok_parse(parse_module(source, "shared.player.health"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(lua.contains("local MyPlayer = player.MyPlayer"));
+    assert!(lua.contains("local MyPlayer = shared_player.MyPlayer"));
     assert!(lua.contains("MyPlayer.DEFAULT_HEALTH = 100"));
     assert!(!lua.contains("local MyPlayer = {}"));
 }
@@ -89,7 +92,7 @@ impl MyPlayer {
 #[test]
 fn parses_submodule_source_with_parent_import() {
     let source = r"
-use crate::player::MyPlayer;
+use crate::shared::player::MyPlayer;
 
 impl MyPlayer {
     pub fn get_health(&self) -> u64 {
@@ -98,13 +101,14 @@ impl MyPlayer {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player.extra_info"));
+    let module = must_ok_parse(parse_module(source, "shared.player.extra_info"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert_eq!(module.imports.len(), 1);
-    assert_eq!(module.imports[0].module, "player");
-    assert!(lua.contains("local player = require(\"player\")"));
-    assert!(lua.contains("local MyPlayer = player.MyPlayer"));
+    assert_eq!(module.imports[0].module, "shared.player");
+    assert_eq!(module.imports[0].local, "shared_player");
+    assert!(lua.contains("local shared_player = require(\"__mod__/lua/shared/player\")"));
+    assert!(lua.contains("local MyPlayer = shared_player.MyPlayer"));
     assert!(!lua.contains("local MyPlayer = {}"));
     assert!(lua.contains("function MyPlayer:get_health()"));
 }

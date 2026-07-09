@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use syn::{File, ImplItem, Item, Visibility};
+use syn::{ImplItem, Item, Visibility};
 
 use crate::error::{FrontendError, FrontendResult};
 
+pub mod attrs;
 pub mod context;
 pub mod expressions;
 pub mod functions;
@@ -34,10 +35,30 @@ pub fn parse_module(
     module_name: &str,
 ) -> FrontendResult<factorio_ir::module::Module> {
     let file = syn::parse_file(source)?;
-    lower_module(&file, module_name)
+    let stage = factorio_ir::stage::Stage::from_module_name(module_name).ok_or_else(|| {
+        FrontendError::InvalidModuleStage {
+            module: module_name.to_string(),
+        }
+    })?;
+    lower_items(&file.items, module_name, stage)
 }
 
-fn lower_module(file: &File, module_name: &str) -> FrontendResult<factorio_ir::module::Module> {
+/// Lower a discovered module into IR.
+pub fn parse_discovered_module(
+    discovered: &crate::discovery::DiscoveredModule,
+) -> FrontendResult<factorio_ir::module::Module> {
+    lower_items(
+        &discovered.items,
+        &discovered.module_name,
+        discovered.stage,
+    )
+}
+
+fn lower_items(
+    items: &[Item],
+    module_name: &str,
+    stage: factorio_ir::stage::Stage,
+) -> FrontendResult<factorio_ir::module::Module> {
     let mut body = Vec::new();
     let mut symbols = Vec::new();
     let mut use_imports = Vec::new();
@@ -47,7 +68,9 @@ fn lower_module(file: &File, module_name: &str) -> FrontendResult<factorio_ir::m
     let mut ctx = LowerContext {
         imports: &mut inline_imports,
     };
-    let mut state = ModuleLowerState {
+    let mut module_state = ModuleLowerState {
+        module_name,
+        stage,
         body: &mut body,
         symbols: &mut symbols,
         use_imports: &mut use_imports,
@@ -55,8 +78,8 @@ fn lower_module(file: &File, module_name: &str) -> FrontendResult<factorio_ir::m
         structs: &mut structs,
     };
 
-    for item in &file.items {
-        lower_top_level_item(item, module_name, &mut state, &mut ctx)?;
+    for item in items {
+        lower_top_level_item(item, module_name, &mut module_state, &mut ctx)?;
     }
 
     finalize_pending_structs(structs, &mut body, &mut symbols);
@@ -66,6 +89,7 @@ fn lower_module(file: &File, module_name: &str) -> FrontendResult<factorio_ir::m
 
     Ok(factorio_ir::module::Module {
         name: module_name.to_string(),
+        stage,
         body: factorio_ir::block::Block { statements: body },
         symbols,
         imports: merge_imports(all_imports),
@@ -74,6 +98,8 @@ fn lower_module(file: &File, module_name: &str) -> FrontendResult<factorio_ir::m
 }
 
 struct ModuleLowerState<'a> {
+    module_name: &'a str,
+    stage: factorio_ir::stage::Stage,
     body: &'a mut Vec<factorio_ir::statement::Statement>,
     symbols: &'a mut Vec<factorio_ir::module::Symbol>,
     use_imports: &'a mut Vec<imports::ImportFragment>,
@@ -84,7 +110,7 @@ struct ModuleLowerState<'a> {
 fn lower_top_level_item(
     item: &Item,
     module_name: &str,
-    state: &mut ModuleLowerState<'_>,
+    module_state: &mut ModuleLowerState<'_>,
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<()> {
     match item {
@@ -92,22 +118,25 @@ fn lower_top_level_item(
             let lowered = factorio_ir::statement::Statement::FunctionDecl(lower_function(
                 function, ctx,
             )?);
-            push_scoped_statement(lowered, &function.vis, state.body, state.symbols);
+            if let factorio_ir::statement::Statement::FunctionDecl(ref func) = lowered
+                && func.event.is_some()
+                && module_state.stage != factorio_ir::stage::Stage::Control
+            {
+                return Err(FrontendError::EventOutsideControlStage {
+                    module: module_state.module_name.to_string(),
+                });
+            }
+            push_scoped_statement(lowered, &function.vis, module_state.body, module_state.symbols);
         }
-        Item::Struct(item_struct) => lower_struct_item(item_struct, state.structs)?,
-        Item::Impl(item_impl) => lower_impl_item(item_impl, state.structs, ctx)?,
-        Item::Use(use_item) => state.use_imports.extend(lower_use(use_item)?),
+        Item::Struct(item_struct) => lower_struct_item(item_struct, module_state.structs)?,
+        Item::Impl(item_impl) => lower_impl_item(item_impl, module_state.structs, ctx)?,
+        Item::Use(use_item) => module_state.use_imports.extend(lower_use(use_item)?),
         Item::Mod(item_mod) if item_mod.content.is_none() => {
-            state
+            module_state
                 .submodules
                 .push(submodule_path(module_name, &item_mod.ident.to_string()));
         }
-        Item::Mod(item_mod) => {
-            return Err(FrontendError::UnsupportedItem {
-                item: "inline mod".to_string(),
-                location: location(item_mod),
-            });
-        }
+        Item::Mod(_) => {}
         item => {
             return Err(FrontendError::UnsupportedItem {
                 item: item_name(item),

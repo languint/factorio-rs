@@ -8,6 +8,7 @@ license.workspace = true
 factorio-ir.workspace = true
 
 syn = { version = "2.0.114", features = ["full"] }
+proc-macro2 = "1.0.106"
 thiserror.workspace = true
 
 [dev-dependencies]

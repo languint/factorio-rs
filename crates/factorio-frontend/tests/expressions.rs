@@ -21,7 +21,7 @@ pub fn add(a: i32, b: i32) -> i32 {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "math_util"));
+    let module = must_ok_parse(parse_module(source, "control.math_util"));
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected function declaration");
         return;
@@ -62,7 +62,7 @@ pub fn bump(counter: i32) {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "counter"));
+    let module = must_ok_parse(parse_module(source, "control.counter"));
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected function declaration");
         return;
@@ -93,7 +93,7 @@ pub fn damage(player: MyPlayer, amount: u64) {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "combat"));
+    let module = must_ok_parse(parse_module(source, "control.combat"));
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected function declaration");
         return;

@@ -1,43 +1,70 @@
 use std::path::{Path, PathBuf};
 
 use factorio_codegen::LuaGenerator;
-use factorio_frontend::{lua_output_path, module_name_from_source, parse_module};
+use factorio_frontend::{
+    discover_modules, lua_output_path, parse_discovered_module,
+};
+use factorio_ir::module::Module;
 
 use crate::{
+    cargo_manifest::CargoPackage,
     config::Config,
     error::{CliError, CliResult},
+    manifest::{collect_event_registrations, write_mod_manifests},
 };
 
-/// Transpile Rust sources in a project to Lua.
+/// Transpile Rust sources in a project to a loadable Factorio mod directory.
 pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<PathBuf>> {
     let config = Config::load(project_root)?;
+    let package = CargoPackage::load(project_root)?;
     let source_dir = project_root.join(&config.source);
     let output_dir = project_root.join(&config.output_dir);
+    let lua_dir = output_dir.join("lua");
 
     if !source_dir.is_dir() {
         return Err(CliError::NotFound { path: source_dir });
     }
 
-    let sources = collect_source_files(&source_dir)?;
+    let sources = collect_rust_sources(&source_dir)?;
     if sources.is_empty() {
         return Err(CliError::NoSourceFiles { path: source_dir });
     }
 
     purge_output_dir(&output_dir)?;
-    std::fs::create_dir_all(&output_dir).map_err(|source| CliError::CreateDir {
-        path: output_dir.clone(),
+    std::fs::create_dir_all(&lua_dir).map_err(|source| CliError::CreateDir {
+        path: lua_dir.clone(),
         source,
     })?;
 
     let mut outputs = Vec::new();
+    let mut event_registrations = Vec::new();
+
     for source_path in sources {
-        outputs.push(transpile_file(
-            &source_path,
-            &source_dir,
-            &output_dir,
-            debug_level,
-        )?);
+        let source = std::fs::read_to_string(&source_path).map_err(|err| CliError::ReadFile {
+            path: source_path.clone(),
+            source: err,
+        })?;
+        let discovered = discover_modules(&source_dir, &source_path, &source)?;
+
+        for module_spec in discovered {
+            let (output_path, module) = transpile_discovered_module(
+                &module_spec,
+                &lua_dir,
+                &package.name,
+                debug_level,
+            )?;
+            event_registrations.extend(collect_event_registrations(&module));
+            outputs.push(output_path);
+        }
     }
+
+    if outputs.is_empty() {
+        return Err(CliError::NoSourceFiles { path: source_dir });
+    }
+
+    write_mod_manifests(&output_dir, &package, &config, &event_registrations)?;
+    outputs.push(output_dir.join("control.lua"));
+    outputs.push(output_dir.join("info.json"));
 
     Ok(outputs)
 }
@@ -53,14 +80,14 @@ fn purge_output_dir(output_dir: &Path) -> CliResult<()> {
     })
 }
 
-fn collect_source_files(source_dir: &Path) -> CliResult<Vec<PathBuf>> {
+fn collect_rust_sources(source_dir: &Path) -> CliResult<Vec<PathBuf>> {
     let mut sources = Vec::new();
-    collect_source_files_recursive(source_dir, source_dir, &mut sources)?;
+    collect_rust_sources_recursive(source_dir, source_dir, &mut sources)?;
     sources.sort();
     Ok(sources)
 }
 
-fn collect_source_files_recursive(
+fn collect_rust_sources_recursive(
     source_dir: &Path,
     current_dir: &Path,
     sources: &mut Vec<PathBuf>,
@@ -76,15 +103,11 @@ fn collect_source_files_recursive(
         let path = entry.path();
 
         if path.is_dir() {
-            collect_source_files_recursive(source_dir, &path, sources)?;
+            collect_rust_sources_recursive(source_dir, &path, sources)?;
             continue;
         }
 
-        if !is_rust_source(&path) {
-            continue;
-        }
-
-        if module_name_from_source(source_dir, &path).is_some() {
+        if is_rust_source(&path) {
             sources.push(path);
         }
     }
@@ -99,29 +122,20 @@ fn is_rust_source(path: &Path) -> bool {
             .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
 }
 
-fn transpile_file(
-    source_path: &Path,
-    source_dir: &Path,
-    output_dir: &Path,
+fn transpile_discovered_module(
+    discovered: &factorio_frontend::DiscoveredModule,
+    lua_dir: &Path,
+    mod_name: &str,
     debug_level: Option<u8>,
-) -> CliResult<PathBuf> {
-    let module_name = module_name_from_source(source_dir, source_path).ok_or_else(|| {
-        CliError::InvalidProjectPath {
-            path: source_path.to_path_buf(),
-        }
-    })?;
-
-    let source = std::fs::read_to_string(source_path).map_err(|err| CliError::ReadFile {
-        path: source_path.to_path_buf(),
-        source: err,
-    })?;
-
-    let module = parse_module(&source, &module_name)?;
-    let mut generator =
-        debug_level.map_or_else(LuaGenerator::new, LuaGenerator::with_debug_level);
+) -> CliResult<(PathBuf, Module)> {
+    let module = parse_discovered_module(discovered)?;
+    let mut generator = match debug_level {
+        Some(level) => LuaGenerator::with_mod_name_and_debug(mod_name, level),
+        None => LuaGenerator::with_mod_name(mod_name),
+    };
     let lua = generator.generate_module(&module)?;
 
-    let output_path = lua_output_path(output_dir, &module_name);
+    let output_path = lua_output_path(lua_dir, &discovered.module_name);
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| CliError::CreateDir {
             path: parent.to_path_buf(),
@@ -134,7 +148,7 @@ fn transpile_file(
         source,
     })?;
 
-    Ok(output_path)
+    Ok((output_path, module))
 }
 
 #[cfg(test)]
@@ -146,37 +160,54 @@ mod tests {
     #[test]
     fn purge_output_dir_removes_stale_generated_files() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let output_dir = temp_dir.path().join("lua");
-        std::fs::create_dir_all(output_dir.join("player")).unwrap();
+        let output_dir = temp_dir.path().join("dist");
+        std::fs::create_dir_all(output_dir.join("lua/player")).unwrap();
         std::fs::write(output_dir.join("stale.lua"), "stale").unwrap();
-        std::fs::write(output_dir.join("player/old.lua"), "old").unwrap();
+        std::fs::write(output_dir.join("lua/player/old.lua"), "old").unwrap();
 
         purge_output_dir(&output_dir).unwrap();
 
         assert!(!output_dir.exists());
     }
 
+    use factorio_frontend::discover_modules;
+
     #[test]
-    fn collects_nested_source_files() {
+    fn discovers_path_based_and_attribute_based_sources() {
         let temp_dir = tempfile::tempdir().unwrap();
         let source_dir = temp_dir.path().join("src");
-        std::fs::create_dir_all(source_dir.join("player")).unwrap();
-        std::fs::write(source_dir.join("on_init.rs"), "pub fn on_init() {}").unwrap();
-        std::fs::write(source_dir.join("player.rs"), "mod extra_info;").unwrap();
-        std::fs::write(source_dir.join("player/extra_info.rs"), "pub fn f() {}").unwrap();
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::write(
+            source_dir.join("lib.rs"),
+            r#"
+            #[factorio::control]
+            mod control {
+                pub fn on_init() {}
+            }
+        "#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(source_dir.join("shared/player")).unwrap();
+        std::fs::write(source_dir.join("shared/player.rs"), "mod health;").unwrap();
+        std::fs::write(source_dir.join("shared/player/health.rs"), "pub fn f() {}").unwrap();
+        std::fs::write(source_dir.join("legacy.rs"), "pub fn legacy() {}").unwrap();
 
-        let sources = collect_source_files(&source_dir).unwrap();
-        let module_names = sources
-            .iter()
-            .map(|path| module_name_from_source(&source_dir, path).unwrap())
-            .collect::<Vec<_>>();
+        let sources = collect_rust_sources(&source_dir).unwrap();
+        let mut module_names = Vec::new();
+        for path in sources {
+            let source = std::fs::read_to_string(&path).unwrap();
+            for module in discover_modules(&source_dir, &path, &source).unwrap() {
+                module_names.push(module.module_name);
+            }
+        }
+        module_names.sort();
 
         assert_eq!(
             module_names,
             vec![
-                "on_init".to_string(),
-                "player.extra_info".to_string(),
-                "player".to_string(),
+                "control".to_string(),
+                "shared.player".to_string(),
+                "shared.player.health".to_string(),
             ]
         );
     }

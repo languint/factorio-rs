@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     expression::Expression,
     function::{Function, Parameter},
@@ -17,6 +18,7 @@ use factorio_ir::{
 fn generates_struct_as_table_with_methods() {
     let module = Module {
         name: "player".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -46,6 +48,7 @@ fn generates_struct_as_table_with_methods() {
                         },
                         doc: None,
                         debug: None,
+                        event: None,
                     },
                     Function {
                         name: "set_health".to_string(),
@@ -72,6 +75,7 @@ fn generates_struct_as_table_with_methods() {
                         },
                         doc: None,
                         debug: None,
+                        event: None,
                     },
                 ],
                 doc: None,
@@ -104,6 +108,7 @@ fn generates_struct_as_table_with_methods() {
 fn generates_private_struct_as_local_table() {
     let module = Module {
         name: "player".to_string(),
+        stage: Stage::Control,
         body: Block {
             statements: vec![Statement::StructDecl(Struct {
                 name: "MyPlayer".to_string(),
@@ -115,6 +120,7 @@ fn generates_private_struct_as_local_table() {
                     body: Block { statements: vec![] },
                     doc: None,
                     debug: None,
+                    event: None,
                 }],
                 doc: None,
                 debug: None,

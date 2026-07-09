@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     expression::Expression,
     function::{Function, Parameter},
@@ -17,6 +18,7 @@ use factorio_ir::{
 fn generates_module_with_private_helper_and_exported_handler() {
     let module = Module {
         name: "bound_detector".to_string(),
+        stage: Stage::Control,
         body: Block {
             statements: vec![Statement::FunctionDecl(Function {
                 name: "helper".to_string(),
@@ -28,6 +30,7 @@ fn generates_module_with_private_helper_and_exported_handler() {
                 },
                 doc: None,
                 debug: None,
+                event: None,
             })],
         },
         imports: vec![],
@@ -51,6 +54,7 @@ fn generates_module_with_private_helper_and_exported_handler() {
                 },
                 doc: None,
                 debug: None,
+                event: None,
             }),
         }],
     };

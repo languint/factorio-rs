@@ -12,7 +12,7 @@ pub fn reset(&mut self, player: ()) {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "player_util"));
+    let module = must_ok_parse(parse_module(source, "control.player_util"));
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         assert_eq!(1, 0, "expected function declaration");
         return;
@@ -36,7 +36,7 @@ fn helper() -> i64 {
 }
 ";
 
-    let module = must_ok_parse(parse_module(source, "example"));
+    let module = must_ok_parse(parse_module(source, "control.example"));
     let Statement::FunctionDecl(function) = &module.body.statements[0] else {
         assert_eq!(1, 0, "expected helper function");
         return;

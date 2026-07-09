@@ -7,31 +7,26 @@ use crate::{
 
 const FACTORIO_SDK_VERSION: &str = "0.1.0";
 
-const LIB_RS: &str = r"//! Factorio mod source crate.
-
-mod on_init;
-";
-
-const ON_INIT_RS: &str = r"#![allow(dead_code)]
-
-use factorio::event::OnInit;
-
-fn helper() -> i64 {
-    1
-}
-
-pub fn on_init(_event: OnInit) {
-    let _count: i32 = 0;
+const LIB_RS: &str = r"factorio::control_mod! {
+    #[factorio::event(OnInit)]
+    pub fn on_init() {
+        println!("Initialized.");
+    }
 }
 ";
 
 const FACTORIO_CONFIG: &str = r#"# cargo-factorio project configuration
 source = "src"
-output_dir = "lua"
+output_dir = "dist"
+
+[mod]
+title = "Factorio Mod"
+factorio_version = "2.0"
 "#;
 
 const GITIGNORE: &str = r"/target
-/lua
+/dist
+/*.zip
 ";
 
 /// Initialize a new cargo-factorio project in `project_root`.
@@ -52,7 +47,6 @@ pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
 
     let source_dir = project_root.join("src");
     let lib_rs = source_dir.join("lib.rs");
-    let on_init_rs = source_dir.join("on_init.rs");
 
     std::fs::create_dir_all(&source_dir).map_err(|source| CliError::CreateDir {
         path: source_dir.clone(),
@@ -62,7 +56,6 @@ pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
     write_file(&cargo_manifest, &cargo_toml_template(&package_name))?;
     write_file(&config_path, FACTORIO_CONFIG)?;
     write_file(&lib_rs, LIB_RS)?;
-    write_file(&on_init_rs, ON_INIT_RS)?;
     write_file(&project_root.join(".gitignore"), GITIGNORE)?;
 
     Ok(())

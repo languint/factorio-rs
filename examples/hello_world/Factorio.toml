@@ -1,3 +1,8 @@
 # cargo-factorio project configuration
 source = "src"
-output_dir = "lua"
+output_dir = "dist"
+
+[mod]
+title = "hello-world"
+description = "Example cargo-factorio project"
+factorio_version = "2.0"

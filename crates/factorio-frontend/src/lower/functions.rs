@@ -3,6 +3,7 @@ use syn::{Attribute, Block, ItemFn, PatType, Signature, Visibility};
 use crate::error::FrontendResult;
 
 use super::{
+    attrs::extract_factorio_event,
     context::LowerContext,
     metadata::{extract_doc_comments, function_header_comment},
     statements::lower_block,
@@ -55,6 +56,7 @@ fn lower_function_parts(
             header_comment: function_header_comment(visibility, signature),
             return_type: return_type_string(signature),
         }),
+        event: extract_factorio_event(attrs),
     })
 }
 

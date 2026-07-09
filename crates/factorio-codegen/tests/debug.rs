@@ -3,6 +3,7 @@ mod common;
 use common::must_ok;
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    stage::Stage,
     block::Block,
     debug::FunctionDebug,
     expression::Expression,
@@ -17,6 +18,7 @@ use factorio_ir::{
 fn debug_level_one_adds_type_comments_to_functions() {
     let module = Module {
         name: "math_util".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -48,6 +50,7 @@ fn debug_level_one_adds_type_comments_to_functions() {
                     header_comment: "pub fn add(a: i64, b: i64) -> i64".to_string(),
                     return_type: Some("i64".to_string()),
                 }),
+                event: None,
             }),
         }],
     };
@@ -62,6 +65,7 @@ fn debug_level_one_adds_type_comments_to_functions() {
 fn debug_level_zero_adds_header_without_inline_types() {
     let module = Module {
         name: "math_util".to_string(),
+        stage: Stage::Control,
         body: Block { statements: vec![] },
         imports: vec![],
         submodules: vec![],
@@ -87,6 +91,7 @@ fn debug_level_zero_adds_header_without_inline_types() {
                     header_comment: "pub fn add(a: i64, b: i64) -> i64".to_string(),
                     return_type: Some("i64".to_string()),
                 }),
+                event: None,
             }),
         }],
     };
