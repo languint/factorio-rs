@@ -1,7 +1,7 @@
 //! Dead-code elimination for lowered IR modules.
 //!
 //! Pruning runs after lowering and before Lua codegen. Reachability starts from
-//! event handlers registered with `#[factorio::event]`, then follows call graphs
+//! event handlers registered with `#[factorio_rs::event]`, then follows call graphs
 //! within and across modules. Anything not reached is removed from the IR so it
 //! is never emitted to Lua.
 

@@ -49,7 +49,7 @@ pub fn on_init() {}
 #[test]
 fn ignores_external_crate_use() {
     let source = r"
-use factorio::event::OnInit;
+use factorio_rs::event::OnInit;
 use crate::shared::player::MyPlayer;
 
 pub fn on_init() {}

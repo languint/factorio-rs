@@ -2,14 +2,14 @@ use syn::{Attribute, Meta, Path};
 
 use factorio_ir::stage::Stage;
 
-/// Parses `#[factorio::event(OnInit)]` and returns the Factorio event name (`on_init`).
+/// Parses `#[factorio_rs::event(OnInit)]` and returns the Factorio event name (`on_init`).
 pub fn extract_factorio_event(attrs: &[Attribute]) -> Option<String> {
     attrs
         .iter()
         .find_map(parse_factorio_event_attribute)
 }
 
-/// Parses `#[factorio::control]`, `#[factorio::shared]`, or `#[factorio::data]`.
+/// Parses `#[factorio_rs::control]`, `#[factorio_rs::shared]`, or `#[factorio_rs::data]`.
 pub fn extract_factorio_stage(attrs: &[Attribute]) -> Option<Stage> {
     attrs.iter().find_map(parse_factorio_stage_attribute)
 }
@@ -18,7 +18,7 @@ pub fn is_factorio_stage_bang(path: &Path) -> Option<Stage> {
     let mut segments = path.segments.iter();
     let first = segments.next()?;
 
-    if first.ident == "factorio" {
+    if first.ident == "factorio_rs" {
         let second = segments.next()?;
         if segments.next().is_some() {
             return None;
@@ -72,7 +72,7 @@ fn is_factorio_path_segment(path: &Path, segment: &str) -> bool {
     let Some(first) = segments.next() else {
         return false;
     };
-    if first.ident != "factorio" {
+    if first.ident != "factorio_rs" {
         return false;
     }
     segments.next().is_some_and(|next| next.ident == segment)
@@ -106,7 +106,7 @@ mod tests {
     fn parses_factorio_event_attribute() {
         let Ok(function) = parse_str::<syn::ItemFn>(
             r"
-            #[factorio::event(OnInit)]
+            #[factorio_rs::event(OnInit)]
             pub fn on_init() {}
         ",
         ) else {
@@ -124,7 +124,7 @@ mod tests {
     fn parses_factorio_stage_attribute() {
         let Ok(item_mod) = parse_str::<syn::ItemMod>(
             r"
-            #[factorio::control]
+            #[factorio_rs::control]
             mod handlers {}
         ",
         ) else {

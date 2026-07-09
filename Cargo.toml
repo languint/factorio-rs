@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/cargo-factorio",
-    "crates/factorio",
+    "crates/factorio-rs-cli",
+    "crates/factorio-rs",
     "crates/factorio-macros",
     "crates/factorio-codegen",
     "crates/factorio-frontend",
@@ -15,7 +15,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-factorio = { path = "./crates/factorio" }
+factorio-rs = { path = "./crates/factorio-rs" }
 factorio-codegen = { path = "./crates/factorio-codegen" }
 factorio-frontend = { path = "./crates/factorio-frontend" }
 factorio-ir = { path = "./crates/factorio-ir" }

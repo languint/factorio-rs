@@ -14,6 +14,6 @@ pub struct Function {
     pub body: Block,
     pub doc: Option<String>,
     pub debug: Option<FunctionDebug>,
-    /// Factorio event name when this function is registered with `#[factorio::event(...)]`.
+    /// Factorio event name when this function is registered with `#[factorio_rs::event(...)]`.
     pub event: Option<String>,
 }

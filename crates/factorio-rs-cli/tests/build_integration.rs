@@ -49,7 +49,7 @@ impl MyPlayer {
 ";
 
 const ON_INIT_RS: &str = r"
-#[factorio::event(OnInit)]
+#[factorio_rs::event(OnInit)]
 pub fn on_init() {
     let mut player = crate::shared::player::MyPlayer::new();
 
@@ -77,7 +77,7 @@ fn build_generates_nested_module_lua() {
     let project_root = temp_dir.path();
     write_nested_module_project(project_root);
 
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .arg("build")
         .current_dir(project_root)
         .status()
@@ -115,7 +115,7 @@ fn build_removes_stale_lua_files() {
     std::fs::create_dir_all(project_root.join("dist")).unwrap();
     std::fs::write(&stale_path, "stale").unwrap();
 
-    let status = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .arg("build")
         .current_dir(project_root)
         .status()

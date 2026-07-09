@@ -86,25 +86,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
-name = "cargo-factorio"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "factorio-codegen",
- "factorio-frontend",
- "factorio-ir",
- "heck",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "toml",
- "walkdir",
- "zip",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -210,13 +191,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "factorio"
-version = "0.1.0"
-dependencies = [
- "factorio-macros",
-]
-
-[[package]]
 name = "factorio-codegen"
 version = "0.1.0"
 dependencies = [
@@ -250,6 +224,32 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "factorio-rs"
+version = "0.1.0"
+dependencies = [
+ "factorio-macros",
+]
+
+[[package]]
+name = "factorio-rs-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "factorio-codegen",
+ "factorio-frontend",
+ "factorio-ir",
+ "heck",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
@@ -295,7 +295,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "hello_world"
 version = "0.1.0"
 dependencies = [
- "factorio",
+ "factorio-rs",
 ]
 
 [[package]]

@@ -38,7 +38,7 @@ pub enum FrontendError {
         location: String,
     },
 
-    #[error("module `{module}` must be marked with `factorio::control_mod!`, `#[factorio::control]`, or live under `src/control/`, `src/shared/`, or `src/data/`")]
+    #[error("module `{module}` must be marked with `factorio_rs::control_mod!`, `#[factorio_rs::control]`, or live under `src/control/`, `src/shared/`, or `src/data/`")]
     InvalidModuleStage { module: String },
 
     #[error("event handlers are only allowed in control-stage modules, found in `{module}`")]

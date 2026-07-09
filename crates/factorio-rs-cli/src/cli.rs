@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Create a new cargo-factorio project in the current directory.
+    /// Create a new factorio-rs project in the current directory.
     Init(InitArgs),
     /// Transpile Rust sources to a loadable Factorio mod directory.
     Build(BuildArgs),
@@ -16,8 +16,7 @@ pub enum Command {
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "factorio",
-    bin_name = "cargo factorio",
+    name = "factorio-rs",
     about = "Transpile Rust into Lua for Factorio mods",
     version
 )]

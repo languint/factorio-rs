@@ -22,8 +22,8 @@ pub struct DiscoveredModule {
 ///
 /// Modules are found via:
 /// - path-based layout (`src/control/...`, `src/control.rs`, ...)
-/// - `factorio::control_mod! { ... }` block macros (and `shared_mod!` / `data_mod!`)
-/// - `#[factorio::control] mod name { ... }` inline modules
+/// - `factorio_rs::control_mod! { ... }` block macros (and `shared_mod!` / `data_mod!`)
+/// - `#[factorio_rs::control] mod name { ... }` inline modules
 ///
 /// # Errors
 /// Returns `Err` if parsing the Rust source fails.
@@ -102,8 +102,8 @@ mod tests {
         let source_dir = Path::new("/project/src");
         let source_path = source_dir.join("lib.rs");
         let source = r"
-            factorio::control_mod! {
-                #[factorio::event(OnInit)]
+            factorio_rs::control_mod! {
+                #[factorio_rs::event(OnInit)]
                 pub fn on_init() {}
             }
         ";
@@ -119,9 +119,9 @@ mod tests {
         let source_dir = Path::new("/project/src");
         let source_path = source_dir.join("lib.rs");
         let source = r"
-            #![factorio::control]
+            #![factorio_rs::control]
 
-            #[factorio::event(OnInit)]
+            #[factorio_rs::event(OnInit)]
             pub fn on_init() {}
         ";
 
@@ -136,7 +136,7 @@ mod tests {
         let source_dir = Path::new("/project/src");
         let source_path = source_dir.join("lib.rs");
         let source = r"
-            #[factorio::control]
+            #[factorio_rs::control]
             mod handlers {
                 pub fn on_init() {}
             }

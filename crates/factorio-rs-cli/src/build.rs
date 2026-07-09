@@ -187,7 +187,7 @@ mod tests {
         std::fs::write(
             source_dir.join("lib.rs"),
             r"
-            #[factorio::control]
+            #[factorio_rs::control]
             mod control {
                 pub fn on_init() {}
             }

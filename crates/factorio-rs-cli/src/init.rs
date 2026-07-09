@@ -7,15 +7,15 @@ use crate::{
 
 const FACTORIO_SDK_VERSION: &str = "0.1.0";
 
-const LIB_RS: &str = r#"factorio::control_mod! {
-    #[factorio::event(OnInit)]
+const LIB_RS: &str = r#"factorio_rs::control_mod! {
+    #[factorio_rs::event(OnInit)]
     pub fn on_init() {
         println!("Initialized");
     }
 }
 "#;
 
-const FACTORIO_CONFIG: &str = r#"# cargo-factorio project configuration
+const FACTORIO_CONFIG: &str = r#"# factorio-rs project configuration
 source = "src"
 output_dir = "dist"
 prune_dead_code = true
@@ -30,7 +30,7 @@ const GITIGNORE: &str = r"/target
 /*.zip
 ";
 
-/// Initialize a new cargo-factorio project in `project_root`.
+/// Initialize a new factorio-rs project in `project_root`.
 pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
     let cargo_manifest = project_root.join("Cargo.toml");
     if cargo_manifest.exists() {
@@ -75,7 +75,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-factorio = "{FACTORIO_SDK_VERSION}"
+factorio-rs = "{FACTORIO_SDK_VERSION}"
 "#
     )
 }
@@ -143,6 +143,6 @@ mod tests {
     fn cargo_toml_includes_factorio_dependency() {
         let manifest = cargo_toml_template("my-mod");
         assert!(manifest.contains("name = \"my-mod\""));
-        assert!(manifest.contains("factorio = \"0.1.0\""));
+        assert!(manifest.contains("factorio-rs = \"0.1.0\""));
     }
 }

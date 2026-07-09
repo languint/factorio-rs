@@ -1,10 +1,9 @@
 [package]
-name = "factorio"
+name = "factorio-rs"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 description = "Rust SDK for Factorio modding"
-publish = false
 
 [dependencies]
 factorio-macros = { path = "../factorio-macros" }

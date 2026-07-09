@@ -28,7 +28,7 @@ fn run_init(args: &InitArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
     init::init(&project_root, args.name.as_deref())?;
     println!(
-        "Initialized cargo-factorio project at `{}`",
+        "Initialized factorio-rs project at `{}`",
         project_root.display()
     );
     Ok(())

@@ -6,13 +6,13 @@ use std::process::Command;
 use tempfile::TempDir;
 
 fn write_cargo_patch(project_root: &std::path::Path) {
-    let factorio_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/factorio");
+    let factorio_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/factorio-rs");
     let cargo_dir = project_root.join(".cargo");
     std::fs::create_dir_all(&cargo_dir).unwrap();
     std::fs::write(
         cargo_dir.join("config.toml"),
         format!(
-            "[patch.crates-io]\nfactorio = {{ path = \"{}\" }}\n",
+            "[patch.crates-io]\nfactorio-rs = {{ path = \"{}\" }}\n",
             factorio_path.display()
         ),
     )
@@ -24,7 +24,7 @@ fn init_creates_cargo_project_files() {
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["init", "--name", "test-mod"])
         .current_dir(project_root)
         .status()
@@ -36,7 +36,7 @@ fn init_creates_cargo_project_files() {
     assert!(project_root.join("src/lib.rs").is_file());
     assert!(project_root.join(".gitignore").is_file());
     let lib_rs = std::fs::read_to_string(project_root.join("src/lib.rs")).unwrap();
-    assert!(lib_rs.contains("factorio::control_mod!"));
+    assert!(lib_rs.contains("factorio_rs::control_mod!"));
 }
 
 #[test]
@@ -45,14 +45,14 @@ fn build_generates_lua_from_sources() {
     let project_root = temp_dir.path();
     write_cargo_patch(project_root);
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["init", "--name", "test-mod"])
         .current_dir(project_root)
         .status()
         .unwrap();
     assert!(status.success());
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .arg("build")
         .current_dir(project_root)
         .status()
@@ -74,7 +74,7 @@ fn initialized_project_passes_cargo_check() {
     let project_root = temp_dir.path();
     write_cargo_patch(project_root);
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["init", "--name", "test-mod"])
         .current_dir(project_root)
         .status()
@@ -94,7 +94,7 @@ fn init_fails_when_project_already_exists() {
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();
 
-    let binary = env!("CARGO_BIN_EXE_cargo-factorio");
+    let binary = env!("CARGO_BIN_EXE_factorio-rs");
 
     let status = Command::new(binary)
         .args(["init", "--name", "test-mod"])
@@ -117,14 +117,14 @@ fn build_with_package_flag_creates_factorio_zip() {
     let project_root = temp_dir.path();
     write_cargo_patch(project_root);
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["init", "--name", "test-mod"])
         .current_dir(project_root)
         .status()
         .unwrap();
     assert!(status.success());
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["build", "--package"])
         .current_dir(project_root)
         .status()
@@ -139,14 +139,14 @@ fn package_creates_factorio_zip() {
     let project_root = temp_dir.path();
     write_cargo_patch(project_root);
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .args(["init", "--name", "test-mod"])
         .current_dir(project_root)
         .status()
         .unwrap();
     assert!(status.success());
 
-    let status = Command::new(env!("CARGO_BIN_EXE_cargo-factorio"))
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
         .arg("package")
         .current_dir(project_root)
         .status()

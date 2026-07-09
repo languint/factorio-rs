@@ -1,10 +1,10 @@
-#[factorio::control]
+#[factorio_rs::control]
 mod control {
-    pub fn add(a: i64, b: i64) -> i64 {
+    fn add(a: i64, b: i64) -> i64 {
         a + b
     }
 
-    #[factorio::event(OnInit)]
+    #[factorio_rs::event(OnInit)]
     pub fn on_init() {
         println!("Hello from factorio-rs!");
     }
