@@ -21,7 +21,7 @@ impl Stage {
     }
 
     #[must_use]
-    pub fn default_module_name(self) -> &'static str {
+    pub const fn default_module_name(self) -> &'static str {
         match self {
             Self::Control => "control",
             Self::Shared => "shared",

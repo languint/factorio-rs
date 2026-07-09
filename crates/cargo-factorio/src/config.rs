@@ -14,7 +14,7 @@ fn default_output_dir() -> String {
     "dist".to_string()
 }
 
-fn default_prune_dead_code() -> bool {
+const fn default_prune_dead_code() -> bool {
     true
 }
 

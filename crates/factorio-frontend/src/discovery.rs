@@ -24,6 +24,9 @@ pub struct DiscoveredModule {
 /// - path-based layout (`src/control/...`, `src/control.rs`, ...)
 /// - `factorio::control_mod! { ... }` block macros (and `shared_mod!` / `data_mod!`)
 /// - `#[factorio::control] mod name { ... }` inline modules
+///
+/// # Errors
+/// Returns `Err` if parsing the Rust source fails.
 pub fn discover_modules(
     source_dir: &Path,
     source_path: &Path,
@@ -115,12 +118,12 @@ mod tests {
     fn discovers_inner_control_attribute_on_lib_rs() {
         let source_dir = Path::new("/project/src");
         let source_path = source_dir.join("lib.rs");
-        let source = r#"
+        let source = r"
             #![factorio::control]
 
             #[factorio::event(OnInit)]
             pub fn on_init() {}
-        "#;
+        ";
 
         let modules = discover_modules(source_dir, &source_path, source).unwrap();
         assert_eq!(modules.len(), 1);

@@ -1,8 +1,7 @@
-# cargo-factorio project configuration
 source = "src"
 output_dir = "dist"
 
 [mod]
 title = "hello-world"
-description = "Example cargo-factorio project"
+description = "Example factorio-rs project"
 factorio_version = "2.0"

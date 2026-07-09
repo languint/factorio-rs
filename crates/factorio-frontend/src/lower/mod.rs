@@ -21,7 +21,7 @@ use expressions::lower_expression;
 use functions::{lower_function, lower_impl_method};
 use imports::{lower_use, merge_imports};
 use metadata::{extract_doc_comments, struct_header_comment};
-use structs::{impl_type_name, lower_struct_fields, PendingStruct};
+use structs::{PendingStruct, impl_type_name, lower_struct_fields};
 use util::{item_name, item_name_impl, location};
 
 /// Parse Rust source into a [`factorio_ir::module::Module`].
@@ -44,14 +44,13 @@ pub fn parse_module(
 }
 
 /// Lower a discovered module into IR.
+///
+/// # Errors
+/// Returns `Err` if lowering fails.
 pub fn parse_discovered_module(
     discovered: &crate::discovery::DiscoveredModule,
 ) -> FrontendResult<factorio_ir::module::Module> {
-    lower_items(
-        &discovered.items,
-        &discovered.module_name,
-        discovered.stage,
-    )
+    lower_items(&discovered.items, &discovered.module_name, discovered.stage)
 }
 
 fn lower_items(
@@ -115,9 +114,8 @@ fn lower_top_level_item(
 ) -> FrontendResult<()> {
     match item {
         Item::Fn(function) => {
-            let lowered = factorio_ir::statement::Statement::FunctionDecl(lower_function(
-                function, ctx,
-            )?);
+            let lowered =
+                factorio_ir::statement::Statement::FunctionDecl(lower_function(function, ctx)?);
             if let factorio_ir::statement::Statement::FunctionDecl(ref func) = lowered
                 && func.event.is_some()
                 && module_state.stage != factorio_ir::stage::Stage::Control
@@ -126,7 +124,12 @@ fn lower_top_level_item(
                     module: module_state.module_name.to_string(),
                 });
             }
-            push_scoped_statement(lowered, &function.vis, module_state.body, module_state.symbols);
+            push_scoped_statement(
+                lowered,
+                &function.vis,
+                module_state.body,
+                module_state.symbols,
+            );
         }
         Item::Struct(item_struct) => lower_struct_item(item_struct, module_state.structs)?,
         Item::Impl(item_impl) => lower_impl_item(item_impl, module_state.structs, ctx)?,

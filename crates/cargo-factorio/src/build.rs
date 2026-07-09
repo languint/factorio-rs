@@ -1,9 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use factorio_codegen::LuaGenerator;
-use factorio_frontend::{
-    discover_modules, lua_output_path, parse_discovered_module,
-};
+use factorio_frontend::{discover_modules, lua_output_path, parse_discovered_module};
 use factorio_ir::{module::Module, prune::prune_modules};
 
 use crate::{
@@ -69,13 +67,8 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
     }
 
     for (module_spec, module) in discovered_modules {
-        let output_path = transpile_module(
-            &module_spec,
-            &module,
-            &lua_dir,
-            &package.name,
-            debug_level,
-        )?;
+        let output_path =
+            transpile_module(&module_spec, &module, &lua_dir, &package.name, debug_level)?;
         event_registrations.extend(collect_event_registrations(&module));
         outputs.push(output_path);
     }
@@ -147,10 +140,10 @@ fn transpile_module(
     mod_name: &str,
     debug_level: Option<u8>,
 ) -> CliResult<PathBuf> {
-    let mut generator = match debug_level {
-        Some(level) => LuaGenerator::with_mod_name_and_debug(mod_name, level),
-        None => LuaGenerator::with_mod_name(mod_name),
-    };
+    let mut generator = debug_level.map_or_else(
+        || LuaGenerator::with_mod_name(mod_name),
+        |level| LuaGenerator::with_mod_name_and_debug(mod_name, level),
+    );
     let lua = generator.generate_module(module)?;
 
     let output_path = lua_output_path(lua_dir, &discovered.module_name);
@@ -197,12 +190,12 @@ mod tests {
         std::fs::create_dir_all(&source_dir).unwrap();
         std::fs::write(
             source_dir.join("lib.rs"),
-            r#"
+            r"
             #[factorio::control]
             mod control {
                 pub fn on_init() {}
             }
-        "#,
+        ",
         )
         .unwrap();
         std::fs::create_dir_all(source_dir.join("shared/player")).unwrap();
