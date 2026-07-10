@@ -33,7 +33,7 @@ pub fn resolve_event_handler(function: &ItemFn) -> Option<ParsedEventHandler> {
     Some(ParsedEventHandler { event_name, filter })
 }
 
-pub(crate) fn event_marker_from_type(ty: &Type) -> Option<String> {
+pub fn event_marker_from_type(ty: &Type) -> Option<String> {
     let syn::Type::Path(type_path) = ty else {
         return None;
     };
@@ -47,7 +47,7 @@ pub(crate) fn event_marker_from_type(ty: &Type) -> Option<String> {
     }
 }
 
-pub(crate) fn event_marker_from_param(function: &ItemFn) -> Option<String> {
+pub fn event_marker_from_param(function: &ItemFn) -> Option<String> {
     let syn::FnArg::Typed(pat_type) = function.sig.inputs.first()? else {
         return None;
     };
@@ -65,10 +65,10 @@ mod tests {
     #[test]
     fn resolves_handler_from_attribute_without_filter() {
         let function: syn::ItemFn = parse_str(
-            r#"
+            r"
             #[factorio_rs::event]
             pub fn on_singleplayer_init(_event: OnSingleplayerInitEvent) {}
-            "#,
+            ",
         )
         .expect("function");
 

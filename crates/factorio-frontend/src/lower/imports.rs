@@ -109,7 +109,7 @@ fn finalize_use_binding(
             .unwrap_or_else(|| require_local_name(&module_path));
         let prefixed_local = apply_prefix(&default_local, module_prefix);
         return Ok(Some(ImportFragment {
-            module: module_path.clone(),
+            module: module_path,
             require_local: binding.rename.unwrap_or(prefixed_local),
             item: None,
         }));
@@ -118,7 +118,7 @@ fn finalize_use_binding(
     if item_segments.len() == 1 {
         let prefixed_local = apply_prefix(&require_local_name(&module_path), module_prefix);
         return Ok(Some(ImportFragment {
-            module: module_path.clone(),
+            module: module_path,
             require_local: prefixed_local,
             item: Some(factorio_ir::module::ImportedItem {
                 name: item_segments[0].clone(),

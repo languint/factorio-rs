@@ -43,30 +43,29 @@ fn lower_statement(
 
             // Handle tuple destructuring: `let (a, b) = (expr_a, expr_b)`
             // Expand into individual `VariableDecl` statements.
-            if let Pat::Tuple(pat_tuple) = &local.pat {
-                if let Expr::Tuple(rhs_tuple) = init.expr.as_ref() {
-                    if pat_tuple.elems.len() == rhs_tuple.elems.len() {
-                        let mut stmts = Vec::new();
-                        for (pat, rhs) in pat_tuple.elems.iter().zip(rhs_tuple.elems.iter()) {
-                            let name = extract_plain_binding(pat).ok_or_else(|| {
-                                FrontendError::ExpectedIdentifierPattern {
-                                    location: location(pat),
-                                }
-                            })?;
-                            let value = lower_expression(rhs, ctx, self_type)?;
-                            let ty = infer_type_from_expression(&value)
-                                .unwrap_or(factorio_ir::r#type::Type::Void);
-                            let source_type = inferred_source_type(&ty);
-                            stmts.push(factorio_ir::statement::Statement::VariableDecl {
-                                name,
-                                ty,
-                                source_type,
-                                value,
-                            });
+            if let Pat::Tuple(pat_tuple) = &local.pat
+                && let Expr::Tuple(rhs_tuple) = init.expr.as_ref()
+                && pat_tuple.elems.len() == rhs_tuple.elems.len()
+            {
+                let mut stmts = Vec::new();
+                for (pat, rhs) in pat_tuple.elems.iter().zip(rhs_tuple.elems.iter()) {
+                    let name = extract_plain_binding(pat).ok_or_else(|| {
+                        FrontendError::ExpectedIdentifierPattern {
+                            location: location(pat),
                         }
-                        return Ok(stmts);
-                    }
+                    })?;
+                    let value = lower_expression(rhs, ctx, self_type)?;
+                    let ty =
+                        infer_type_from_expression(&value).unwrap_or(factorio_ir::r#type::Type::Void);
+                    let source_type = inferred_source_type(&ty);
+                    stmts.push(factorio_ir::statement::Statement::VariableDecl {
+                        name,
+                        ty,
+                        source_type,
+                        value,
+                    });
                 }
+                return Ok(stmts);
             }
 
             let (name, annotated_type) = lower_binding(&local.pat)?;
@@ -298,8 +297,9 @@ fn lower_if_expression(
 ) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
     // Handle `if let Some(x) = expr { ... }`:
     // Lower as `local x = expr` followed by `if x then ... end`.
-    if let Expr::Let(let_expr) = if_expression.cond.as_ref() {
-        if let Some(binding) = extract_some_binding(&let_expr.pat) {
+    if let Expr::Let(let_expr) = if_expression.cond.as_ref()
+        && let Some(binding) = extract_some_binding(&let_expr.pat)
+    {
             let rhs = lower_expression(&let_expr.expr, ctx, self_type)?;
             let then_block =
                 lower_block_statements(&if_expression.then_branch.stmts, ctx, self_type)?;
@@ -320,7 +320,6 @@ fn lower_if_expression(
                     else_block,
                 },
             ]);
-        }
     }
 
     let condition = lower_expression(&if_expression.cond, ctx, self_type)?;

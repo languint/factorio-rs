@@ -64,130 +64,17 @@ impl LuaGenerator {
                 let base = self.generate_expression(base);
                 format!("{base}.{field}")
             }
-            Expression::QualifiedPath { segments } => {
-                if let Some((struct_name, table_path)) = &self.struct_table_context
-                    && segments
-                        .first()
-                        .is_some_and(|segment| segment == struct_name)
-                {
-                    let suffix = segments
-                        .get(1..)
-                        .map_or_else(String::new, |rest| rest.join("."));
-                    if suffix.is_empty() {
-                        return table_path.clone();
-                    }
-                    return format!("{table_path}.{suffix}");
-                }
-
-                segments.join(".")
-            }
-            Expression::Call { func, args } => {
-                if let Expression::QualifiedPath { segments } = func.as_ref()
-                    && args.is_empty()
-                    && segments
-                        .last()
-                        .is_some_and(|s| s == "new" || s == "default")
-                {
-                    let ty = segments.first().map_or("", String::as_str);
-                    match segments[0].as_str() {
-                        "LuaAny" => return "nil".to_string(),
-                        "Vec" if segments.last().is_some_and(|s| s == "new") => {
-                            return "{}".to_string();
-                        }
-                        _ if segments.last().is_some_and(|s| s == "default") => {
-                            return "{}".to_string();
-                        }
-                        _ => {
-                            let _ = ty; // fall through to normal call generation
-                        }
-                    }
-                }
-
-                let func = self.generate_expression(func);
-                let args = args
-                    .iter()
-                    .map(|arg| self.generate_expression(arg))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{func}({args})")
-            }
+            Expression::QualifiedPath { segments } => self.generate_qualified_path(segments),
+            Expression::Call { func, args } => self.generate_call(func, args),
             Expression::MethodCall {
                 receiver,
                 method,
                 args,
-            } => {
-                if method == "get" && args.len() == 1 {
-                    let receiver = self.generate_expression(receiver);
-                    let key = self.generate_expression(&args[0]);
-                    return format!("{receiver}[{key}].value");
-                }
-
-                if method == "len" && args.is_empty() {
-                    let receiver = self.generate_expression(receiver);
-                    return format!("#{receiver}");
-                }
-
-                if method == "push" && args.len() == 1 {
-                    let receiver = self.generate_expression(receiver);
-                    let item = self.generate_expression(&args[0]);
-                    return format!("table.insert({receiver}, {item})");
-                }
-
-                if method == "is_empty" && args.is_empty() {
-                    let receiver = self.generate_expression(receiver);
-                    return format!("#{receiver} == 0");
-                }
-
-                if args.is_empty() {
-                    let receiver = self.generate_expression(receiver);
-                    return format!("{receiver}.{method}");
-                }
-
-                let receiver = self.generate_expression(receiver);
-                let args_lua = args
-                    .iter()
-                    .map(|arg| self.generate_expression(arg))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                format!("{receiver}.{method}({args_lua})")
-            }
+            } => self.generate_method_call(receiver, method, args),
             Expression::StructLiteral {
                 struct_name,
                 fields,
-            } => {
-                let injected_type = struct_name.as_deref().and_then(prototype_lua_type);
-                let type_prefix = injected_type.map(|t| format!("type = \"{t}\", "));
-
-                let field_strs = fields
-                    .iter()
-                    .filter(|(name, _)| {
-                        injected_type.is_none() || (name != "type" && name != "r#type")
-                    })
-                    .map(|(name, value)| {
-                        let lua_name = if name == "r#type" {
-                            "type"
-                        } else {
-                            name.as_str()
-                        };
-                        format!("{lua_name} = {}", self.generate_expression(value))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                let inner = match type_prefix {
-                    Some(prefix) if !field_strs.is_empty() => format!("{prefix}{field_strs}"),
-                    Some(prefix) => prefix.trim_end_matches(", ").to_string(),
-                    None => field_strs,
-                };
-                let literal = format!("{{ {inner} }}");
-
-                if let Some((_, table_path)) = &self.struct_table_context {
-                    format!("setmetatable({literal}, {{ __index = {table_path} }})")
-                } else {
-                    literal
-                }
-            }
+            } => self.generate_struct_literal(struct_name.as_deref(), fields),
             Expression::FormatConcat { parts } => parts
                 .iter()
                 .map(|part| self.generate_expression(part))
@@ -201,37 +88,8 @@ impl LuaGenerator {
                     .join(", ");
                 format!("{{ {elements} }}")
             }
-            Expression::Index { base, key } => {
-                let base = self.generate_expression(base);
-
-                // Lua is 1-indexed, so translate 0 to 1
-                let key = match key.as_ref() {
-                    Expression::Literal(factorio_ir::literal::Literal::Int(0)) => "1".to_string(),
-                    _ => self.generate_expression(key),
-                };
-                format!("{base}[{key}]")
-            }
-            Expression::Not(inner) => {
-                if let Expression::MethodCall {
-                    receiver,
-                    method,
-                    args,
-                } = inner.as_ref()
-                    && method == "is_empty"
-                    && args.is_empty()
-                {
-                    let receiver = self.generate_expression(receiver);
-                    return format!("#{receiver} ~= 0");
-                }
-
-                let needs_parens = matches!(inner.as_ref(), Expression::BinaryOp { .. });
-                let inner_str = self.generate_expression(inner);
-                if needs_parens {
-                    format!("not ({inner_str})")
-                } else {
-                    format!("not {inner_str}")
-                }
-            }
+            Expression::Index { base, key } => self.generate_index(base, key),
+            Expression::Not(inner) => self.generate_not(inner),
             Expression::Len(inner) => {
                 let inner = self.generate_expression(inner);
                 format!("#{inner}")
@@ -239,6 +97,164 @@ impl LuaGenerator {
             Expression::BinaryOp { .. } => {
                 unreachable!("binary operators are handled by generate_expression_prec")
             }
+        }
+    }
+
+    fn generate_qualified_path(&self, segments: &[String]) -> String {
+        if let Some((struct_name, table_path)) = &self.struct_table_context
+            && segments
+                .first()
+                .is_some_and(|segment| segment == struct_name)
+        {
+            let suffix = segments
+                .get(1..)
+                .map_or_else(String::new, |rest| rest.join("."));
+            if suffix.is_empty() {
+                return table_path.clone();
+            }
+            return format!("{table_path}.{suffix}");
+        }
+
+        segments.join(".")
+    }
+
+    fn generate_call(&self, func: &Expression, args: &[Expression]) -> String {
+        if let Expression::QualifiedPath { segments } = func
+            && args.is_empty()
+            && segments
+                .last()
+                .is_some_and(|s| s == "new" || s == "default")
+        {
+            match segments[0].as_str() {
+                "LuaAny" => return "nil".to_string(),
+                "Vec" if segments.last().is_some_and(|s| s == "new") => {
+                    return "{}".to_string();
+                }
+                _ if segments.last().is_some_and(|s| s == "default") => {
+                    return "{}".to_string();
+                }
+                _ => {}
+            }
+        }
+
+        let func = self.generate_expression(func);
+        let args = args
+            .iter()
+            .map(|arg| self.generate_expression(arg))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{func}({args})")
+    }
+
+    fn generate_method_call(
+        &self,
+        receiver: &Expression,
+        method: &str,
+        args: &[Expression],
+    ) -> String {
+        if method == "get" && args.len() == 1 {
+            let receiver = self.generate_expression(receiver);
+            let key = self.generate_expression(&args[0]);
+            return format!("{receiver}[{key}].value");
+        }
+
+        if method == "len" && args.is_empty() {
+            let receiver = self.generate_expression(receiver);
+            return format!("#{receiver}");
+        }
+
+        if method == "push" && args.len() == 1 {
+            let receiver = self.generate_expression(receiver);
+            let item = self.generate_expression(&args[0]);
+            return format!("table.insert({receiver}, {item})");
+        }
+
+        if method == "is_empty" && args.is_empty() {
+            let receiver = self.generate_expression(receiver);
+            return format!("#{receiver} == 0");
+        }
+
+        if args.is_empty() {
+            let receiver = self.generate_expression(receiver);
+            return format!("{receiver}.{method}");
+        }
+
+        let receiver = self.generate_expression(receiver);
+        let args_lua = args
+            .iter()
+            .map(|arg| self.generate_expression(arg))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!("{receiver}.{method}({args_lua})")
+    }
+
+    fn generate_struct_literal(
+        &self,
+        struct_name: Option<&str>,
+        fields: &[(String, Expression)],
+    ) -> String {
+        let injected_type = struct_name.and_then(prototype_lua_type);
+        let type_prefix = injected_type.map(|t| format!("type = \"{t}\", "));
+
+        let field_strs = fields
+            .iter()
+            .filter(|(name, _)| injected_type.is_none() || (name != "type" && name != "r#type"))
+            .map(|(name, value)| {
+                let lua_name = if name == "r#type" {
+                    "type"
+                } else {
+                    name.as_str()
+                };
+                format!("{lua_name} = {}", self.generate_expression(value))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let inner = match type_prefix {
+            Some(prefix) if !field_strs.is_empty() => format!("{prefix}{field_strs}"),
+            Some(prefix) => prefix.trim_end_matches(", ").to_string(),
+            None => field_strs,
+        };
+        let literal = format!("{{ {inner} }}");
+
+        if let Some((_, table_path)) = &self.struct_table_context {
+            format!("setmetatable({literal}, {{ __index = {table_path} }})")
+        } else {
+            literal
+        }
+    }
+
+    fn generate_index(&self, base: &Expression, key: &Expression) -> String {
+        let base = self.generate_expression(base);
+
+        // Lua is 1-indexed, so translate 0 to 1
+        let key = match key {
+            Expression::Literal(factorio_ir::literal::Literal::Int(0)) => "1".to_string(),
+            _ => self.generate_expression(key),
+        };
+        format!("{base}[{key}]")
+    }
+
+    fn generate_not(&self, inner: &Expression) -> String {
+        if let Expression::MethodCall {
+            receiver,
+            method,
+            args,
+        } = inner
+            && method == "is_empty"
+            && args.is_empty()
+        {
+            let receiver = self.generate_expression(receiver);
+            return format!("#{receiver} ~= 0");
+        }
+
+        let needs_parens = matches!(inner, Expression::BinaryOp { .. });
+        let inner_str = self.generate_expression(inner);
+        if needs_parens {
+            format!("not ({inner_str})")
+        } else {
+            format!("not {inner_str}")
         }
     }
 }

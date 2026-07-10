@@ -66,7 +66,7 @@ pub fn return_stub_for_type(api_type: &ApiType, known: &KnownTypes<'_>) -> Retur
         Some("dictionary") | Some("LuaCustomTable") => {
             if api_type
                 .child_type("key")
-                .map_or(false, |k| is_string_key(&k))
+                .is_some_and(|k| is_string_key(&k))
             {
                 ReturnStub::Default // HashMap::default() = HashMap::new()
             } else {

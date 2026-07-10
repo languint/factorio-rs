@@ -75,20 +75,20 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
     let lua_module_prefix = config.lua_module_prefix.as_deref().unwrap_or("");
     for (module_spec, module) in &discovered_modules {
         let output_path = transpile_module(
-            &module_spec,
-            &module,
+            module_spec,
+            module,
             &lua_dir,
             &package.name,
             debug_level,
             lua_module_prefix,
         )?;
-        event_registrations.extend(collect_event_registrations(&module));
+        event_registrations.extend(collect_event_registrations(module));
         if let Some(stage_module) =
-            collect_stage_module(&module, factorio_ir::stage::Stage::Settings)
+            collect_stage_module(module, factorio_ir::stage::Stage::Settings)
         {
             settings_modules.push(stage_module);
         }
-        if let Some(stage_module) = collect_stage_module(&module, factorio_ir::stage::Stage::Data) {
+        if let Some(stage_module) = collect_stage_module(module, factorio_ir::stage::Stage::Data) {
             data_modules.push(stage_module);
         }
         outputs.push(output_path);
@@ -129,15 +129,16 @@ fn prefix_module_name(module_name: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         return module_name.to_string();
     }
-    match module_name.rfind('.') {
-        Some(dot) => format!(
-            "{}.{}_{}",
-            &module_name[..dot],
-            prefix,
-            &module_name[dot + 1..]
-        ),
-        None => format!("{}_{}", prefix, module_name),
-    }
+    module_name.rfind('.').map_or_else(
+        || format!("{prefix}_{module_name}"),
+        |dot| {
+            format!(
+                "{}.{prefix}_{}",
+                &module_name[..dot],
+                &module_name[dot + 1..]
+            )
+        },
+    )
 }
 
 fn collect_rust_sources(source_dir: &Path) -> CliResult<Vec<PathBuf>> {

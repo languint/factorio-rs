@@ -32,14 +32,14 @@ impl LowerContext<'_> {
 
     /// If the first segment of `segments` matches a bare-imported module local,
     /// rewrite it to the prefixed name.
-    pub fn normalize_bare_import_path(&self, segments: &mut Vec<String>) {
+    pub fn normalize_bare_import_path(&self, segments: &mut [String]) {
         if self.bare_import_renames.is_empty() {
             return;
         }
-        if let Some(first) = segments.first() {
-            if let Some(renamed) = self.bare_import_renames.get(first.as_str()) {
-                segments[0] = renamed.clone();
-            }
+        if let Some(first) = segments.first()
+            && let Some(renamed) = self.bare_import_renames.get(first.as_str())
+        {
+            segments[0].clone_from(renamed);
         }
     }
 

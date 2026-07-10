@@ -52,14 +52,12 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
         return;
     }
 
-    if player_index != 0 {
-        if let Some(player) = game.get_player(player_index.into()) {
-            let cursor = player.cursor_stack();
-            if cursor.valid_for_read() {
-                if cursor.r#type() == "rail-planner" {
-                    return;
-                }
-            }
+    if player_index != 0
+        && let Some(player) = game.get_player(player_index.into())
+    {
+        let cursor = player.cursor_stack();
+        if cursor.valid_for_read() && cursor.r#type() == "rail-planner" {
+            return;
         }
     }
 
@@ -102,11 +100,14 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
 fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<classes::LuaEntity> {
     let mut pos = source.position();
 
+    // Manual swap keeps the transpiler happy (`std::mem::swap` is not lowered).
+    #[allow(clippy::manual_swap)]
     if pos.x > offset.x {
         let tmp = pos.x;
         pos.x = offset.x;
         offset.x = tmp;
     }
+    #[allow(clippy::manual_swap)]
     if pos.y > offset.y {
         let tmp = pos.y;
         pos.y = offset.y;
@@ -121,7 +122,7 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
     let direction = if is_rectangular {
         source.direction().into()
     } else {
-        LuaAny::default()
+        LuaAny
     };
 
     let entities = source
@@ -162,8 +163,7 @@ fn draw_line(surface: classes::LuaSurface, from: LuaAny, to: LuaAny) -> classes:
             g: 1.0,
             b: 1.0,
             a: 1.0,
-        }
-        .into(),
+        },
         from,
         to,
         surface: surface.into(),

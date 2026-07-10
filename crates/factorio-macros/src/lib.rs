@@ -59,15 +59,15 @@ pub fn event(args: TokenStream, input: TokenStream) -> TokenStream {
             .into();
     };
 
-    if let Some(filter) = &event_args.filter {
-        if lookup_event_filter_type(&type_name).is_none() {
-            return syn::Error::new_spanned(
-                filter,
-                format!("event `{type_name}` does not support filters"),
-            )
-            .to_compile_error()
-            .into();
-        }
+    if let Some(filter) = &event_args.filter
+        && lookup_event_filter_type(&type_name).is_none()
+    {
+        return syn::Error::new_spanned(
+            filter,
+            format!("event `{type_name}` does not support filters"),
+        )
+        .to_compile_error()
+        .into();
     }
 
     if function.sig.ident != event_name {

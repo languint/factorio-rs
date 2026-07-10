@@ -178,13 +178,13 @@ fn prefixed_lua_path(module_name: &str, prefix: &str) -> String {
         return module_name.replace('.', "/");
     }
     // Apply prefix to the last segment only.
-    match module_name.rfind('.') {
-        Some(dot) => {
+    module_name.rfind('.').map_or_else(
+        || format!("{prefix}_{module_name}"),
+        |dot| {
             let dir = module_name[..dot].replace('.', "/");
             format!("{dir}/{prefix}_{}", &module_name[dot + 1..])
-        }
-        None => format!("{prefix}_{module_name}"),
-    }
+        },
+    )
 }
 
 #[derive(Debug, Serialize)]

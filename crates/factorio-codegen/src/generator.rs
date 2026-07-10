@@ -141,18 +141,21 @@ impl LuaGenerator {
         if self.module_prefix.is_empty() {
             return path.to_string();
         }
-        match path.rfind('/') {
-            Some(slash) => format!(
-                "{}/{prefix}_{}",
-                &path[..slash],
-                &path[slash + 1..],
-                prefix = self.module_prefix
-            ),
-            None => format!("{}_{}", self.module_prefix, path),
-        }
+        path.rfind('/').map_or_else(
+            || format!("{}_{}", self.module_prefix, path),
+            |slash| {
+                format!(
+                    "{}/{prefix}_{}",
+                    &path[..slash],
+                    &path[slash + 1..],
+                    prefix = self.module_prefix
+                )
+            },
+        )
     }
 
     /// Return the prefixed local variable name for a module import.
+    #[must_use]
     pub fn prefixed_local(&self, local: &str) -> String {
         if self.module_prefix.is_empty() {
             local.to_string()

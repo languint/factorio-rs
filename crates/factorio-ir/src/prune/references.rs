@@ -169,23 +169,24 @@ fn collect_references_from_statement(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_references_from_method_call(
     graph: &ModuleGraph<'_>,
     module: &Module,
     locals: &HashMap<String, String>,
     reachability: &mut HashMap<String, ModuleReachability>,
     pending: &mut VecDeque<(String, ItemKey)>,
-    receiver: &Box<Expression>,
-    method: &String,
-    args: &Vec<Expression>,
+    receiver: &Expression,
+    method: &str,
+    args: &[Expression],
 ) {
-    if let Expression::Identifier(name) = receiver.as_ref() {
+    if let Expression::Identifier(name) = receiver {
         if let Some((target_module, struct_name)) = resolve_import(module, name) {
             enqueue_item(
                 reachability,
                 pending,
                 &target_module,
-                ItemKey::StructMethod(struct_name, method.clone()),
+                ItemKey::StructMethod(struct_name, method.to_owned()),
             );
         } else if let Some(struct_name) = locals.get(name) {
             let owner = struct_utils::struct_owner_module(graph, module, struct_name);
@@ -193,7 +194,7 @@ fn collect_references_from_method_call(
                 reachability,
                 pending,
                 &owner,
-                ItemKey::StructMethod(struct_name.clone(), method.clone()),
+                ItemKey::StructMethod(struct_name.clone(), method.to_owned()),
             );
         }
     } else {
@@ -210,10 +211,10 @@ fn collect_references_from_field_access(
     locals: &HashMap<String, String>,
     reachability: &mut HashMap<String, ModuleReachability>,
     pending: &mut VecDeque<(String, ItemKey)>,
-    base: &Box<Expression>,
-    field: &String,
+    base: &Expression,
+    field: &str,
 ) {
-    if let Expression::Identifier(name) = base.as_ref() {
+    if let Expression::Identifier(name) = base {
         if let Some((target_module, struct_name)) = resolve_import(module, name) {
             enqueue_item(
                 reachability,
@@ -225,7 +226,7 @@ fn collect_references_from_field_access(
                 reachability,
                 pending,
                 &target_module,
-                ItemKey::StructMethod(struct_name, field.clone()),
+                ItemKey::StructMethod(struct_name, field.to_owned()),
             );
         } else if let Some(struct_name) = locals.get(name) {
             queue_struct_member(graph, module, struct_name, field, reachability, pending);

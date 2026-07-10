@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use proc_macro2::TokenStream;
 use syn::{
     Expr, LitStr, Token, Type,
@@ -25,9 +27,10 @@ pub fn expand(tokens: TokenStream) -> FrontendResult<Vec<syn::Item>> {
             let lua_name = build_lua_name(input.prefix.as_deref(), &entry.ident.to_string());
             let default_str = expr_to_string(&entry.default);
 
-            const_defs.push_str(&format!(
-                "pub const {const_name}: &'static str = \"{lua_name}\";\n"
-            ));
+            let _ = writeln!(
+                const_defs,
+                "pub const {const_name}: &'static str = \"{lua_name}\";"
+            );
 
             let (struct_name, extra_fields) = match entry.setting_type {
                 SettingType::Bool => ("BoolSetting", String::new()),
@@ -42,9 +45,10 @@ pub fn expand(tokens: TokenStream) -> FrontendResult<Vec<syn::Item>> {
                 SettingType::Str => ("StringSetting", "hidden: false,".to_string()),
             };
 
-            extend_items.push_str(&format!(
-                "{struct_name} {{ name: \"{lua_name}\", setting_type: \"{stage_str}\", default_value: {default_str}, {extra_fields} }},\n"
-            ));
+            let _ = writeln!(
+                extend_items,
+                "{struct_name} {{ name: \"{lua_name}\", setting_type: \"{stage_str}\", default_value: {default_str}, {extra_fields} }},"
+            );
         }
     }
 

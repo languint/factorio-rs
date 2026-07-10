@@ -234,15 +234,11 @@ fn build_takes_table_structs(
             let fields = method.parameters.iter().map(|p| {
                 let ident = make_ident(&p.name);
                 let ty = map_field_type_unboxed(&p.type_name, known);
-                if let Some(doc) = p
-                    .description
-                    .is_empty()
-                    .then_some(None)
-                    .unwrap_or_else(|| Some(sanitize_doc(&p.description)))
-                {
-                    quote! { #[doc = #doc] pub #ident: #ty, }
-                } else {
+                if p.description.is_empty() {
                     quote! { pub #ident: #ty, }
+                } else {
+                    let doc = sanitize_doc(&p.description);
+                    quote! { #[doc = #doc] pub #ident: #ty, }
                 }
             });
 
@@ -295,7 +291,7 @@ fn generate_class(
         let params_struct = takes_table_map
             .get(&(defining_class.to_string(), method.name.clone()))
             .filter(|_| method.format.takes_table);
-        generate_method(method, known, params_struct.map(|i| i))
+        generate_method(method, known, params_struct)
     });
     let attributes = all_attrs.iter().filter_map(|(attribute, defining_class)| {
         generate_attribute(

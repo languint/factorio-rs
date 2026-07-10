@@ -26,37 +26,7 @@ pub fn lower_expression(
                 args,
             })
         }
-        Expr::MethodCall(call) => {
-            // Rust-only coercion methods that are semantically transparent in Lua.
-            // Strip them so `value.unwrap().into()` becomes just `value` in Lua.
-            const TRANSPARENT_METHODS: &[&str] = &[
-                "into",
-                "unwrap",
-                "clone",
-                "as_str",
-                "as_ref",
-                "as_slice",
-                "as_deref",
-                "to_string",
-                "to_owned",
-            ];
-            if TRANSPARENT_METHODS.contains(&call.method.to_string().as_str())
-                && call.args.is_empty()
-            {
-                return lower_expression(&call.receiver, ctx, self_type);
-            }
-            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
-            let args = call
-                .args
-                .iter()
-                .map(|arg| lower_expression(arg, ctx, self_type))
-                .collect::<FrontendResult<Vec<_>>>()?;
-            Ok(factorio_ir::expression::Expression::MethodCall {
-                receiver: Box::new(receiver),
-                method: strip_raw_prefix(call.method.to_string()),
-                args,
-            })
-        }
+        Expr::MethodCall(call) => lower_method_call(call, ctx, self_type),
         Expr::Struct(item) => lower_struct_expression(item, ctx, self_type),
         Expr::Macro(mac) => lower_macro_expression(mac, ctx, self_type),
         Expr::Array(array) => {
@@ -81,66 +51,115 @@ pub fn lower_expression(
         // `(expr)` - transparent grouping.
         Expr::Paren(paren) => lower_expression(&paren.expr, ctx, self_type),
         // `if cond { a } else { b }` as an expression → Lua `cond and a or b` ternary idiom.
-        Expr::If(if_expr) => {
-            let condition = lower_expression(&if_expr.cond, ctx, self_type)?;
-            let else_branch = if_expr.else_branch.as_ref().ok_or_else(|| {
-                FrontendError::UnsupportedExpression {
-                    location: location(if_expr),
-                }
+        Expr::If(if_expr) => lower_if_expr(if_expr, ctx, self_type),
+        Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
+        _ => Err(FrontendError::UnsupportedExpression {
+            location: location(expression),
+        }),
+    }
+}
+
+fn lower_method_call(
+    call: &syn::ExprMethodCall,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    const TRANSPARENT_METHODS: &[&str] = &[
+        "into",
+        "unwrap",
+        "clone",
+        "as_str",
+        "as_ref",
+        "as_slice",
+        "as_deref",
+        "to_string",
+        "to_owned",
+    ];
+    if TRANSPARENT_METHODS.contains(&call.method.to_string().as_str()) && call.args.is_empty() {
+        return lower_expression(&call.receiver, ctx, self_type);
+    }
+    let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+    let args = call
+        .args
+        .iter()
+        .map(|arg| lower_expression(arg, ctx, self_type))
+        .collect::<FrontendResult<Vec<_>>>()?;
+    Ok(factorio_ir::expression::Expression::MethodCall {
+        receiver: Box::new(receiver),
+        method: strip_raw_prefix(call.method.to_string()),
+        args,
+    })
+}
+
+fn lower_if_expr(
+    if_expr: &syn::ExprIf,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let condition = lower_expression(&if_expr.cond, ctx, self_type)?;
+    let else_branch =
+        if_expr
+            .else_branch
+            .as_ref()
+            .ok_or_else(|| FrontendError::UnsupportedExpression {
+                location: location(if_expr),
             })?;
-            let then_val = match if_expr.then_branch.stmts.as_slice() {
-                [syn::Stmt::Expr(e, None)] => lower_expression(e, ctx, self_type)?,
-                _ => {
-                    return Err(FrontendError::UnsupportedExpression {
-                        location: location(if_expr),
-                    });
-                }
-            };
-            let else_val = match else_branch.1.as_ref() {
-                Expr::Block(b) => match b.block.stmts.as_slice() {
-                    [syn::Stmt::Expr(e, None)] => lower_expression(e, ctx, self_type)?,
-                    _ => {
-                        return Err(FrontendError::UnsupportedExpression {
-                            location: location(if_expr),
-                        });
-                    }
-                },
-                e => lower_expression(e, ctx, self_type)?,
-            };
-            // `cond and then_val or else_val`
-            let and_part = factorio_ir::expression::Expression::BinaryOp {
-                lhs: Box::new(condition),
-                op: factorio_ir::operator::Operator::And,
-                rhs: Box::new(then_val),
-            };
+    let then_val = match if_expr.then_branch.stmts.as_slice() {
+        [syn::Stmt::Expr(e, None)] => lower_expression(e, ctx, self_type)?,
+        _ => {
+            return Err(FrontendError::UnsupportedExpression {
+                location: location(if_expr),
+            });
+        }
+    };
+    let else_val = match else_branch.1.as_ref() {
+        Expr::Block(b) => match b.block.stmts.as_slice() {
+            [syn::Stmt::Expr(e, None)] => lower_expression(e, ctx, self_type)?,
+            _ => {
+                return Err(FrontendError::UnsupportedExpression {
+                    location: location(if_expr),
+                });
+            }
+        },
+        e => lower_expression(e, ctx, self_type)?,
+    };
+    // `cond and then_val or else_val`
+    let and_part = factorio_ir::expression::Expression::BinaryOp {
+        lhs: Box::new(condition),
+        op: factorio_ir::operator::Operator::And,
+        rhs: Box::new(then_val),
+    };
+    Ok(factorio_ir::expression::Expression::BinaryOp {
+        lhs: Box::new(and_part),
+        op: factorio_ir::operator::Operator::Or,
+        rhs: Box::new(else_val),
+    })
+}
+
+fn lower_unary_expression(
+    unary: &syn::ExprUnary,
+    expression: &Expr,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    match unary.op {
+        UnOp::Not(_) => {
+            let inner = lower_expression(&unary.expr, ctx, self_type)?;
+            Ok(factorio_ir::expression::Expression::Not(Box::new(inner)))
+        }
+        UnOp::Neg(_) => {
+            // `-x` → `0 - x`
+            let inner = lower_expression(&unary.expr, ctx, self_type)?;
             Ok(factorio_ir::expression::Expression::BinaryOp {
-                lhs: Box::new(and_part),
-                op: factorio_ir::operator::Operator::Or,
-                rhs: Box::new(else_val),
+                lhs: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Int(0),
+                )),
+                op: factorio_ir::operator::Operator::Sub,
+                rhs: Box::new(inner),
             })
         }
-        Expr::Unary(unary) => match unary.op {
-            UnOp::Not(_) => {
-                let inner = lower_expression(&unary.expr, ctx, self_type)?;
-                Ok(factorio_ir::expression::Expression::Not(Box::new(inner)))
-            }
-            UnOp::Neg(_) => {
-                // `-x` → `0 - x`
-                let inner = lower_expression(&unary.expr, ctx, self_type)?;
-                Ok(factorio_ir::expression::Expression::BinaryOp {
-                    lhs: Box::new(factorio_ir::expression::Expression::Literal(
-                        factorio_ir::literal::Literal::Int(0),
-                    )),
-                    op: factorio_ir::operator::Operator::Sub,
-                    rhs: Box::new(inner),
-                })
-            }
-            // `*x` - dereference is a no-op in Lua; lower the inner expression directly.
-            UnOp::Deref(_) => lower_expression(&unary.expr, ctx, self_type),
-            _ => Err(FrontendError::UnsupportedExpression {
-                location: location(expression),
-            }),
-        },
+        // `*x` - dereference is a no-op in Lua; lower the inner expression directly.
+        UnOp::Deref(_) => lower_expression(&unary.expr, ctx, self_type),
         _ => Err(FrontendError::UnsupportedExpression {
             location: location(expression),
         }),

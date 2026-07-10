@@ -5,9 +5,9 @@ use syn::{
 
 use factorio_ir::stage::Stage;
 
-pub(crate) struct EventAttributeArgs {
-    pub(crate) event: Option<Path>,
-    pub(crate) filter: Option<Expr>,
+pub struct EventAttributeArgs {
+    pub event: Option<Path>,
+    pub filter: Option<Expr>,
 }
 
 impl Parse for EventAttributeArgs {
@@ -59,7 +59,7 @@ impl Parse for EventAttributeArgs {
 }
 
 /// Parses optional `#[factorio_rs::event(...)]` attribute arguments.
-pub(crate) fn parse_factorio_event_attribute_args(attr: &Attribute) -> Option<EventAttributeArgs> {
+pub fn parse_factorio_event_attribute_args(attr: &Attribute) -> Option<EventAttributeArgs> {
     let path = attr.path();
     if !is_factorio_path_segment(path, "event") {
         return None;
