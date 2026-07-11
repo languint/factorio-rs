@@ -3,6 +3,10 @@ name = "factorio-frontend"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+description = "Rust frontend that lowers Factorio mod sources into factorio-ir"
 
 [dependencies]
 factorio-api.workspace = true
@@ -14,7 +18,7 @@ thiserror.workspace = true
 quote = "1.0.46"
 
 [dev-dependencies]
-factorio-codegen = { path = "../factorio-codegen" }
+factorio-codegen = { workspace = true }
 
 [lints]
 workspace = true

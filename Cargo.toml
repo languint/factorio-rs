@@ -16,13 +16,18 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/languint/factorio-rs"
+homepage = "https://github.com/languint/factorio-rs"
+readme = "README.md"
 
 [workspace.dependencies]
-factorio-rs = { path = "./crates/factorio-rs" }
-factorio-api = { path = "./crates/factorio-api" }
-factorio-codegen = { path = "./crates/factorio-codegen" }
-factorio-frontend = { path = "./crates/factorio-frontend" }
-factorio-ir = { path = "./crates/factorio-ir" }
+factorio-rs = { version = "0.1.0", path = "./crates/factorio-rs" }
+factorio-api = { version = "0.1.0", path = "./crates/factorio-api" }
+factorio-api-gen = { version = "0.1.0", path = "./crates/factorio-api-gen" }
+factorio-macros = { version = "0.1.0", path = "./crates/factorio-macros" }
+factorio-codegen = { version = "0.1.0", path = "./crates/factorio-codegen" }
+factorio-frontend = { version = "0.1.0", path = "./crates/factorio-frontend" }
+factorio-ir = { version = "0.1.0", path = "./crates/factorio-ir" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"

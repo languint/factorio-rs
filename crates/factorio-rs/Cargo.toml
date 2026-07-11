@@ -3,11 +3,14 @@ name = "factorio-rs"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 description = "Rust SDK for Factorio modding"
 
 [dependencies]
 factorio-api = { workspace = true }
-factorio-macros = { path = "../factorio-macros" }
+factorio-macros = { workspace = true }
 
 [lints]
 workspace = true
