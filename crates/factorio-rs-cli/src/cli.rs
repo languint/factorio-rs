@@ -12,6 +12,8 @@ pub enum Command {
     Package(PackageArgs),
     /// Build and copy the mod into the Factorio mods directory.
     Install(InstallArgs),
+    /// Open Factorio if it is installed on this system.
+    Open,
 }
 
 #[derive(Debug, Parser)]
@@ -89,4 +91,8 @@ pub struct InstallArgs {
     /// Override the profile's debug comment level in generated Lua.
     #[arg(long, value_name = "LEVEL")]
     pub debug_level: Option<u8>,
+
+    /// Open Factorio after installing the mod.
+    #[arg(long)]
+    pub open: bool,
 }

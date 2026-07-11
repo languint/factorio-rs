@@ -65,6 +65,15 @@ pub enum CliError {
         source: zip::result::ZipError,
     },
 
+    #[error("Factorio was not found on this system ({hint})")]
+    FactorioNotFound { hint: String },
+
+    #[error("failed to launch Factorio (`{target}`)")]
+    LaunchFactorio {
+        target: String,
+        source: std::io::Error,
+    },
+
     #[error(transparent)]
     Frontend(#[from] factorio_frontend::FrontendError),
 

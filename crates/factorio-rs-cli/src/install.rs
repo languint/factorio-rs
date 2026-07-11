@@ -5,6 +5,7 @@ use crate::{
     cargo_manifest::CargoPackage,
     config::Config,
     error::{CliError, CliResult},
+    paths::factorio_mods_dir,
 };
 
 /// Build the mod and copy it into the Factorio mods directory.
@@ -19,19 +20,6 @@ pub fn install(project_root: &Path, options: &BuildOptions) -> CliResult<PathBuf
 
     copy_dir_recursive(&output_dir, &dest)?;
     Ok(dest)
-}
-
-fn factorio_mods_dir() -> CliResult<PathBuf> {
-    if let Ok(path) = std::env::var("FACTORIO_MODS_DIR") {
-        return Ok(PathBuf::from(path));
-    }
-
-    let home = std::env::var("HOME").map_err(|source| CliError::ReadFile {
-        path: PathBuf::from("~/.factorio/mods"),
-        source: std::io::Error::new(std::io::ErrorKind::NotFound, source),
-    })?;
-
-    Ok(PathBuf::from(home).join(".factorio/mods"))
 }
 
 fn copy_dir_recursive(source: &Path, dest: &Path) -> CliResult<()> {
@@ -86,7 +74,7 @@ fn copy_dir_recursive(source: &Path, dest: &Path) -> CliResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::factorio_mods_dir;
+    use crate::paths::factorio_mods_dir;
 
     #[test]
     fn factorio_mods_dir_defaults_to_home_factorio_mods() {
