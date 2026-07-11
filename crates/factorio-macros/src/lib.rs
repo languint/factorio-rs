@@ -575,9 +575,12 @@ pub fn locale(input: TokenStream) -> TokenStream {
                 let value = &entry.value;
                 let value_text = value.value();
                 if value_text.contains('\n') || value_text.contains('\r') {
-                    return syn::Error::new_spanned(value, "locale values must be a single line")
-                        .to_compile_error()
-                        .into();
+                    return syn::Error::new_spanned(
+                        value,
+                        "locale values must be a single line",
+                    )
+                    .to_compile_error()
+                    .into();
                 }
             }
         }

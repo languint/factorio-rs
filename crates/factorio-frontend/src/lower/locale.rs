@@ -20,7 +20,8 @@ pub fn expand(
     tokens: TokenStream,
     const_strings: &BTreeMap<String, String>,
 ) -> FrontendResult<Vec<LocaleFile>> {
-    let input: LocaleInput = syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let input: LocaleInput =
+        syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
 
     let file = input.file.unwrap_or_else(|| "locale".to_string());
     let mut files = Vec::new();
@@ -71,10 +72,7 @@ pub fn collect_const_strings(
     map
 }
 
-fn resolve_key(
-    key: &LocaleKey,
-    const_strings: &BTreeMap<String, String>,
-) -> FrontendResult<String> {
+fn resolve_key(key: &LocaleKey, const_strings: &BTreeMap<String, String>) -> FrontendResult<String> {
     match key {
         LocaleKey::Literal(s) => Ok(s.clone()),
         LocaleKey::Path(path) => {

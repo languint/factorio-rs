@@ -209,10 +209,7 @@ impl ApiType {
             return false;
         }
         let non_nil = self.non_nil_options();
-        !non_nil.is_empty()
-            && non_nil
-                .iter()
-                .all(|option| option.literal_kind() == Some("string"))
+        !non_nil.is_empty() && non_nil.iter().all(|option| option.literal_kind() == Some("string"))
     }
 
     /// String values of a homogeneous string-literal union, in Factorio order.
