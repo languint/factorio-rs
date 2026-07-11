@@ -42,7 +42,13 @@ pub struct BuildArgs {
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
 
-    /// Emit Rust source comments in generated Lua for debugging.
+    /// Transpile profile from `Factorio.toml` (`debug`, `release`, or custom).
+    ///
+    /// Defaults to `debug`.
+    #[arg(long, value_name = "NAME", default_value = "debug")]
+    pub profile: String,
+
+    /// Override the profile's debug comment level in generated Lua.
     #[arg(long, value_name = "LEVEL")]
     pub debug_level: Option<u8>,
 
@@ -56,6 +62,16 @@ pub struct PackageArgs {
     /// Path to the project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
+
+    /// Transpile profile from `Factorio.toml`.
+    ///
+    /// Defaults to `release`.
+    #[arg(long, value_name = "NAME", default_value = "release")]
+    pub profile: String,
+
+    /// Override the profile's debug comment level in generated Lua.
+    #[arg(long, value_name = "LEVEL")]
+    pub debug_level: Option<u8>,
 }
 
 #[derive(Debug, Parser)]
@@ -63,4 +79,14 @@ pub struct InstallArgs {
     /// Path to the project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
+
+    /// Transpile profile from `Factorio.toml`.
+    ///
+    /// Defaults to `debug`.
+    #[arg(long, value_name = "NAME", default_value = "debug")]
+    pub profile: String,
+
+    /// Override the profile's debug comment level in generated Lua.
+    #[arg(long, value_name = "LEVEL")]
+    pub debug_level: Option<u8>,
 }

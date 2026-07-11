@@ -18,11 +18,18 @@ const LIB_RS: &str = r#"factorio_rs::control_mod! {
 const FACTORIO_CONFIG: &str = r#"# factorio-rs project configuration
 source = "src"
 output_dir = "dist"
-prune_dead_code = true
 
 [mod]
 title = "Factorio Mod"
 factorio_version = "2.0"
+
+[profiles.debug]
+debug_level = 1
+prune_dead_code = false
+
+[profiles.release]
+debug_level = 0
+prune_dead_code = true
 "#;
 
 const GITIGNORE: &str = r"/target

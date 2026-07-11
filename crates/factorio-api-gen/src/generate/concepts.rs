@@ -15,6 +15,7 @@ pub fn generatable_concept_names(
         .iter()
         .filter(|c| {
             !excluded.contains(&c.name)
+                && !c.type_name.is_homog_string_literal_union()
                 && (concept_table_params(&c.type_name).is_some() || is_string_alias(c))
         })
         .map(|c| c.name.clone())
@@ -46,6 +47,11 @@ pub fn generate_concepts(
 }
 
 fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenStream> {
+    // Literal-union concepts are emitted by `generate_unions`.
+    if concept.type_name.is_homog_string_literal_union() {
+        return None;
+    }
+
     let name = make_ident(&concept.name);
     let doc: Option<String> = if concept.description.is_empty() {
         None

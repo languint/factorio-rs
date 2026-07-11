@@ -10,9 +10,9 @@ use super::imports::ImportFragment;
 pub struct LowerContext<'a> {
     pub imports: &'a mut Vec<ImportFragment>,
     /// Prefix prepended to every generated module local name to avoid shadowing
-    /// Factorio built-in globals (e.g. `"ms"` → `settings` becomes `ms_settings`).
+    /// Factorio built-in globals (e.g. `"ms"` -> `settings` becomes `ms_settings`).
     pub module_prefix: &'a str,
-    /// Maps bare module local names → prefixed names for rewriting path expressions
+    /// Maps bare module local names -> prefixed names for rewriting path expressions
     /// of the form `module_name::item` that reference bare-imported modules.
     /// Only populated for bare module imports (`use crate::foo`), NOT item imports
     /// (`use crate::foo::Bar`) - this keeps Factorio globals like `settings` safe.

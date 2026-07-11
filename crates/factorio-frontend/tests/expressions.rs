@@ -141,3 +141,40 @@ pub fn damage(player: MyPlayer, amount: u64) {
         }]
     );
 }
+
+#[test]
+fn lowers_literal_union_enum_variant_to_string() {
+    let source = r"
+pub fn direction() -> &'static str {
+    GuiDirection::Horizontal
+}
+";
+
+    let module = must_ok_parse(parse_module(source, "control.gui"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        assert_eq!(1, 0, "expected function declaration");
+        return;
+    };
+
+    assert_eq!(
+        function.body.statements,
+        vec![Statement::Return(Some(Expression::Literal(
+            Literal::String("horizontal".to_string()),
+        )))]
+    );
+}
+
+#[test]
+fn transpiles_literal_union_enum_variant_to_lua_string() {
+    use factorio_codegen::LuaGenerator;
+
+    let source = r"
+pub fn direction() -> &'static str {
+    GuiDirection::Vertical
+}
+";
+    let module = must_ok_parse(parse_module(source, "control.gui"));
+    let mut generator = LuaGenerator::new();
+    let lua = generator.generate_module(&module).expect("generate");
+    assert!(lua.contains("return \"vertical\""), "lua was:\n{lua}");
+}

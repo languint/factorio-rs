@@ -194,4 +194,96 @@ impl ApiType {
             })
             .unwrap_or_default()
     }
+
+    /// Non-`nil` arms of a `union` complex type.
+    pub fn non_nil_options(&self) -> Vec<ApiType> {
+        self.options()
+            .into_iter()
+            .filter(|option| option.as_simple_name() != Some("nil"))
+            .collect()
+    }
+
+    /// Whether this type is a `union` whose non-nil arms are all string literals.
+    pub fn is_homog_string_literal_union(&self) -> bool {
+        if self.complex_type() != Some("union") {
+            return false;
+        }
+        let non_nil = self.non_nil_options();
+        !non_nil.is_empty() && non_nil.iter().all(|option| option.literal_kind() == Some("string"))
+    }
+
+    /// String values of a homogeneous string-literal union, in Factorio order.
+    ///
+    /// Returns an empty vec when this is not a homog string-literal union.
+    pub fn string_literal_values(&self) -> Vec<String> {
+        if !self.is_homog_string_literal_union() {
+            return Vec::new();
+        }
+        self.non_nil_options()
+            .into_iter()
+            .filter_map(|option| {
+                option
+                    .0
+                    .get("value")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            })
+            .collect()
+    }
+
+    /// Whether this union includes a `nil` arm.
+    pub fn union_has_nil(&self) -> bool {
+        self.complex_type() == Some("union")
+            && self
+                .options()
+                .iter()
+                .any(|option| option.as_simple_name() == Some("nil"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ApiType;
+
+    fn parse(json: &str) -> ApiType {
+        ApiType(serde_json::from_str(json).expect("json"))
+    }
+
+    #[test]
+    fn detects_homog_string_literal_union() {
+        let ty = parse(
+            r#"{
+                "complex_type": "union",
+                "options": [
+                    {"complex_type": "literal", "value": "left"},
+                    {"complex_type": "literal", "value": "right"},
+                    "nil"
+                ]
+            }"#,
+        );
+        assert!(ty.is_homog_string_literal_union());
+        assert!(ty.union_has_nil());
+        assert_eq!(
+            ty.string_literal_values(),
+            vec!["left".to_string(), "right".to_string()]
+        );
+    }
+
+    #[test]
+    fn rejects_heterogeneous_union() {
+        let ty = parse(
+            r#"{
+                "complex_type": "union",
+                "options": ["LuaEntity", "LuaEquipment"]
+            }"#,
+        );
+        assert!(!ty.is_homog_string_literal_union());
+        assert!(ty.string_literal_values().is_empty());
+    }
+
+    #[test]
+    fn rejects_non_union() {
+        let ty = parse(r#""string""#);
+        assert!(!ty.is_homog_string_literal_union());
+    }
 }

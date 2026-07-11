@@ -1,8 +1,20 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
-use crate::error::{CliError, CliResult};
+use crate::{
+    config::{
+        emit::EmitConfig,
+        profile::{ProfileSettings, ResolvedProfile, resolve_profile},
+    },
+    error::{CliError, CliResult},
+};
+
+pub mod emit;
+pub mod profile;
 
 const CONFIG_FILE: &str = "Factorio.toml";
 
@@ -12,10 +24,6 @@ fn default_source() -> String {
 
 fn default_output_dir() -> String {
     "dist".to_string()
-}
-
-const fn default_prune_dead_code() -> bool {
-    true
 }
 
 /// Metadata written to generated `info.json`.
@@ -45,16 +53,15 @@ pub struct Config {
     #[serde(default = "default_output_dir")]
     pub output_dir: String,
 
-    /// Remove unreachable functions and exports from generated Lua.
-    #[serde(default = "default_prune_dead_code")]
-    pub prune_dead_code: bool,
-
-    /// Optional prefix prepended to every generated Lua module's filename
     #[serde(default)]
-    pub lua_module_prefix: Option<String>,
+    pub emit: EmitConfig,
 
     #[serde(default)]
     pub r#mod: ModConfig,
+
+    /// Named transpile profiles (`[profiles.debug]`, `[profiles.release]`, …).
+    #[serde(default)]
+    pub profiles: BTreeMap<String, ProfileSettings>,
 }
 
 impl Config {
@@ -76,37 +83,10 @@ impl Config {
     pub fn config_path(project_root: &Path) -> PathBuf {
         project_root.join(CONFIG_FILE)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-
-    use super::Config;
-
-    #[test]
-    fn parses_defaults() {
-        let config: Config = toml::from_str("").unwrap();
-
-        assert_eq!(
-            config,
-            Config {
-                source: "src".to_string(),
-                output_dir: "dist".to_string(),
-                prune_dead_code: true,
-                lua_module_prefix: None,
-                r#mod: super::ModConfig {
-                    title: None,
-                    description: None,
-                    factorio_version: Some("2.0".to_string()),
-                },
-            }
-        );
-    }
-
-    #[test]
-    fn parses_prune_dead_code_override() {
-        let config: Config = toml::from_str("prune_dead_code = false").unwrap();
-        assert!(!config.prune_dead_code);
+    /// Resolve a named profile, applying built-in defaults then TOML overrides.
+    #[must_use]
+    pub fn resolve_profile(&self, profile_name: &str) -> ResolvedProfile {
+        resolve_profile(&self.profiles, profile_name)
     }
 }

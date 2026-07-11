@@ -3,10 +3,11 @@
 use std::path::Path;
 
 const FACTORIO_TOML: &str = r#"
-prune_dead_code = true
-
 [mod]
 title = "Test Mod"
+
+[profiles.release]
+prune_dead_code = true
 "#;
 
 const CARGO_TOML: &str = r#"

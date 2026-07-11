@@ -200,6 +200,7 @@ pub mod settings;
 
 pub use event_filters::{EventFilterEntry, FilterMethodSpec, filter_method_spec};
 pub use map::{event_filter_type, event_type_to_name};
+pub use unions::literal_enum_variant_str;
 
 pub mod prelude {
     pub use crate::SettingValue;
@@ -212,4 +213,5 @@ pub mod prelude {
     pub use crate::settings::{
         BoolSetting, DoubleSetting, IntSetting, ModSettingValue, StringSetting, data, settings,
     };
+    pub use crate::unions::*;
 }

@@ -13,9 +13,39 @@ use crate::{
     },
 };
 
-/// Transpile Rust sources in a project to a loadable Factorio mod directory.
-pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<PathBuf>> {
+/// Options that select how a project is transpiled.
+#[derive(Debug, Clone)]
+pub struct BuildOptions {
+    /// Profile name from `Factorio.toml` (`debug`, `release`, or custom).
+    pub profile: String,
+    /// Optional CLI override for the profile's debug comment level.
+    pub debug_level: Option<u8>,
+}
+
+impl BuildOptions {
+    #[must_use]
+    pub fn new(profile: impl Into<String>) -> Self {
+        Self {
+            profile: profile.into(),
+            debug_level: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_debug_level(mut self, debug_level: Option<u8>) -> Self {
+        self.debug_level = debug_level;
+        self
+    }
+}
+
+/// Transpile Rust sources to a loadable Factorio mod directory.
+pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathBuf>> {
     let config = Config::load(project_root)?;
+    let mut profile = config.resolve_profile(&options.profile);
+    if let Some(level) = options.debug_level {
+        profile.debug_level = Some(level);
+    }
+
     let package = CargoPackage::load(project_root)?;
     let source_dir = project_root.join(&config.source);
     let output_dir = project_root.join(&config.output_dir);
@@ -48,7 +78,7 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
         })?;
         let discovered = discover_modules(&source_dir, &source_path, &source)?;
 
-        let lua_module_prefix_early = config.lua_module_prefix.as_deref().unwrap_or("");
+        let lua_module_prefix_early = config.emit.lua_module_prefix.as_deref().unwrap_or("");
         for module_spec in discovered {
             let module =
                 parse_discovered_module_with_prefix(&module_spec, lua_module_prefix_early)?;
@@ -60,7 +90,7 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
         return Err(CliError::NoSourceFiles { path: source_dir });
     }
 
-    if config.prune_dead_code {
+    if profile.prune_dead_code {
         let mut modules = discovered_modules
             .iter()
             .map(|(_, module)| module.clone())
@@ -71,15 +101,16 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
         }
     }
 
-    let lua_module_prefix = config.lua_module_prefix.as_deref().unwrap_or("");
+    let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
     for (module_spec, module) in &discovered_modules {
         let output_path = transpile_module(
             module_spec,
             module,
             &lua_dir,
             &package.name,
-            debug_level,
+            profile.debug_level,
             lua_module_prefix,
+            &profile.name,
         )?;
         event_registrations.extend(collect_event_registrations(module));
         if module.stage.has_side_effect_entry()
@@ -96,6 +127,7 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
         &config,
         &event_registrations,
         &stage_modules,
+        &profile.name,
     )?;
     outputs.push(output_dir.join("control.lua"));
     outputs.push(output_dir.join("info.json"));
@@ -115,8 +147,8 @@ fn purge_output_dir(output_dir: &Path) -> CliResult<()> {
 }
 
 /// Prepend `prefix` to the last dotted segment of `module_name`.
-/// `("settings", "ms")` → `"ms_settings"`;
-/// `("shared.util", "ms")` → `"shared.ms_util"`.
+/// `("settings", "ms")` -> `"ms_settings"`;
+/// `("shared.util", "ms")` -> `"shared.ms_util"`.
 fn prefix_module_name(module_name: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         return module_name.to_string();
@@ -178,6 +210,7 @@ fn transpile_module(
     mod_name: &str,
     debug_level: Option<u8>,
     module_prefix: &str,
+    profile: &str,
 ) -> CliResult<PathBuf> {
     let mut generator = debug_level.map_or_else(
         || LuaGenerator::with_mod_name(mod_name),
@@ -186,6 +219,7 @@ fn transpile_module(
     if !module_prefix.is_empty() {
         generator = generator.with_module_prefix(module_prefix);
     }
+    generator = generator.with_profile(profile);
     let lua = generator.generate_module(module)?;
 
     // Apply prefix to the last segment of the module name for the output file path.

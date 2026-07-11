@@ -56,7 +56,7 @@ fn inherited_members<'a>(
 /// an inline `table` type, generate a named struct and return its identifier so
 /// the parent class generator can reference it.
 ///
-/// Returns `(struct_token_streams, attr_name → struct_ident)`.
+/// Returns `(struct_token_streams, attr_name -> struct_ident)`.
 fn generate_inline_table_structs(
     class_name_str: &str,
     attrs: &[&Attribute],

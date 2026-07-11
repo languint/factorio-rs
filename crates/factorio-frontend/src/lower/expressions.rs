@@ -50,7 +50,7 @@ pub fn lower_expression(
         Expr::Cast(cast) => lower_expression(&cast.expr, ctx, self_type),
         // `(expr)` - transparent grouping.
         Expr::Paren(paren) => lower_expression(&paren.expr, ctx, self_type),
-        // `if cond { a } else { b }` as an expression → Lua `cond and a or b` ternary idiom.
+        // `if cond { a } else { b }` as an expression -> Lua `cond and a or b` ternary idiom.
         Expr::If(if_expr) => lower_if_expr(if_expr, ctx, self_type),
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
         _ => Err(FrontendError::UnsupportedExpression {
@@ -148,7 +148,7 @@ fn lower_unary_expression(
             Ok(factorio_ir::expression::Expression::Not(Box::new(inner)))
         }
         UnOp::Neg(_) => {
-            // `-x` → `0 - x`
+            // `-x` -> `0 - x`
             let inner = lower_expression(&unary.expr, ctx, self_type)?;
             Ok(factorio_ir::expression::Expression::BinaryOp {
                 lhs: Box::new(factorio_ir::expression::Expression::Literal(
@@ -307,7 +307,7 @@ fn lower_path_expression(
     let mut segments = lower_path_segments(path, self_type)?;
     ctx.normalize_crate_path(&mut segments)?;
     // Rewrite bare imported module names, e.g. `adjacent_blacklist::check`
-    // → `ms_adjacent_blacklist::check` when prefix is set.
+    // -> `ms_adjacent_blacklist::check` when prefix is set.
     ctx.normalize_bare_import_path(&mut segments);
 
     // Map Rust Option/bool keywords to Lua literals.
@@ -325,12 +325,29 @@ fn lower_path_expression(
         }
     }
 
+    // `Alignment::Center` / `unions::GuiDirection::Horizontal` -> Factorio string literal.
+    if let Some(literal) = literal_enum_path_str(&segments) {
+        return Ok(factorio_ir::expression::Expression::Literal(
+            factorio_ir::literal::Literal::String(literal.to_string()),
+        ));
+    }
+
     match segments.len() {
         1 => Ok(factorio_ir::expression::Expression::Identifier(
             segments[0].clone(),
         )),
         _ => Ok(factorio_ir::expression::Expression::QualifiedPath { segments }),
     }
+}
+
+/// Resolve a path ending in `Type::Variant` to a Factorio literal-union string.
+fn literal_enum_path_str(segments: &[String]) -> Option<&'static str> {
+    if segments.len() < 2 {
+        return None;
+    }
+    let variant = segments.last()?.as_str();
+    let type_name = segments.get(segments.len().checked_sub(2)?)?.as_str();
+    factorio_api::literal_enum_variant_str(type_name, variant)
 }
 
 fn lower_path_segments(path: &ExprPath, self_type: Option<&str>) -> FrontendResult<Vec<String>> {

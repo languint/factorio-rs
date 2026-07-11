@@ -5,6 +5,7 @@ mod event_filters;
 mod events;
 mod ident;
 mod types;
+mod unions;
 
 pub use classes::{class_names, generate_classes, generate_globals};
 pub use concepts::{event_filter_concept_names, generatable_concept_names, generate_concepts};
@@ -15,3 +16,4 @@ pub use events::{
     generate_event_map, generate_event_module_lookup, generate_events,
 };
 pub use types::KnownTypes;
+pub use unions::{collect_literal_unions, generate_unions};

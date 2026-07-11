@@ -52,12 +52,12 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
         return;
     }
 
-    if player_index != 0
-        && let Some(player) = game.get_player(player_index.into())
-    {
-        let cursor = player.cursor_stack();
-        if cursor.valid_for_read() && cursor.r#type() == "rail-planner" {
-            return;
+    if player_index != 0 {
+        if let Some(player) = game.get_player(player_index.into()) {
+            let cursor = player.cursor_stack();
+            if cursor.valid_for_read() && cursor.r#type() == "rail-planner" {
+                return;
+            }
         }
     }
 

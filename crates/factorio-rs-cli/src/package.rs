@@ -6,15 +6,15 @@ use walkdir::WalkDir;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 use crate::{
-    build::build,
+    build::{BuildOptions, build},
     cargo_manifest::CargoPackage,
     config::Config,
     error::{CliError, CliResult},
 };
 
 /// Build the mod and write `{name}_{version}.zip` at the project root.
-pub fn package(project_root: &Path, debug_level: Option<u8>) -> CliResult<PathBuf> {
-    build(project_root, debug_level)?;
+pub fn package(project_root: &Path, options: &BuildOptions) -> CliResult<PathBuf> {
+    build(project_root, options)?;
     create_archive(project_root)
 }
 

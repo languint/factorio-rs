@@ -59,6 +59,7 @@ pub struct GeneratedApi {
     pub classes: String,
     pub globals: String,
     pub concepts: String,
+    pub unions: String,
 }
 
 pub fn parse_runtime_api(json: &str) -> Result<RuntimeApi, serde_json::Error> {
@@ -70,9 +71,12 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
     let class_names = generate::class_names(api);
     let filter_concept_names = generate::event_filter_concept_names(api);
     let concept_names = generate::generatable_concept_names(api, &filter_concept_names);
+    let union_registry = generate::collect_literal_unions(api);
     let known = generate::KnownTypes {
         classes: &class_names,
         concepts: &concept_names,
+        unions: union_registry.names(),
+        union_registry: &union_registry,
     };
     let event_filters = generate::generate_event_filters(api);
 
@@ -90,6 +94,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
         classes: generate::generate_classes(api, &known),
         globals: generate::generate_globals(api, &known),
         concepts: generate::generate_concepts(api, &known, &filter_concept_names),
+        unions: generate::generate_unions(&union_registry),
     }
 }
 
@@ -122,7 +127,8 @@ pub fn write_generated_api(output_dir: &Path, generated: &GeneratedApi) -> std::
              pub mod event_filters;\n\
              pub mod events;\n\
              pub mod globals;\n\
-             pub mod map;\n",
+             pub mod map;\n\
+             pub mod unions;\n",
             generated.application_version, generated.api_version
         ),
     )?;
@@ -134,6 +140,7 @@ pub fn write_generated_api(output_dir: &Path, generated: &GeneratedApi) -> std::
     write_module(output_dir, "classes.rs", &generated.classes)?;
     write_module(output_dir, "globals.rs", &generated.globals)?;
     write_module(output_dir, "concepts.rs", &generated.concepts)?;
+    write_module(output_dir, "unions.rs", &generated.unions)?;
 
     Ok(())
 }

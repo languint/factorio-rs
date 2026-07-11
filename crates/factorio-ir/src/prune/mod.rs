@@ -18,8 +18,8 @@ use self::{apply::prune_module, module_graph::ModuleGraph, reachability::compute
 
 /// Remove unreachable functions and exports from transpiled modules.
 ///
-/// When `prune_dead_code` is enabled in `Factorio.toml`, the build collects all
-/// lowered modules, runs this pass, then generates Lua from the pruned IR.
+/// When dead-code pruning is enabled for the active transpile profile, the build
+/// collects all lowered modules, runs this pass, then generates Lua from the pruned IR.
 pub fn prune_modules(modules: &mut [Module]) {
     if modules.is_empty() {
         return;

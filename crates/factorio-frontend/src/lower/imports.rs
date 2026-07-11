@@ -63,7 +63,7 @@ fn collect_use_bindings(
             Ok(())
         }
         UseTree::Glob(_) => {
-            // `use crate::foo::*` → record a module-level import of `crate::foo`
+            // `use crate::foo::*` -> record a module-level import of `crate::foo`
             // so the module gets `require`d in Lua.
             // External globs like `use factorio_rs::prelude::*` are filtered out
             // later by `finalize_use_binding` because they don't start with `crate`.

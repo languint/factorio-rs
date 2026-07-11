@@ -10,6 +10,7 @@ mod install;
 mod manifest;
 mod package;
 
+use build::BuildOptions;
 use cli::{BuildArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs};
 use error::project_root;
 
@@ -36,7 +37,8 @@ fn run_init(args: &InitArgs) -> anyhow::Result<()> {
 
 fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let outputs = build::build(&project_root, args.debug_level)?;
+    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let outputs = build::build(&project_root, &options)?;
 
     for output in outputs {
         println!("Generated `{}`", output.display());
@@ -52,14 +54,16 @@ fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
 
 fn run_package(args: &PackageArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let zip_path = package::package(&project_root, None)?;
+    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let zip_path = package::package(&project_root, &options)?;
     println!("Packaged mod archive `{}`", zip_path.display());
     Ok(())
 }
 
 fn run_install(args: &InstallArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let dest = install::install(&project_root)?;
+    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let dest = install::install(&project_root, &options)?;
     println!("Installed mod to `{}`", dest.display());
     Ok(())
 }

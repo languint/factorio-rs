@@ -1,15 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    build::build,
+    build::{BuildOptions, build},
     cargo_manifest::CargoPackage,
     config::Config,
     error::{CliError, CliResult},
 };
 
 /// Build the mod and copy it into the Factorio mods directory.
-pub fn install(project_root: &Path) -> CliResult<PathBuf> {
-    build(project_root, None)?;
+pub fn install(project_root: &Path, options: &BuildOptions) -> CliResult<PathBuf> {
+    build(project_root, options)?;
 
     let package = CargoPackage::load(project_root)?;
     let config = Config::load(project_root)?;

@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::generate::ident::make_ident;
+use crate::generate::unions::UnionRegistry;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -13,6 +14,15 @@ pub struct KnownTypes<'a> {
     pub classes: &'a BTreeSet<String>,
     /// `crate::concepts::*` - emitted as `T` (value types, no boxing needed).
     pub concepts: &'a BTreeSet<String>,
+    /// `crate::unions::*` - Copy unit enums for homog string-literal unions.
+    pub unions: &'a BTreeSet<String>,
+    /// Registry used to resolve anonymous/named literal unions to enum names.
+    pub union_registry: &'a UnionRegistry,
+}
+
+fn union_type_path(name: &str) -> TokenStream {
+    let ident = make_ident(name);
+    quote!(crate::unions::#ident)
 }
 
 /// Opaque placeholder for complex Factorio Lua API values.
@@ -52,6 +62,7 @@ pub fn return_stub_for_type(api_type: &ApiType, known: &KnownTypes<'_>) -> Retur
             other if known.classes.contains(other) || known.concepts.contains(other) => {
                 ReturnStub::Default
             }
+            other if known.unions.contains(other) => ReturnStub::Default,
             _ => ReturnStub::LuaAny,
         };
     }
@@ -91,7 +102,14 @@ pub fn return_stub_for_type(api_type: &ApiType, known: &KnownTypes<'_>) -> Retur
                     }
                 }
                 _ => {
-                    if all_same_literal_kind(&non_nil) {
+                    if let Some(enum_name) = known.union_registry.resolve(api_type) {
+                        let _ = enum_name;
+                        if has_nil {
+                            ReturnStub::Option(Box::new(ReturnStub::Default))
+                        } else {
+                            ReturnStub::Default
+                        }
+                    } else if all_same_literal_kind(&non_nil) {
                         let inner = match non_nil[0].literal_kind() {
                             Some("string") => ReturnStub::Str,
                             Some("number") => ReturnStub::Number,
@@ -234,9 +252,9 @@ pub fn map_api_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream {
 
 /// Maps a Factorio numeric API type name to the most precise Rust numeric type.
 ///
-/// Integer types preserve their exact width (e.g. `uint16` → `u16`) so that
+/// Integer types preserve their exact width (e.g. `uint16` -> `u16`) so that
 /// callers get useful range information and IDE diagnostics. Float types use the
-/// appropriate float (`float` → `f32`, `double`/`number` → `f64`).
+/// appropriate float (`float` -> `f32`, `double`/`number` -> `f64`).
 ///
 /// All of these are `Copy`, so the mapping is safe for every context.
 fn map_numeric_type(name: &str) -> TokenStream {
@@ -296,6 +314,7 @@ fn map_simple_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
             let ident = make_ident(other);
             quote!(crate::concepts::#ident)
         }
+        other if known.unions.contains(other) => union_type_path(other),
         other if other.starts_with("defines.") => quote!(&str),
         _ => lua_any_type(),
     }
@@ -336,8 +355,6 @@ pub fn map_field_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream
     }
 }
 
-// ── Shared helpers for complex type variants ──────────────────────────────
-
 /// Maps `dictionary` / `LuaCustomTable` to `HashMap<String, V>` when the key is
 /// a string type, otherwise falls back to `LuaAny`.
 fn map_dict_type(
@@ -359,15 +376,24 @@ fn map_dict_type(
 }
 
 /// Maps a `union` type:
-/// - Single non-nil arm → that arm's type
-/// - Single non-nil arm + nil(s) → `Option<T>`
-/// - Multiple non-nil arms that are all literals of the same kind → collapsed primitive
-/// - Multiple non-nil arms of different/complex types → `LuaAny`
+/// - Homogeneous string-literal unions -> generated unit enum (`crate::unions::*`)
+/// - Single non-nil arm -> that arm's type
+/// - Single non-nil arm + nil(s) -> `Option<T>`
+/// - Multiple non-nil arms of different/complex types -> `LuaAny`
 fn map_union_type(
     api_type: &ApiType,
     known: &KnownTypes<'_>,
     map_inner: fn(&ApiType, &KnownTypes<'_>) -> TokenStream,
 ) -> TokenStream {
+    if let Some(enum_name) = known.union_registry.resolve(api_type) {
+        let ty = union_type_path(enum_name);
+        return if api_type.union_has_nil() {
+            quote!(Option<#ty>)
+        } else {
+            ty
+        };
+    }
+
     let options = api_type.options();
     let non_nil: Vec<_> = options
         .iter()
@@ -385,8 +411,7 @@ fn map_union_type(
             }
         }
         _ => {
-            // All options are literals of the same kind - delegate through `map_inner`
-            // so the context (`&str` vs `String`) is preserved automatically.
+            // Non-string homogeneous literals (numbers/bools) still collapse to primitives.
             if all_same_literal_kind(&non_nil) {
                 let ty = map_inner(non_nil[0], known);
                 if has_nil { quote!(Option<#ty>) } else { ty }
@@ -442,21 +467,19 @@ fn map_simple_field_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
         }
         other if known.classes.contains(other) => {
             let ident = make_ident(other);
-            // Box<T> breaks potential recursive struct cycles (e.g. LuaForce ↔ LuaTechnology).
+            // Box<T> breaks srecursive struct cycles.
             quote!(Box<crate::classes::#ident>)
         }
         other if known.concepts.contains(other) => {
             let ident = make_ident(other);
             quote!(crate::concepts::#ident)
         }
+        other if known.unions.contains(other) => union_type_path(other),
         other if other.starts_with("defines.") => quote!(String),
         _ => lua_any_type(),
     }
 }
 
-/// Like [`map_simple_field_type`] but does NOT wrap class references in `Box<T>`.
-/// Use this for standalone structs (params structs, inline table structs) that are
-/// never embedded inside other structs, so recursive size cycles cannot form.
 fn map_simple_field_type_unboxed(name: &str, known: &KnownTypes<'_>) -> TokenStream {
     match name {
         "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => quote!(String),
@@ -473,17 +496,12 @@ fn map_simple_field_type_unboxed(name: &str, known: &KnownTypes<'_>) -> TokenStr
             let ident = make_ident(other);
             quote!(crate::concepts::#ident)
         }
+        other if known.unions.contains(other) => union_type_path(other),
         other if other.starts_with("defines.") => quote!(String),
         _ => lua_any_type(),
     }
 }
 
-/// Like [`map_simple_field_type`] but produces fully Copy-compatible types:
-/// - strings → `&'static str` (Copy; field default is `""`)
-/// - class refs → direct `T` (ZSTs after classes become empty structs, Copy)
-/// - arrays → `&'static [T]` (fat-pointer, Copy; field default is `&[]`)
-/// - concept refs → `crate::LuaAny` (ZST, Copy; avoids potential size cycles)
-/// - dicts → `crate::LuaAny` (ZST, Copy)
 pub fn map_simple_copy_field_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
     match name {
         "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => {
@@ -496,23 +514,15 @@ pub fn map_simple_copy_field_type(name: &str, known: &KnownTypes<'_>) -> TokenSt
         }
         other if known.classes.contains(other) => {
             let ident = make_ident(other);
-            // Classes are now ZSTs - safe to embed directly.
             quote!(crate::classes::#ident)
         }
-        other if known.concepts.contains(other) => {
-            // Concepts can be mutually recursive (e.g. MapLocation ↔ MapLocation),
-            // so we collapse concept-type fields to LuaAny to break size cycles
-            // while keeping the outer struct Copy.
-            lua_any_type()
-        }
+        other if known.unions.contains(other) => union_type_path(other),
+        other if known.concepts.contains(other) => lua_any_type(),
         other if other.starts_with("defines.") => quote!(&'static str),
         _ => lua_any_type(),
     }
 }
 
-/// Like [`map_field_type`] but produces fully Copy-compatible types.
-/// Use for inline table struct fields and concept struct fields where we want
-/// everything to be `Copy` so the struct can derive `Copy`.
 pub fn map_copy_field_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream {
     if let Some(name) = api_type.as_simple_name() {
         return map_simple_copy_field_type(name, known);
@@ -552,9 +562,6 @@ pub fn map_copy_field_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenS
     }
 }
 
-/// Like [`map_field_type`] but does NOT wrap class references in `Box<T>`.
-/// Use this for standalone structs (params structs, inline table structs) where
-/// recursive size cycles cannot form.
 pub fn map_field_type_unboxed(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream {
     if let Some(name) = api_type.as_simple_name() {
         return map_simple_field_type_unboxed(name, known);
