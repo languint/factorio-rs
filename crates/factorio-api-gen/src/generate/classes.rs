@@ -384,6 +384,21 @@ pub fn generate_globals(api: &RuntimeApi, known: &KnownTypes<'_>) -> String {
         }
     });
 
+    // Auxiliary globals from Factorio docs (not in `global_objects`).
+    let auxiliary_globals = quote! {
+        /// Persistent mod-local table. Serialized across save/load.
+        ///
+        /// See <https://lua-api.factorio.com/latest/auxiliary/storage.html>.
+        pub static storage: std::sync::LazyLock<crate::LuaStorage> =
+            std::sync::LazyLock::new(crate::LuaStorage::default);
+
+        /// Deterministic table pretty-printer shipped as a Factorio global.
+        ///
+        /// See <https://lua-api.factorio.com/latest/auxiliary/libraries.html>.
+        pub static serpent: std::sync::LazyLock<crate::Serpent> =
+            std::sync::LazyLock::new(crate::Serpent::default);
+    };
+
     let global_functions = api.global_functions.iter().map(|function| {
         let name = method_rust_name(&function.name);
         let return_type = map_return_type(&function.return_values, known);
@@ -402,6 +417,7 @@ pub fn generate_globals(api: &RuntimeApi, known: &KnownTypes<'_>) -> String {
 
     let tokens = quote! {
         #( #globals )*
+        #auxiliary_globals
         #( #global_functions )*
     };
     tokens.to_string()

@@ -98,6 +98,22 @@ Prefer concrete concepts and Identification enums whenever the stubs expose
 them. Reaching for `.into()` should mean “this API accepts several Factorio
 shapes,” not “the type was erased.”
 
+## Globals
+
+Schema `global_objects` become prelude statics: `game`, `script`, `commands`,
+`remote`, `rendering`, `rcon`, `settings`, `prototypes`, `helpers`.
+
+Factorio also documents auxiliaries that are not in `global_objects`. The stubs
+include:
+
+- `storage` (`LuaStorage`) - persistent mod-local table
+- `serpent` - table pretty-printer (`block` / `line` / `dump`)
+
+Plus global functions `log`, `localised_print`, and `table_size`.
+
+Data-stage `data` / settings registration helpers live in `factorio_api::settings`
+(also re-exported from the prelude).
+
 ## See also
 
 - [Language support](language/)

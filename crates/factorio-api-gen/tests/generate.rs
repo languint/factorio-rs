@@ -10,6 +10,50 @@ fn bundled_runtime_api_parses() {
 }
 
 #[test]
+fn emits_all_runtime_and_auxiliary_globals() {
+    let generated = generate_from_bundled_api().expect("generate");
+    let globals = &generated.globals;
+
+    // `global_objects` from runtime-api.json
+    for name in [
+        "commands",
+        "game",
+        "helpers",
+        "prototypes",
+        "rcon",
+        "remote",
+        "rendering",
+        "script",
+        "settings",
+    ] {
+        let needle = format!("pub static {name}");
+        assert!(
+            globals.contains(&needle) || globals.contains(&format!("pub static {name} ")),
+            "missing schema global `{name}`"
+        );
+    }
+
+    // Auxiliary (not in global_objects)
+    assert!(
+        globals.contains("pub static storage") || globals.contains("pub static storage "),
+        "missing auxiliary global `storage`"
+    );
+    assert!(
+        globals.contains("pub static serpent") || globals.contains("pub static serpent "),
+        "missing auxiliary global `serpent`"
+    );
+
+    // Global functions from the schema / libraries page
+    for name in ["log", "localised_print", "table_size"] {
+        assert!(
+            globals.contains(&format!("pub fn {name}"))
+                || globals.contains(&format!("pub fn {name} ")),
+            "missing global function `{name}`"
+        );
+    }
+}
+
+#[test]
 fn maps_events_to_rust_names() {
     let api = parse_runtime_api(factorio_api_gen::bundled_runtime_api_json())
         .expect("bundled runtime-api.json should parse");

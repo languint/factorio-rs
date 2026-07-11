@@ -22,6 +22,60 @@ pub trait LuaObject {}
 pub struct LuaAny;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LuaStorage;
+
+impl LuaStorage {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl From<LuaStorage> for LuaAny {
+    fn from(_: LuaStorage) -> Self {
+        LuaAny
+    }
+}
+
+impl std::ops::Index<&str> for LuaStorage {
+    type Output = LuaAny;
+
+    fn index(&self, _key: &str) -> &LuaAny {
+        &LUA_ANY
+    }
+}
+
+const LUA_ANY: LuaAny = LuaAny;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Serpent;
+
+impl Serpent {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
+
+    /// Multi-line pretty-print (`serpent.block`).
+    #[allow(unused_variables)]
+    pub fn block(&self, value: impl Into<LuaAny>) -> &'static str {
+        ""
+    }
+
+    /// Single-line pretty-print (`serpent.line`).
+    #[allow(unused_variables)]
+    pub fn line(&self, value: impl Into<LuaAny>) -> &'static str {
+        ""
+    }
+
+    /// Serialize to a string that `serpent.load` can revive (`serpent.dump`).
+    #[allow(unused_variables)]
+    pub fn dump(&self, value: impl Into<LuaAny>) -> &'static str {
+        ""
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LuaFunction;
 
 impl LuaFunction {
