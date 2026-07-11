@@ -5,12 +5,12 @@ use crate::error::{FrontendError, FrontendResult};
 
 use super::{context::LowerContext, expressions::lower_expression, util::location};
 
-struct PrintlnMacroInput {
+struct FormatMacroInput {
     format: LitStr,
     args: Vec<Expr>,
 }
 
-impl Parse for PrintlnMacroInput {
+impl Parse for FormatMacroInput {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let format = input.parse::<LitStr>()?;
         let mut args = Vec::new();
@@ -39,22 +39,22 @@ pub fn lower_macro_expression(
         ToString::to_string,
     );
 
-    if name != "println" {
-        return Err(FrontendError::UnsupportedMacro {
+    match name.as_str() {
+        "println" => lower_println_macro(mac, ctx, self_type),
+        "format" => lower_format_macro(mac, ctx, self_type),
+        _ => Err(FrontendError::UnsupportedMacro {
             name,
             location: location(mac),
-        });
+        }),
     }
+}
 
-    let input = syn::parse2::<PrintlnMacroInput>(mac.mac.tokens.clone())?;
-    let template = input.format.value();
-    let lowered_args = input
-        .args
-        .iter()
-        .map(|arg| lower_expression(arg, ctx, self_type))
-        .collect::<FrontendResult<Vec<_>>>()?;
-    let message = lower_format_template(&template, &lowered_args, location(mac))?;
-
+fn lower_println_macro(
+    mac: &ExprMacro,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let message = lower_format_macro_message(mac, ctx, self_type)?;
     Ok(factorio_ir::expression::Expression::Call {
         func: Box::new(factorio_ir::expression::Expression::FieldAccess {
             base: Box::new(factorio_ir::expression::Expression::Identifier(
@@ -64,6 +64,29 @@ pub fn lower_macro_expression(
         }),
         args: vec![message],
     })
+}
+
+fn lower_format_macro(
+    mac: &ExprMacro,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    lower_format_macro_message(mac, ctx, self_type)
+}
+
+fn lower_format_macro_message(
+    mac: &ExprMacro,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let input = syn::parse2::<FormatMacroInput>(mac.mac.tokens.clone())?;
+    let template = input.format.value();
+    let lowered_args = input
+        .args
+        .iter()
+        .map(|arg| lower_expression(arg, ctx, self_type))
+        .collect::<FrontendResult<Vec<_>>>()?;
+    lower_format_template(&template, &lowered_args, location(mac))
 }
 
 fn lower_format_template(

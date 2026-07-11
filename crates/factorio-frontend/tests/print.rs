@@ -63,3 +63,47 @@ pub fn on_init() {
 
     assert!(lua.contains(r#"game.print(name .. " has " .. health .. " health")"#));
 }
+
+#[test]
+fn parses_format_with_arguments() {
+    let source = r#"
+pub fn message(name: &str, health: i64) -> String {
+    format!("{} has {} health", name, health)
+}
+"#;
+
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
+    let lua = must_ok(LuaGenerator::new().generate_module(&module));
+
+    assert!(lua.contains(r#"return name .. " has " .. health .. " health""#));
+    assert!(!lua.contains("game.print"));
+}
+
+#[test]
+fn parses_format_with_named_capture() {
+    let source = r#"
+pub fn message() -> String {
+    let health = 10;
+    format!("hp={health}")
+}
+"#;
+
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
+    let lua = must_ok(LuaGenerator::new().generate_module(&module));
+
+    assert!(lua.contains(r#"return "hp=" .. health"#));
+}
+
+#[test]
+fn parses_format_literal_only() {
+    let source = r#"
+pub fn message() -> String {
+    format!("hello")
+}
+"#;
+
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
+    let lua = must_ok(LuaGenerator::new().generate_module(&module));
+
+    assert!(lua.contains(r#"return "hello""#));
+}

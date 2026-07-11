@@ -45,8 +45,12 @@ See [Locale](../guides/locale/).
 
 ## Expression macros
 
-In executable code, only **`println!`** is lowered (to `game.print`). Other
-macros in expression position are rejected. Item macros such as `mod_settings!`
-and `locale!` are handled separately during module lowering.
+In executable code, **`println!`** and **`format!`** are lowered:
+
+- `println!(…)` → `game.print(…)`
+- `format!(…)` → Lua string concatenation with `..`
+
+Item macros such as `mod_settings!` and `locale!` are handled separately during
+module lowering.
 
 Full syntax inventory: [Language support](../guides/language/).

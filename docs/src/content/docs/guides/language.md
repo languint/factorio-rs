@@ -68,6 +68,7 @@ There is no real `Option` wrapper in Lua. Prefer APIs that return a value or nil
 | `+ - * / % == != < <= > >= && \|\|` |                                                                |
 | `if c { a } else { b }`             | Each arm must be a **single** expression; emits `c and a or b` |
 | `println!(...)`                     | -> `game.print(...)` with `..` concatenation                   |
+| `format!(...)`                      | -> string via `..` concatenation                               |
 | Literal string unions               | e.g. `GuiDirection::Horizontal` -> `"horizontal"`              |
 
 **Transparent zero-arg methods** (receiver kept): `into`, `unwrap`, `clone`,
@@ -157,7 +158,17 @@ only**.
 
 ## Expression macros
 
-Only **`println!`** is lowered. Other macros in expression position fail with `UnsupportedMacro`.
+Only **`println!`** and **`format!`** are lowered:
+
+| Macro | Lua |
+| --- | --- |
+| `println!(…)` | `game.print(…)` with `..` concatenation |
+| `format!(…)` | string built with `..` (no `game.print`) |
+
+Supported template forms: `{}`, `{0}`, `{name}`, and `{{` / `}}` escapes.
+Format specs after `:` (e.g. `{:.2}`) are ignored.
+
+Other macros in expression position fail with `UnsupportedMacro`.
 
 ## Common errors
 
@@ -168,7 +179,7 @@ Only **`println!`** is lowered. Other macros in expression position fail with `U
 | `let binding requires an initializer` | `let x;` without value |
 | `event handlers are only allowed in control-stage modules` | Move handler to control |
 | `could not resolve locale key` | `Settings::FOO` not in this module |
-| `unsupported macro` | Only `println!` in expressions |
+| `unsupported macro` | Only `println!` / `format!` in expressions |
 
 ## See also
 
