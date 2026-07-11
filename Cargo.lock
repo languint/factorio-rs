@@ -201,14 +201,14 @@ dependencies = [
 
 [[package]]
 name = "factorio-api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "factorio-api-gen",
 ]
 
 [[package]]
 name = "factorio-api-gen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "factorio-codegen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "factorio-ir",
  "heck",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "factorio-frontend"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "factorio-api",
  "factorio-codegen",
@@ -241,14 +241,14 @@ dependencies = [
 
 [[package]]
 name = "factorio-ir"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "factorio-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "factorio-api-gen",
  "proc-macro2",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "factorio-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "factorio-api",
  "factorio-macros",
@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "factorio-rs-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",

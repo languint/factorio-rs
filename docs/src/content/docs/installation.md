@@ -19,7 +19,7 @@ In your mod’s `Cargo.toml`:
 
 ```toml
 [dependencies]
-factorio-rs = "0.1.0"
+factorio-rs = "0.1.1"
 ```
 
 `factorio-rs init` scaffolds a project with this pin and `edition = "2024"`.
