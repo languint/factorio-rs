@@ -38,8 +38,7 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
 
     let mut outputs = Vec::new();
     let mut event_registrations = Vec::new();
-    let mut settings_modules: Vec<crate::manifest::StageModule> = Vec::new();
-    let mut data_modules: Vec<crate::manifest::StageModule> = Vec::new();
+    let mut stage_modules = StageModules::new();
     let mut discovered_modules = Vec::new();
 
     for source_path in sources {
@@ -83,21 +82,14 @@ pub fn build(project_root: &Path, debug_level: Option<u8>) -> CliResult<Vec<Path
             lua_module_prefix,
         )?;
         event_registrations.extend(collect_event_registrations(module));
-        if let Some(stage_module) =
-            collect_stage_module(module, factorio_ir::stage::Stage::Settings)
+        if module.stage.has_side_effect_entry()
+            && let Some(stage_module) = collect_stage_module(module, module.stage)
         {
-            settings_modules.push(stage_module);
-        }
-        if let Some(stage_module) = collect_stage_module(module, factorio_ir::stage::Stage::Data) {
-            data_modules.push(stage_module);
+            stage_modules.push(module.stage, stage_module);
         }
         outputs.push(output_path);
     }
 
-    let stage_modules = StageModules {
-        settings: settings_modules,
-        data: data_modules,
-    };
     write_mod_manifests(
         &output_dir,
         &package,

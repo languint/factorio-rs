@@ -8,7 +8,6 @@ use crate::{
         references::{collect_references_from_expression, collect_references_from_function},
         struct_utils,
     },
-    stage::Stage,
     statement::Statement,
     structure::Struct,
 };
@@ -42,9 +41,7 @@ pub fn compute_reachability(graph: &ModuleGraph<'_>) -> HashMap<String, ModuleRe
                 }
                 // Public functions and structs in settings/data modules are stage
                 // entry points - they are exported and used by Factorio at load time.
-                Statement::FunctionDecl(function)
-                    if matches!(module.stage, Stage::Settings | Stage::Data) =>
-                {
+                Statement::FunctionDecl(function) if module.stage.has_side_effect_entry() => {
                     enqueue_item(
                         &mut reachability,
                         &mut pending,
@@ -52,9 +49,7 @@ pub fn compute_reachability(graph: &ModuleGraph<'_>) -> HashMap<String, ModuleRe
                         ItemKey::Function(function.name.clone()),
                     );
                 }
-                Statement::StructDecl(struct_decl)
-                    if matches!(module.stage, Stage::Settings | Stage::Data) =>
-                {
+                Statement::StructDecl(struct_decl) if module.stage.has_side_effect_entry() => {
                     enqueue_item(
                         &mut reachability,
                         &mut pending,

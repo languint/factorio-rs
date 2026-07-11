@@ -75,7 +75,7 @@ pub fn collect_stage_module(module: &Module, stage: Stage) -> Option<StageModule
     })
 }
 
-/// For `data.lua` / `settings.lua` the Lua runtime runs side-effects
+/// For `data*.lua` / `settings*.lua` the Lua runtime runs side-effects
 /// (prototype definitions, setting registrations) when those functions execute.
 pub fn generate_stage_entry_lua(
     mod_name: &str,
@@ -217,8 +217,34 @@ pub fn generate_info_json(package: &CargoPackage, mod_config: &ModConfig) -> Cli
 }
 
 pub struct StageModules {
-    pub settings: Vec<StageModule>,
-    pub data: Vec<StageModule>,
+    pub entries: Vec<(Stage, StageModule)>,
+}
+
+impl StageModules {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, stage: Stage, module: StageModule) {
+        self.entries.push((stage, module));
+    }
+
+    fn modules_for(&self, stage: Stage) -> Vec<StageModule> {
+        self.entries
+            .iter()
+            .filter(|(s, _)| *s == stage)
+            .map(|(_, module)| module.clone())
+            .collect()
+    }
+}
+
+impl Default for StageModules {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn write_mod_manifests(
@@ -235,24 +261,16 @@ pub fn write_mod_manifests(
     let control_lua = generate_control_lua(&package.name, events, module_prefix);
     write_file(output_dir, "control.lua", &control_lua)?;
 
-    if !stage_modules.settings.is_empty() {
-        let settings_lua = generate_stage_entry_lua(
-            &package.name,
-            &stage_modules.settings,
-            Stage::Settings,
-            module_prefix,
-        );
-        write_file(output_dir, "settings.lua", &settings_lua)?;
-    }
-
-    if !stage_modules.data.is_empty() {
-        let data_lua = generate_stage_entry_lua(
-            &package.name,
-            &stage_modules.data,
-            Stage::Data,
-            module_prefix,
-        );
-        write_file(output_dir, "data.lua", &data_lua)?;
+    for stage in Stage::SIDE_EFFECT_STAGES {
+        let modules = stage_modules.modules_for(stage);
+        if modules.is_empty() {
+            continue;
+        }
+        let Some(entry_file) = stage.entry_file_name() else {
+            continue;
+        };
+        let lua = generate_stage_entry_lua(&package.name, &modules, stage, module_prefix);
+        write_file(output_dir, entry_file, &lua)?;
     }
 
     Ok(())
@@ -281,8 +299,8 @@ mod tests {
     };
 
     use super::{
-        StageModule, collect_event_registrations, collect_stage_module, generate_control_lua,
-        generate_stage_entry_lua,
+        StageModule, StageModules, collect_event_registrations, collect_stage_module,
+        generate_control_lua, generate_stage_entry_lua, write_mod_manifests,
     };
 
     fn make_control_module(name: &str, event: &str) -> Module {
@@ -439,6 +457,106 @@ mod tests {
 
         assert!(lua.contains("local settings = require(\"__my_mod__/lua/settings\")"));
         assert!(lua.contains("settings.register()"));
+    }
+
+    #[test]
+    fn generates_settings_updates_and_final_fixes_lua() {
+        let updates = vec![StageModule {
+            name: "settings_updates".to_string(),
+            entry_functions: vec!["patch".to_string()],
+        }];
+        let updates_lua =
+            generate_stage_entry_lua("my_mod", &updates, Stage::SettingsUpdates, "");
+        assert!(updates_lua.contains(
+            "local settingsUpdates = require(\"__my_mod__/lua/settings_updates\")"
+        ));
+        assert!(updates_lua.contains("settingsUpdates.patch()"));
+
+        let finals = vec![StageModule {
+            name: "settings_final_fixes".to_string(),
+            entry_functions: vec!["fixup".to_string()],
+        }];
+        let finals_lua =
+            generate_stage_entry_lua("my_mod", &finals, Stage::SettingsFinalFixes, "");
+        assert!(finals_lua.contains(
+            "local settingsFinalFixes = require(\"__my_mod__/lua/settings_final_fixes\")"
+        ));
+        assert!(finals_lua.contains("settingsFinalFixes.fixup()"));
+    }
+
+    #[test]
+    fn generates_data_updates_and_final_fixes_lua() {
+        let updates = vec![StageModule {
+            name: "data_updates".to_string(),
+            entry_functions: vec!["patch".to_string()],
+        }];
+        let updates_lua = generate_stage_entry_lua("my_mod", &updates, Stage::DataUpdates, "");
+        assert!(
+            updates_lua.contains("local dataUpdates = require(\"__my_mod__/lua/data_updates\")")
+        );
+        assert!(updates_lua.contains("dataUpdates.patch()"));
+
+        let finals = vec![StageModule {
+            name: "data_final_fixes".to_string(),
+            entry_functions: vec!["fixup".to_string()],
+        }];
+        let finals_lua =
+            generate_stage_entry_lua("my_mod", &finals, Stage::DataFinalFixes, "");
+        assert!(finals_lua.contains(
+            "local dataFinalFixes = require(\"__my_mod__/lua/data_final_fixes\")"
+        ));
+        assert!(finals_lua.contains("dataFinalFixes.fixup()"));
+    }
+
+    #[test]
+    fn write_mod_manifests_emits_all_settings_phase_files() {
+        use std::fs;
+
+        use tempfile::tempdir;
+
+        use crate::{cargo_manifest::CargoPackage, config::Config};
+
+        let dir = tempdir().expect("tempdir");
+        let package = CargoPackage {
+            name: "phase_mod".to_string(),
+            version: "0.1.0".to_string(),
+            authors: Some(vec!["test".to_string()]),
+        };
+        let config: Config = toml::from_str("").expect("default config");
+        let mut stage_modules = StageModules::new();
+        stage_modules.push(
+            Stage::Settings,
+            StageModule {
+                name: "settings".to_string(),
+                entry_functions: vec!["register".to_string()],
+            },
+        );
+        stage_modules.push(
+            Stage::SettingsUpdates,
+            StageModule {
+                name: "settings_updates".to_string(),
+                entry_functions: vec!["patch".to_string()],
+            },
+        );
+        stage_modules.push(
+            Stage::SettingsFinalFixes,
+            StageModule {
+                name: "settings_final_fixes".to_string(),
+                entry_functions: vec!["fixup".to_string()],
+            },
+        );
+
+        write_mod_manifests(dir.path(), &package, &config, &[], &stage_modules)
+            .expect("write manifests");
+
+        assert!(dir.path().join("settings.lua").is_file());
+        assert!(dir.path().join("settings-updates.lua").is_file());
+        assert!(dir.path().join("settings-final-fixes.lua").is_file());
+
+        let updates = fs::read_to_string(dir.path().join("settings-updates.lua")).unwrap();
+        assert!(updates.contains("settingsUpdates.patch()"));
+        let finals = fs::read_to_string(dir.path().join("settings-final-fixes.lua")).unwrap();
+        assert!(finals.contains("settingsFinalFixes.fixup()"));
     }
 
     #[test]

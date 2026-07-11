@@ -183,7 +183,27 @@ pub fn settings(_args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn settings_updates(_args: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+
+#[proc_macro_attribute]
+pub fn settings_final_fixes(_args: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+
+#[proc_macro_attribute]
 pub fn data(_args: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+
+#[proc_macro_attribute]
+pub fn data_updates(_args: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+
+#[proc_macro_attribute]
+pub fn data_final_fixes(_args: TokenStream, input: TokenStream) -> TokenStream {
     input
 }
 
@@ -206,10 +226,34 @@ pub fn settings_mod(input: TokenStream) -> TokenStream {
     wrap_stage_module("settings", input)
 }
 
+/// Declares a settings-updates-stage module from a block of items.
+#[proc_macro]
+pub fn settings_updates_mod(input: TokenStream) -> TokenStream {
+    wrap_stage_module("settings_updates", input)
+}
+
+/// Declares a settings-final-fixes-stage module from a block of items.
+#[proc_macro]
+pub fn settings_final_fixes_mod(input: TokenStream) -> TokenStream {
+    wrap_stage_module("settings_final_fixes", input)
+}
+
 /// Declares a data/prototype-stage module from a block of items.
 #[proc_macro]
 pub fn data_mod(input: TokenStream) -> TokenStream {
     wrap_stage_module("data", input)
+}
+
+/// Declares a data-updates-stage module from a block of items.
+#[proc_macro]
+pub fn data_updates_mod(input: TokenStream) -> TokenStream {
+    wrap_stage_module("data_updates", input)
+}
+
+/// Declares a data-final-fixes-stage module from a block of items.
+#[proc_macro]
+pub fn data_final_fixes_mod(input: TokenStream) -> TokenStream {
+    wrap_stage_module("data_final_fixes", input)
 }
 
 /// Declares a control/runtime-stage module from a block of items.

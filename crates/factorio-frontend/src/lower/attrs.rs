@@ -102,7 +102,11 @@ pub fn is_factorio_stage_bang(path: &Path) -> Option<Stage> {
 fn stage_bang_ident_to_stage(ident: &str) -> Option<Stage> {
     match ident {
         "settings_mod" => Some(Stage::Settings),
+        "settings_updates_mod" => Some(Stage::SettingsUpdates),
+        "settings_final_fixes_mod" => Some(Stage::SettingsFinalFixes),
         "data_mod" => Some(Stage::Data),
+        "data_updates_mod" => Some(Stage::DataUpdates),
+        "data_final_fixes_mod" => Some(Stage::DataFinalFixes),
         "control_mod" => Some(Stage::Control),
         "shared_mod" => Some(Stage::Shared),
         _ => None,
@@ -111,7 +115,16 @@ fn stage_bang_ident_to_stage(ident: &str) -> Option<Stage> {
 
 fn parse_factorio_stage_attribute(attr: &Attribute) -> Option<Stage> {
     let path = attr.path();
-    for stage_name in ["settings", "data", "control", "shared"] {
+    for stage_name in [
+        "settings_final_fixes",
+        "settings_updates",
+        "settings",
+        "data_final_fixes",
+        "data_updates",
+        "data",
+        "control",
+        "shared",
+    ] {
         if is_factorio_path_segment(path, stage_name) {
             return stage_ident_to_stage(stage_name);
         }
@@ -133,7 +146,11 @@ fn is_factorio_path_segment(path: &Path, segment: &str) -> bool {
 fn stage_ident_to_stage(ident: &str) -> Option<Stage> {
     match ident {
         "settings" => Some(Stage::Settings),
+        "settings_updates" => Some(Stage::SettingsUpdates),
+        "settings_final_fixes" => Some(Stage::SettingsFinalFixes),
         "data" => Some(Stage::Data),
+        "data_updates" => Some(Stage::DataUpdates),
+        "data_final_fixes" => Some(Stage::DataFinalFixes),
         "control" => Some(Stage::Control),
         "shared" => Some(Stage::Shared),
         _ => None,

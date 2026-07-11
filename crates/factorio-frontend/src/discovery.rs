@@ -22,7 +22,8 @@ pub struct DiscoveredModule {
 ///
 /// Modules are found via:
 /// - path-based layout (`src/control/...`, `src/control.rs`, ...)
-/// - `factorio_rs::control_mod! { ... }` block macros (and `shared_mod!` / `data_mod!`)
+/// - `factorio_rs::control_mod! { ... }` block macros (and `shared_mod!` / `data_mod!` /
+///   `settings_updates_mod!` / …)
 /// - `#[factorio_rs::control] mod name { ... }` inline modules
 ///
 /// # Errors
@@ -36,7 +37,7 @@ pub fn discover_modules(
 
     if let Some(module_name) = module_name_from_source(source_dir, source_path) {
         // Any file under src/ is transpilable. Files whose names don't match a
-        // known stage prefix (control/settings/data/shared) default to Shared so
+        // known stage prefix (control/settings*/data*/shared) default to Shared so
         // that helper modules like `adjacent_blacklist.rs` don't need to live
         // inside a `shared/` subdirectory.
         let stage = Stage::from_module_name(&module_name).unwrap_or(Stage::Shared);
@@ -149,5 +150,47 @@ mod tests {
         assert_eq!(modules.len(), 1);
         assert_eq!(modules[0].module_name, "handlers");
         assert_eq!(modules[0].stage, factorio_ir::stage::Stage::Control);
+    }
+
+    #[test]
+    fn discovers_settings_phase_modules_by_path() {
+        let source_dir = Path::new("/project/src");
+
+        let updates = discover_modules(
+            source_dir,
+            &source_dir.join("settings_updates.rs"),
+            "pub fn patch() {}",
+        )
+        .unwrap();
+        assert_eq!(updates[0].module_name, "settings_updates");
+        assert_eq!(updates[0].stage, factorio_ir::stage::Stage::SettingsUpdates);
+
+        let finals = discover_modules(
+            source_dir,
+            &source_dir.join("settings_final_fixes.rs"),
+            "pub fn fixup() {}",
+        )
+        .unwrap();
+        assert_eq!(finals[0].module_name, "settings_final_fixes");
+        assert_eq!(
+            finals[0].stage,
+            factorio_ir::stage::Stage::SettingsFinalFixes
+        );
+    }
+
+    #[test]
+    fn discovers_data_phase_attribute() {
+        let source_dir = Path::new("/project/src");
+        let source_path = source_dir.join("lib.rs");
+        let source = r"
+            #![factorio_rs::data_updates]
+
+            pub fn patch() {}
+        ";
+
+        let modules = discover_modules(source_dir, &source_path, source).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].module_name, "data_updates");
+        assert_eq!(modules[0].stage, factorio_ir::stage::Stage::DataUpdates);
     }
 }
