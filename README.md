@@ -6,6 +6,17 @@
 > [!NOTE]
 > This project is in development, expect breaking changes.
 
+## Docs
+
+- **Online:** https://languint.github.io/factorio-rs/
+- **Local:**
+
+```bash
+cd docs
+pnpm install
+pnpm dev
+```
+
 ## Quick start
 
 ```bash

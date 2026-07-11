@@ -2,9 +2,13 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
+const site = "https://languint.github.io";
+const base = "/factorio-rs";
+
 // https://astro.build/config
 export default defineConfig({
-  site: "https://languint.github.io/factorio-rs",
+  site,
+  base,
   integrations: [
     starlight({
       title: "factorio-rs",
@@ -20,43 +24,41 @@ export default defineConfig({
       editLink: {
         baseUrl: "https://github.com/languint/factorio-rs/edit/main/docs/",
       },
-      // Prefer `link` over `slug` so a stale content cache cannot crash the
-      // splash page while validating sidebar entries against the collection.
       sidebar: [
         {
           label: "Start here",
           items: [
-            { label: "Introduction", link: "/intro/" },
-            { label: "Installation", link: "/installation/" },
-            { label: "Getting started", link: "/guides/getting-started/" },
+            { label: "Introduction", slug: "intro" },
+            { label: "Installation", slug: "installation" },
+            { label: "Getting started", slug: "guides/getting-started" },
           ],
         },
         {
           label: "Guides",
           items: [
-            { label: "Stages", link: "/guides/stages/" },
-            { label: "Language support", link: "/guides/language/" },
-            { label: "Events and filters", link: "/guides/events/" },
-            { label: "Mod settings", link: "/guides/mod-settings/" },
-            { label: "Locale", link: "/guides/locale/" },
-            { label: "Profiles", link: "/guides/profiles/" },
+            { label: "Stages", slug: "guides/stages" },
+            { label: "Language support", slug: "guides/language" },
+            { label: "Events and filters", slug: "guides/events" },
+            { label: "Mod settings", slug: "guides/mod-settings" },
+            { label: "Locale", slug: "guides/locale" },
+            { label: "Profiles", slug: "guides/profiles" },
           ],
         },
         {
           label: "Reference",
           items: [
-            { label: "CLI", link: "/reference/cli/" },
-            { label: "Factorio.toml", link: "/reference/factorio-toml/" },
-            { label: "Macros and attributes", link: "/reference/macros/" },
+            { label: "CLI", slug: "reference/cli" },
+            { label: "Factorio.toml", slug: "reference/factorio-toml" },
+            { label: "Macros and attributes", slug: "reference/macros" },
           ],
         },
         {
           label: "Examples",
           items: [
-            { label: "hello_world", link: "/examples/hello-world/" },
+            { label: "hello_world", slug: "examples/hello-world" },
             {
               label: "mandatory_spaghetti",
-              link: "/examples/mandatory-spaghetti/",
+              slug: "examples/mandatory-spaghetti",
             },
           ],
         },

@@ -44,5 +44,5 @@ You typically iterate with both: check with Cargo, emit the mod with the CLI.
 ## Language surface
 
 Only a subset of Rust is transpiled. See
-[Language support](/guides/language/) for statements, expressions, `Option` /
+[Language support](guides/language/) for statements, expressions, `Option` /
 `Vec` behaviour, and common unsupported constructs.

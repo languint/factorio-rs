@@ -25,7 +25,7 @@ Applied to a crate, module, or used as `*_mod!` wrappers:
 
 ## `#[factorio_rs::event]`
 
-See [Events and filters](/guides/events/).
+See [Events and filters](../guides/events/).
 
 ```rust
 #[factorio_rs::event(OnSingleplayerInit)]
@@ -37,11 +37,11 @@ pub fn on_built_entity(event: OnBuiltEntityEvent) {}
 
 ## `mod_settings!`
 
-See [Mod settings](/guides/mod-settings/).
+See [Mod settings](../guides/mod-settings/).
 
 ## `locale!`
 
-See [Locale](/guides/locale/).
+See [Locale](../guides/locale/).
 
 ## Expression macros
 
@@ -49,4 +49,4 @@ In executable code, only **`println!`** is lowered (to `game.print`). Other
 macros in expression position are rejected. Item macros such as `mod_settings!`
 and `locale!` are handled separately during module lowering.
 
-Full syntax inventory: [Language support](/guides/language/).
+Full syntax inventory: [Language support](../guides/language/).

@@ -39,6 +39,6 @@ Build produces prefixed Lua modules (`msr_control.lua`, `msr_settings.lua`),
 `settings.lua` calling `msr_settings.register()`, and
 `locale/en/settings.cfg` / `locale/de/settings.cfg`.
 
-Useful as a tour of [language support](/guides/language/): `Vec` / `for` /
+Useful as a tour of [language support](../guides/language/): `Vec` / `for` /
 `continue`, let-chains, `..Default::default()` on API param structs, and
 settings reads via `.get`.

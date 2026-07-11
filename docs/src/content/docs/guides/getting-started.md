@@ -90,7 +90,7 @@ folder inside.
 
 ## Next steps
 
-- [Language support](/guides/language/) - what Rust syntax you can use
-- [Stages](/guides/stages/) - control / settings / data / shared
-- [Events and filters](/guides/events/)
-- [hello_world](/examples/hello-world/) example
+- [Language support](language/) - what Rust syntax you can use
+- [Stages](stages/) - control / settings / data / shared
+- [Events and filters](events/)
+- [hello_world](../examples/hello-world/) example

@@ -140,17 +140,17 @@ use crate::adjacent_blacklist;
 - Nested item paths like `use crate::a::b::C` (two+ item segments) are not
   supported - import the module, then path to the item.
 
-See [Stages](/guides/stages/) for how files map to Factorio load phases.
+See [Stages](stages/) for how files map to Factorio load phases.
 
 ## Factorio-oriented features
 
 | Feature              | Docs                                  |
 | -------------------- | ------------------------------------- |
-| Stages / discovery   | [Stages](/guides/stages/)             |
-| `#[event]` + filters | [Events](/guides/events/)             |
-| `mod_settings!`      | [Mod settings](/guides/mod-settings/) |
-| `locale!`            | [Locale](/guides/locale/)             |
-| Profiles / prune     | [Profiles](/guides/profiles/)         |
+| Stages / discovery   | [Stages](stages/)             |
+| `#[event]` + filters | [Events](events/)             |
+| `mod_settings!`      | [Mod settings](mod-settings/) |
+| `locale!`            | [Locale](locale/)             |
+| Profiles / prune     | [Profiles](profiles/)         |
 
 Filter arguments must be **string literals**. Events are **control-stage
 only**.
@@ -172,6 +172,6 @@ Only **`println!`** is lowered. Other macros in expression position fail with `U
 
 ## See also
 
-- [mandatory_spaghetti](/examples/mandatory-spaghetti/) - settings, locale,
+- [mandatory_spaghetti](../examples/mandatory-spaghetti/) - settings, locale,
   `Vec`, `for`, `continue`, `..Default::default()`, let-chains
-- [hello_world](/examples/hello-world/) - events, filters, `println!`
+- [hello_world](../examples/hello-world/) - events, filters, `println!`

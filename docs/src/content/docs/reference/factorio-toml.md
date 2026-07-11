@@ -37,7 +37,7 @@ Mod **name** / zip id still come from Cargo `[package].name` and version.
 | `debug_level` | Lua debug comment level |
 | `prune_dead_code` | Whether to prune unreachable IR |
 
-See [Profiles](/guides/profiles/).
+See [Profiles](../guides/profiles/).
 
 ## Example
 

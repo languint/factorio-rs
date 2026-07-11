@@ -51,7 +51,7 @@ use crate::settings::Settings;
 const CASUAL_MODE: bool = settings.startup.get::<bool>(Settings::CASUAL_MODE);
 ```
 
-Put locale strings for setting names/descriptions in a `locale!` block - see [Locale](/guides/locale/).
+Put locale strings for setting names/descriptions in a `locale!` block - see [Locale](locale/).
 
 ## Reading values in Lua terms
 
@@ -61,4 +61,4 @@ settings.startup.get::<bool>(Settings::CASUAL_MODE)
 
 lowers roughly to `settings.startup["msr-casual-mode"].value`.
 
-Setting / API structs often use `..Default::default()` so only the fields you set appear in the Lua table - see [Language support](/guides/language/).
+Setting / API structs often use `..Default::default()` so only the fields you set appear in the Lua table - see [Language support](language/).
