@@ -38,6 +38,7 @@ export default defineConfig({
           items: [
             { label: "Stages", slug: "guides/stages" },
             { label: "Language support", slug: "guides/language" },
+            { label: "API types", slug: "guides/api-types" },
             { label: "Events and filters", slug: "guides/events" },
             { label: "Mod settings", slug: "guides/mod-settings" },
             { label: "Locale", slug: "guides/locale" },

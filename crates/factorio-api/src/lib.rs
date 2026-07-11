@@ -21,6 +21,38 @@ pub trait LuaObject {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LuaAny;
 
+/// Index-or-name parameter used by APIs such as `game.get_player` /
+/// `game.get_surface` (`uint32 | string` in the Factorio schema).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexOrName {
+    Index(u32),
+    Name(&'static str),
+}
+
+impl Default for IndexOrName {
+    fn default() -> Self {
+        Self::Index(0)
+    }
+}
+
+impl From<u32> for IndexOrName {
+    fn from(value: u32) -> Self {
+        Self::Index(value)
+    }
+}
+
+impl From<&'static str> for IndexOrName {
+    fn from(value: &'static str) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl From<IndexOrName> for LuaAny {
+    fn from(_: IndexOrName) -> Self {
+        LuaAny
+    }
+}
+
 // Primitive types usable as LuaAny positions via `.into()`.
 impl<'a> From<&'a str> for LuaAny {
     fn from(_: &'a str) -> Self {

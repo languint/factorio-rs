@@ -1,11 +1,10 @@
 use factorio_rs::{
     factorio_api::{
-        LuaAny,
         classes::{
             self, LuaEntityDestroyParams, LuaEntityMineParams, LuaRenderingDrawLineParams,
             LuaSurfaceSpillInventoryParams,
         },
-        concepts::{BoundingBox, Color, EntitySearchFilters, MapPosition},
+        concepts::{BoundingBox, Color, EntitySearchFilters, MapPosition, ScriptRenderTarget},
     },
     prelude::*,
 };
@@ -65,19 +64,17 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
     let bb = source.bounding_box();
     let area = BoundingBox {
         left_top: MapPosition {
-            x: bb.left_top.x() - 1.0,
-            y: bb.left_top.y() - 1.0,
-        }
-        .into(),
+            x: bb.left_top.x - 1.0,
+            y: bb.left_top.y - 1.0,
+        },
         right_bottom: MapPosition {
-            x: bb.right_bottom.x() + 1.0,
-            y: bb.right_bottom.y() + 1.0,
-        }
-        .into(),
+            x: bb.right_bottom.x + 1.0,
+            y: bb.right_bottom.y + 1.0,
+        },
         ..Default::default()
     };
     let entities = surface.find_entities_filtered(EntitySearchFilters {
-        area: area.into(),
+        area,
         force: source.force().into(),
         ..Default::default()
     });
@@ -114,25 +111,24 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
     }
 
     let bb = source.prototype().collision_box();
-    let is_rectangular = bb.left_top.x() != bb.left_top.y()
-        || bb.right_bottom.x() != bb.right_bottom.y()
-        || bb.left_top.x() != (0.0 - bb.right_bottom.x());
+    let is_rectangular = bb.left_top.x != bb.left_top.y
+        || bb.right_bottom.x != bb.right_bottom.y
+        || bb.left_top.x != (0.0 - bb.right_bottom.x);
 
     let direction = if is_rectangular {
-        source.direction().into()
+        source.direction()
     } else {
-        LuaAny
+        ""
     };
 
     let entities = source
         .surface()
         .find_entities_filtered(EntitySearchFilters {
             area: BoundingBox {
-                left_top: pos.into(),
-                right_bottom: offset.into(),
+                left_top: pos,
+                right_bottom: offset,
                 ..Default::default()
-            }
-            .into(),
+            },
             name: source.name().into(),
             direction,
             force: source.force().into(),
@@ -154,7 +150,11 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
     result
 }
 
-fn draw_line(surface: classes::LuaSurface, from: LuaAny, to: LuaAny) -> classes::LuaRenderObject {
+fn draw_line(
+    surface: classes::LuaSurface,
+    from: ScriptRenderTarget,
+    to: ScriptRenderTarget,
+) -> classes::LuaRenderObject {
     rendering.draw_line(LuaRenderingDrawLineParams {
         width: 4.0,
         color: Color {
@@ -187,18 +187,18 @@ fn pattern(source: classes::LuaEntity) {
     let mut offsets_list: Vec<MapPosition> = Vec::new();
     offsets_list.push(MapPosition {
         x: 0.0,
-        y: bb.left_top.y() - 4.0 - pos.y,
+        y: bb.left_top.y - 4.0 - pos.y,
     });
     offsets_list.push(MapPosition {
-        x: bb.right_bottom.x() + 4.0 - pos.x,
+        x: bb.right_bottom.x + 4.0 - pos.x,
         y: 0.0,
     });
     offsets_list.push(MapPosition {
         x: 0.0,
-        y: bb.right_bottom.y() + 4.0 - pos.y,
+        y: bb.right_bottom.y + 4.0 - pos.y,
     });
     offsets_list.push(MapPosition {
-        x: bb.left_top.x() - 4.0 - pos.x,
+        x: bb.left_top.x - 4.0 - pos.x,
         y: 0.0,
     });
 

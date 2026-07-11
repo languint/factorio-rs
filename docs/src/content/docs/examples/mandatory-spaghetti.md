@@ -12,6 +12,8 @@ A larger control-stage mod that demonstrates:
   default
 - `mod_settings!` + `locale!` (English and German)
 - `[emit] lua_module_prefix = "msr"`
+- Typed `EntitySearchFilters` / `BoundingBox` / `ScriptRenderTarget` (see
+  [API types](../guides/api-types/))
 
 ## Layout
 
@@ -40,5 +42,6 @@ Build produces prefixed Lua modules (`msr_control.lua`, `msr_settings.lua`),
 `locale/en/settings.cfg` / `locale/de/settings.cfg`.
 
 Useful as a tour of [language support](../guides/language/): `Vec` / `for` /
-`continue`, let-chains, `..Default::default()` on API param structs, and
-settings reads via `.get`.
+`continue`, let-chains, `..Default::default()` on API param structs, settings
+reads via `.get`, and [typed API concepts](../guides/api-types/) instead of
+`LuaAny` for filters and render targets.

@@ -4,7 +4,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::generate::ident::{make_ident, sanitize_doc};
-use crate::generate::types::{KnownTypes, map_copy_field_type};
+use crate::generate::types::{
+    KnownTypes, map_copy_field_type_for_concept, map_numeric_type_tokens,
+};
 use crate::schema::{ApiType, Concept, RuntimeApi};
 
 pub fn generatable_concept_names(
@@ -16,7 +18,9 @@ pub fn generatable_concept_names(
         .filter(|c| {
             !excluded.contains(&c.name)
                 && !c.type_name.is_homog_string_literal_union()
-                && (concept_table_params(&c.type_name).is_some() || is_string_alias(c))
+                && (concept_table_params(&c.type_name).is_some()
+                    || is_string_alias(c)
+                    || is_numeric_alias(c))
         })
         .map(|c| c.name.clone())
         .collect()
@@ -52,6 +56,11 @@ fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenSt
         return None;
     }
 
+    // Identification enums are emitted by `generate_identifications`.
+    if known.identifications.contains(&concept.name) {
+        return None;
+    }
+
     let name = make_ident(&concept.name);
     let doc: Option<String> = if concept.description.is_empty() {
         None
@@ -66,6 +75,17 @@ fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenSt
                 pub type #name = &'static str;
             },
             None => quote! { pub type #name = &'static str; },
+        });
+    }
+
+    if let Some(underlying) = numeric_alias_underlying(concept) {
+        let rust_ty = map_numeric_type_tokens(underlying);
+        return Some(match doc {
+            Some(d) => quote! {
+                #[doc = #d]
+                pub type #name = #rust_ty;
+            },
+            None => quote! { pub type #name = #rust_ty; },
         });
     }
 
@@ -86,7 +106,7 @@ fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenSt
 
     let fields = params.iter().map(|(field_name, field_type, _optional)| {
         let ident = make_ident(field_name);
-        let ty = map_copy_field_type(field_type, known);
+        let ty = map_copy_field_type_for_concept(field_type, known, &concept.name);
         quote! { pub #ident: #ty, }
     });
 
@@ -107,7 +127,7 @@ fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenSt
     })
 }
 
-fn concept_table_params(ty: &ApiType) -> Option<Vec<(String, ApiType, bool)>> {
+pub(crate) fn concept_table_params(ty: &ApiType) -> Option<Vec<(String, ApiType, bool)>> {
     match ty.complex_type() {
         Some("table") => Some(ty.parameters()),
         Some("union") => ty
@@ -121,4 +141,28 @@ fn concept_table_params(ty: &ApiType) -> Option<Vec<(String, ApiType, bool)>> {
 
 fn is_string_alias(concept: &Concept) -> bool {
     matches!(concept.type_name.as_simple_name(), Some("string"))
+}
+
+fn is_numeric_alias(concept: &Concept) -> bool {
+    numeric_alias_underlying(concept).is_some()
+}
+
+fn numeric_alias_underlying(concept: &Concept) -> Option<&'static str> {
+    let name = concept.type_name.as_simple_name()?;
+    match name {
+        "float" => Some("float"),
+        "double" => Some("double"),
+        "number" => Some("number"),
+        "uint8" => Some("uint8"),
+        "uint16" => Some("uint16"),
+        "uint32" => Some("uint32"),
+        "uint64" => Some("uint64"),
+        "uint" => Some("uint"),
+        "int8" => Some("int8"),
+        "int16" => Some("int16"),
+        "int32" => Some("int32"),
+        "int64" => Some("int64"),
+        "int" => Some("int"),
+        _ => None,
+    }
 }

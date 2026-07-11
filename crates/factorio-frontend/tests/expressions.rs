@@ -188,7 +188,7 @@ pub fn shout(message: &str) {
     game.print(
         message,
         Some(PrintSettings {
-            color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }.into(),
+            color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
             ..Default::default()
         }),
     );
@@ -303,4 +303,3 @@ pub fn check(value: Option<i32>) {
         }
     ));
 }
-

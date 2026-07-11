@@ -45,15 +45,15 @@ factorio_rs::control_mod! {
 ```
 
 With the feature enabled, `factorio_rs::prelude::*` also re-exports `info!`,
-`warn!`, `error!`, `debug!`, and `trace!`, so bare `info!("…")` works after
+`warn!`, `error!`, `debug!`, and `trace!`, so bare `info!("...")` works after
 `use factorio_rs::prelude::*`.
 
 Supported paths:
 
 | Form | Example |
 | --- | --- |
-| Qualified | `tracing::info!("…")`, `factorio_rs::tracing::warn!("…")` |
-| Bare (feature on) | `info!("…")` after importing the macro |
+| Qualified | `tracing::info!("...")`, `factorio_rs::tracing::warn!("...")` |
+| Bare (feature on) | `info!("...")` after importing the macro |
 
 ## What it emits
 

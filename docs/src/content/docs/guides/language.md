@@ -51,6 +51,7 @@ if let Some(player) = game.get_player(index.into()) {
 }
 ```
 
+`get_player` takes [`IndexOrName`](api-types/) (`u32` or `&str` via `.into()`).
 There is no real `Option` wrapper in Lua. `None` becomes `nil`, and `Some(x)` is
 transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 
@@ -71,7 +72,7 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | `if c { a } else { b }`             | Each arm must be a **single** expression; emits `c and a or b` |
 | `println!(...)`                     | -> `game.print(...)` with `..` concatenation                   |
 | `format!(...)`                      | -> string via `..` concatenation                               |
-| `tracing::info!` / `warn!` / …      | -> colored `game.print` (CLI `tracing` feature; default on)    |
+| `tracing::info!` / `warn!` / ...      | -> colored `game.print` (CLI `tracing` feature; default on)    |
 | Literal string unions               | e.g. `GuiDirection::Horizontal` -> `"horizontal"`              |
 
 **Transparent zero-arg methods** (receiver kept): `into`, `unwrap`, `clone`,
@@ -89,7 +90,8 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | method with args    | `recv.method(args)` (`.` not `:`) |
 
 **Constructors:** `Vec::new()`, `Type::default()`, `LuaAny::new()` -> `{}` or
-`nil` as appropriate.
+`nil` as appropriate. Prefer typed concepts over `LuaAny` when the stubs expose
+them - see [API types](api-types/).
 
 ### Struct update / `Default`
 
@@ -166,8 +168,8 @@ macros are lowered:
 
 | Macro | Lua |
 | --- | --- |
-| `println!(…)` | `game.print(…)` with `..` concatenation |
-| `format!(…)` | string built with `..` (no `game.print`) |
+| `println!(...)` | `game.print(...)` with `..` concatenation |
+| `format!(...)` | string built with `..` (no `game.print`) |
 | `tracing::info!` / `warn!` / `error!` / `debug!` / `trace!` | `game.print` with `[LEVEL]` prefix + color |
 
 Enable `factorio-rs` feature `tracing` in the mod `Cargo.toml` so those macros
@@ -195,3 +197,4 @@ Other macros in expression position fail with `UnsupportedMacro`.
   `Vec`, `for`, `continue`, `..Default::default()`, let-chains
 - [hello_world](../examples/hello-world/) - events, filters, `println!`
 - [tracing_test](../examples/tracing-test/) - optional `tracing` feature
+- [API types](api-types/) - concepts, Identification enums, `LuaAny`

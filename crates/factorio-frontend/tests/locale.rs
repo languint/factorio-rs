@@ -110,4 +110,3 @@ fn locale_macro_multiple_languages() {
     assert_eq!(module.locales[1].lang, "de");
     assert_eq!(module.locales[1].entries[0].value, "Entspannter Modus");
 }
-

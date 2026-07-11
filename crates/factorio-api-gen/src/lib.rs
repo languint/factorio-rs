@@ -70,15 +70,26 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
     let mappings = generate::collect_event_mappings(api);
     let class_names = generate::class_names(api);
     let filter_concept_names = generate::event_filter_concept_names(api);
-    let concept_names = generate::generatable_concept_names(api, &filter_concept_names);
+    let identification_names = generate::identification_concept_names(api, &filter_concept_names);
+    let identification_signatures = generate::identification_signatures(api, &identification_names);
+    let mut concept_names = generate::generatable_concept_names(api, &filter_concept_names);
+    concept_names.extend(identification_names.iter().cloned());
     let union_registry = generate::collect_literal_unions(api);
     let known = generate::KnownTypes {
         classes: &class_names,
         concepts: &concept_names,
+        identifications: &identification_names,
+        identification_signatures: &identification_signatures,
         unions: union_registry.names(),
         union_registry: &union_registry,
     };
     let event_filters = generate::generate_event_filters(api);
+    let concepts = {
+        let mut structs = generate::generate_concepts(api, &known, &filter_concept_names);
+        let ids = generate::generate_identifications(api, &known).to_string();
+        structs.push_str(&ids);
+        structs
+    };
 
     GeneratedApi {
         application_version: api.application_version.clone(),
@@ -93,7 +104,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
         defines: generate::generate_defines(&api.defines),
         classes: generate::generate_classes(api, &known),
         globals: generate::generate_globals(api, &known),
-        concepts: generate::generate_concepts(api, &known, &filter_concept_names),
+        concepts,
         unions: generate::generate_unions(&union_registry),
     }
 }

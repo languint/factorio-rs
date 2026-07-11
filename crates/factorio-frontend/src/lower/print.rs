@@ -140,7 +140,10 @@ fn lower_tracing_macro(
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let message = lower_format_macro_message(mac, ctx, self_type)?;
     let prefixed = prepend_literal(level.label(), message);
-    Ok(game_print_call(prefixed, Some(print_settings_color(level.color()))))
+    Ok(game_print_call(
+        prefixed,
+        Some(print_settings_color(level.color())),
+    ))
 }
 
 fn game_print_call(
@@ -201,9 +204,7 @@ fn prepend_literal(
 }
 
 #[cfg(feature = "tracing")]
-fn print_settings_color(
-    (r, g, b, a): (f64, f64, f64, f64),
-) -> factorio_ir::expression::Expression {
+fn print_settings_color((r, g, b, a): (f64, f64, f64, f64)) -> factorio_ir::expression::Expression {
     let color = factorio_ir::expression::Expression::StructLiteral {
         struct_name: Some("Color".to_string()),
         fields: vec![

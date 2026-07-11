@@ -46,4 +46,6 @@ You typically iterate with both: check with Cargo, emit the mod with the CLI.
 Only a subset of Rust is transpiled. See
 [Language support](guides/language/) for statements, expressions, `Option` /
 `Vec` behaviour, and common unsupported constructs. Optional
-[Tracing](guides/tracing/) macros lower to colored `game.print`.
+[Tracing](guides/tracing/) macros lower to colored `game.print`. Generated API
+stubs prefer concrete concepts and [Identification enums](guides/api-types/)
+over `LuaAny`.

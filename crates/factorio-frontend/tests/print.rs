@@ -121,7 +121,9 @@ pub fn on_init() {
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert!(
-        lua.contains(r#"game.print("[INFO] ready", { color = { r = 0.55, g = 0.85, b = 1, a = 1 } })"#),
+        lua.contains(
+            r#"game.print("[INFO] ready", { color = { r = 0.55, g = 0.85, b = 1, a = 1 } })"#
+        ),
         "unexpected lua:\n{lua}"
     );
 }
@@ -158,8 +160,5 @@ pub fn on_init() {
     let module = must_ok_parse(parse_module(source, "control.on_init"));
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
-    assert!(
-        lua.contains(r#""[ERROR] boom""#),
-        "unexpected lua:\n{lua}"
-    );
+    assert!(lua.contains(r#""[ERROR] boom""#), "unexpected lua:\n{lua}");
 }

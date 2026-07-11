@@ -4,6 +4,7 @@ mod defines;
 mod event_filters;
 mod events;
 mod ident;
+mod identifications;
 mod types;
 mod unions;
 
@@ -14,6 +15,9 @@ pub use event_filters::{generate_event_data, generate_event_filters};
 pub use events::{
     collect_event_mappings, generate_event_filter_lookup, generate_event_lookup,
     generate_event_map, generate_event_module_lookup, generate_events,
+};
+pub use identifications::{
+    generate_identifications, identification_concept_names, identification_signatures,
 };
 pub use types::KnownTypes;
 pub use unions::{collect_literal_unions, generate_unions};

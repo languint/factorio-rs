@@ -4,7 +4,6 @@ use crate::error::{FrontendError, FrontendResult};
 
 use super::{context::LowerContext, print::lower_macro_expression, util::location};
 
-
 #[allow(clippy::missing_const_for_fn)]
 fn expr_kind_name(expression: &Expr) -> &'static str {
     match expression {
@@ -106,18 +105,12 @@ fn lower_call_expression(
         let mut args = call.args.iter();
         let Some(arg) = args.next() else {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!(
-                    "{} (Some expects exactly one argument)",
-                    location(call)
-                ),
+                location: format!("{} (Some expects exactly one argument)", location(call)),
             });
         };
         if args.next().is_some() {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!(
-                    "{} (Some expects exactly one argument)",
-                    location(call)
-                ),
+                location: format!("{} (Some expects exactly one argument)", location(call)),
             });
         }
         return lower_expression(arg, ctx, self_type);

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::generate::ident::make_ident;
 use crate::generate::unions::UnionRegistry;
@@ -14,6 +14,10 @@ pub struct KnownTypes<'a> {
     pub classes: &'a BTreeSet<String>,
     /// `crate::concepts::*` - emitted as `T` (value types, no boxing needed).
     pub concepts: &'a BTreeSet<String>,
+    /// Identification / mixed-union enums emitted into `crate::concepts`.
+    pub identifications: &'a BTreeSet<String>,
+    /// Sorted arm signature keys → identification concept name.
+    pub identification_signatures: &'a HashMap<Vec<String>, String>,
     /// `crate::unions::*` - Copy unit enums for homog string-literal unions.
     pub unions: &'a BTreeSet<String>,
     /// Registry used to resolve anonymous/named literal unions to enum names.
@@ -257,7 +261,7 @@ pub fn map_api_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream {
 /// appropriate float (`float` -> `f32`, `double`/`number` -> `f64`).
 ///
 /// All of these are `Copy`, so the mapping is safe for every context.
-fn map_numeric_type(name: &str) -> TokenStream {
+pub fn map_numeric_type_tokens(name: &str) -> TokenStream {
     match name {
         "uint8" => quote!(u8),
         "uint16" => quote!(u16),
@@ -276,7 +280,15 @@ fn map_numeric_type(name: &str) -> TokenStream {
     }
 }
 
+fn map_numeric_type(name: &str) -> TokenStream {
+    map_numeric_type_tokens(name)
+}
+
 /// Returns `true` for all Factorio numeric type names that should be treated as integers.
+pub fn is_integer_api_type_pub(name: &str) -> bool {
+    is_integer_api_type(name)
+}
+
 fn is_integer_api_type(name: &str) -> bool {
     matches!(
         name,
@@ -300,7 +312,9 @@ fn is_integer_api_type(name: &str) -> bool {
 
 fn map_simple_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
     match name {
-        "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => quote!(&str),
+        "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => {
+            quote!(&'static str)
+        }
         "boolean" => quote!(bool),
         "nil" | "void" => quote!(()),
         n if is_integer_api_type(n) || matches!(n, "float" | "double" | "number") => {
@@ -315,7 +329,7 @@ fn map_simple_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
             quote!(crate::concepts::#ident)
         }
         other if known.unions.contains(other) => union_type_path(other),
-        other if other.starts_with("defines.") => quote!(&str),
+        other if other.starts_with("defines.") => quote!(&'static str),
         _ => lua_any_type(),
     }
 }
@@ -400,6 +414,23 @@ fn map_union_type(
         .filter(|o| o.as_simple_name() != Some("nil"))
         .collect();
     let has_nil = options.len() > non_nil.len();
+
+    if let Some(name) = resolve_identification_for_arms(&non_nil, known) {
+        let ident = make_ident(&name);
+        let ty = quote!(crate::concepts::#ident);
+        return if has_nil { quote!(Option<#ty>) } else { ty };
+    }
+
+    if let Some(elem) = scalar_from_scalar_or_array(&non_nil) {
+        let ty = map_inner(elem, known);
+        return if has_nil { quote!(Option<#ty>) } else { ty };
+    }
+
+    // Anonymous `uint32 | string` (get_player, get_surface, ...).
+    if let Some(ty) = map_index_or_name_union(&non_nil) {
+        return if has_nil { quote!(Option<#ty>) } else { ty };
+    }
+
     match non_nil.len() {
         0 => quote!(()),
         1 => {
@@ -422,6 +453,90 @@ fn map_union_type(
     }
 }
 
+fn map_index_or_name_union(arms: &[&ApiType]) -> Option<TokenStream> {
+    if arms.len() != 2 {
+        return None;
+    }
+    let mut names: Vec<String> = arms
+        .iter()
+        .filter_map(|arm| {
+            let arm = unwrap_type_ref(arm);
+            arm.as_simple_name().map(str::to_string)
+        })
+        .collect();
+    if names.len() != 2 {
+        return None;
+    }
+    names.sort_unstable();
+    if names == ["string", "uint32"] {
+        return Some(quote!(crate::IndexOrName));
+    }
+    None
+}
+
+/// If arms are exactly `T` and `array<T>` (either order), return `T`.
+fn scalar_from_scalar_or_array<'a>(arms: &[&'a ApiType]) -> Option<&'a ApiType> {
+    if arms.len() != 2 {
+        return None;
+    }
+    let (a, b) = (arms[0], arms[1]);
+    if a.complex_type() == Some("array")
+        && let Some(value) = a.child_type("value")
+        && types_equivalent(&value, b)
+    {
+        return Some(b);
+    }
+    if b.complex_type() == Some("array")
+        && let Some(value) = b.child_type("value")
+        && types_equivalent(&value, a)
+    {
+        return Some(a);
+    }
+    None
+}
+
+fn types_equivalent(a: &ApiType, b: &ApiType) -> bool {
+    match (a.as_simple_name(), b.as_simple_name()) {
+        (Some(x), Some(y)) => x == y,
+        _ => a.0 == b.0,
+    }
+}
+
+fn unwrap_type_ref(api_type: &ApiType) -> ApiType {
+    if api_type.complex_type() == Some("type")
+        && let Some(inner) = api_type.child_type("value")
+    {
+        return unwrap_type_ref(&inner);
+    }
+    api_type.clone()
+}
+
+fn arm_signature_key(arm: &ApiType) -> Option<String> {
+    let arm = unwrap_type_ref(arm);
+    if let Some(name) = arm.as_simple_name() {
+        return Some(name.to_string());
+    }
+    match arm.complex_type() {
+        Some("array") => {
+            let value = arm.child_type("value")?;
+            Some(format!("array<{}>", arm_signature_key(&value)?))
+        }
+        _ => None,
+    }
+}
+
+fn resolve_identification_for_arms(arms: &[&ApiType], known: &KnownTypes<'_>) -> Option<String> {
+    let mut keys: Vec<String> = arms
+        .iter()
+        .filter_map(|arm| arm_signature_key(arm))
+        .collect();
+    if keys.len() != arms.len() {
+        return None;
+    }
+    keys.sort();
+    known.identification_signatures.get(&keys).cloned()
+}
+
 /// Maps a `tuple` type to a Rust tuple `(T1, T2, ...)`.
 fn map_tuple_type(
     api_type: &ApiType,
@@ -439,7 +554,7 @@ fn map_tuple_type(
 /// Maps a `literal` type to its underlying primitive (parameter/return context).
 fn map_literal_type(api_type: &ApiType) -> TokenStream {
     match api_type.literal_kind() {
-        Some("string") => quote!(&str),
+        Some("string") => quote!(&'static str),
         Some("number") => quote!(f64),
         Some("boolean") => quote!(bool),
         _ => lua_any_type(),
@@ -517,10 +632,29 @@ pub fn map_simple_copy_field_type(name: &str, known: &KnownTypes<'_>) -> TokenSt
             quote!(crate::classes::#ident)
         }
         other if known.unions.contains(other) => union_type_path(other),
-        other if known.concepts.contains(other) => lua_any_type(),
+        other if known.concepts.contains(other) => {
+            let ident = make_ident(other);
+            quote!(crate::concepts::#ident)
+        }
         other if other.starts_with("defines.") => quote!(&'static str),
         _ => lua_any_type(),
     }
+}
+
+/// Like [`map_copy_field_type`], but leaves a self-referential concept field as
+/// `LuaAny` so the parent struct can stay `Copy` (e.g. `MapLocation.position`).
+pub fn map_copy_field_type_for_concept(
+    api_type: &ApiType,
+    known: &KnownTypes<'_>,
+    parent_concept: &str,
+) -> TokenStream {
+    if let Some(name) = api_type.as_simple_name()
+        && name == parent_concept
+        && known.concepts.contains(name)
+    {
+        return lua_any_type();
+    }
+    map_copy_field_type(api_type, known)
 }
 
 pub fn map_copy_field_type(api_type: &ApiType, known: &KnownTypes<'_>) -> TokenStream {
