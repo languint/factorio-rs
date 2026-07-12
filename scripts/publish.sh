@@ -141,7 +141,7 @@ for i in "${!CRATES[@]}"; do
     published=$((published + 1))
     # Allow the crates.io index to catch up before dependents resolve the new version.
     if [[ "$i" -lt $((${#CRATES[@]} - 1)) ]]; then
-      echo "Waiting ${SLEEP_SECS}s for crates.io index…"
+      echo "Waiting ${SLEEP_SECS}s for crates.io index..."
       sleep "$SLEEP_SECS"
     fi
   fi

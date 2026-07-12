@@ -57,6 +57,7 @@ mod tests {
                 thumbnail: thumbnail.map(str::to_string),
             },
             profiles: BTreeMap::default(),
+            lints: crate::config::lints::LintsConfig::default(),
         }
     }
 

@@ -354,6 +354,36 @@ pub fn collect_references_from_expression(
         Expression::Not(inner) | Expression::Len(inner) => {
             collect_references_from_expression(graph, module, inner, locals, reachability, pending);
         }
+        Expression::If {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
+            collect_references_from_expression(
+                graph,
+                module,
+                condition,
+                locals,
+                reachability,
+                pending,
+            );
+            collect_references_from_expression(
+                graph,
+                module,
+                then_expr,
+                locals,
+                reachability,
+                pending,
+            );
+            collect_references_from_expression(
+                graph,
+                module,
+                else_expr,
+                locals,
+                reachability,
+                pending,
+            );
+        }
     }
 }
 

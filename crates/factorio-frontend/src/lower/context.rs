@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use factorio_ir::lint::{Diagnostic, LintConfig, LintId, LintLevel};
+
 use crate::{
     error::{FrontendError, FrontendResult},
     paths::{require_local_name, split_crate_path},
@@ -20,9 +22,32 @@ pub struct LowerContext<'a> {
     /// Binding name -> Rust type key (last path segment, `Option`/`&` peeled) for
     /// compile-time `{:?}` Debug format selection.
     pub binding_types: HashMap<String, String>,
+    /// Lint levels from `Factorio.toml` `[lints]` (defaults deny).
+    pub lints: &'a LintConfig,
+    /// Collected `warn`-level diagnostics (deny fails immediately).
+    pub diagnostics: &'a mut Vec<Diagnostic>,
 }
 
 impl LowerContext<'_> {
+    /// Emit a lint at `location`, or return `Ok(())` when the lint is allowed.
+    pub fn emit_lint(
+        &mut self,
+        id: LintId,
+        message: impl Into<String>,
+        location: impl Into<String>,
+    ) -> FrontendResult<()> {
+        let level = self.lints.level(id);
+        if matches!(level, LintLevel::Allow) {
+            return Ok(());
+        }
+        let diagnostic = Diagnostic::new(id, level, message, location);
+        if diagnostic.is_error() {
+            return Err(FrontendError::Lint(diagnostic));
+        }
+        self.diagnostics.push(diagnostic);
+        Ok(())
+    }
+
     pub fn bind_type(&mut self, name: impl Into<String>, type_key: impl Into<String>) {
         self.binding_types.insert(name.into(), type_key.into());
     }

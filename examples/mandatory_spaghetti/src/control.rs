@@ -20,21 +20,22 @@ fn die(source: classes::LuaEntity) {
     let force = source.force();
 
     if CASUAL_MODE {
-        let inventory = game.create_inventory(
-            None,
-            source.prototype().mineable_properties().products.len() as u16,
-        );
+        let mut size: u16 = 0;
+        if let Some(products) = source.prototype().mineable_properties().products {
+            size = products.len() as u16;
+        }
+        let inventory = game.create_inventory(size, None);
         source.mine(LuaEntityMineParams {
-            force: true,
-            inventory,
+            force: Some(true),
+            inventory: Some(inventory),
             ..Default::default()
         });
         surface.spill_inventory(LuaSurfaceSpillInventoryParams {
-            allow_belts: false,
-            enable_looted: true,
+            allow_belts: Some(false),
+            enable_looted: Some(true),
             inventory,
             position,
-            force: force.into(),
+            force: Some(force.into()),
             ..Default::default()
         });
     } else {
@@ -74,8 +75,8 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
         ..Default::default()
     };
     let entities = surface.find_entities_filtered(EntitySearchFilters {
-        area,
-        force: source.force().into(),
+        area: Some(area),
+        force: Some(source.force().into()),
         ..Default::default()
     });
 
@@ -124,14 +125,14 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
     let entities = source
         .surface()
         .find_entities_filtered(EntitySearchFilters {
-            area: BoundingBox {
+            area: Some(BoundingBox {
                 left_top: pos,
                 right_bottom: offset,
                 ..Default::default()
-            },
-            name: source.name().into(),
-            direction,
-            force: source.force().into(),
+            }),
+            name: Some(source.name().into()),
+            direction: Some(direction),
+            force: Some(source.force().into()),
             ..Default::default()
         });
 
@@ -158,19 +159,19 @@ fn draw_line(
     rendering.draw_line(LuaRenderingDrawLineParams {
         width: 4.0,
         color: Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-            a: 1.0,
+            r: Some(1.0),
+            g: Some(1.0),
+            b: Some(1.0),
+            a: Some(1.0),
         },
         from,
         to,
         surface: surface.into(),
-        dash_length: 0.5,
-        gap_length: 0.5,
-        time_to_live: 60,
-        dash_offset: 0.25,
-        blink_interval: 15,
+        dash_length: Some(0.5),
+        gap_length: Some(0.5),
+        time_to_live: Some(60),
+        dash_offset: Some(0.25),
+        blink_interval: Some(15),
         ..Default::default()
     })
 }

@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use factorio_ir::lint::{Diagnostic, LintConfig};
+
 use syn::{ImplItem, Item, Visibility};
 
 use crate::{
@@ -32,9 +34,34 @@ use metadata::{extract_doc_comments, struct_header_comment};
 use structs::{PendingStruct, impl_type_name, lower_struct_fields};
 use util::{item_name, item_name_impl, location};
 
+/// Options for lowering a Rust module into IR.
+#[derive(Debug, Clone)]
+pub struct ParseOptions<'a> {
+    pub module_prefix: &'a str,
+    pub lints: &'a LintConfig,
+}
+
+impl<'a> ParseOptions<'a> {
+    #[must_use]
+    pub const fn new(lints: &'a LintConfig) -> Self {
+        Self {
+            module_prefix: "",
+            lints,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_prefix(mut self, module_prefix: &'a str) -> Self {
+        self.module_prefix = module_prefix;
+        self
+    }
+}
+
 /// Parse Rust source into a [`factorio_ir::module::Module`].
 ///
-/// `module_name` is used as the module identifier in the resulting IR.
+/// Uses [`LintConfig::allow_all`] so unit tests and ad-hoc parsing are not blocked.
+/// The CLI applies `Factorio.toml` `[lints]` (default **deny**) via
+/// [`parse_module_with_options`].
 ///
 /// # Errors
 /// Returns `Err` if the Rust source fails to parse
@@ -42,7 +69,16 @@ pub fn parse_module(
     source: &str,
     module_name: &str,
 ) -> FrontendResult<factorio_ir::module::Module> {
-    parse_module_with_prefix(source, module_name, "")
+    let lints = LintConfig::allow_all();
+    let mut diagnostics = Vec::new();
+    let module = parse_module_with_options(
+        source,
+        module_name,
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )?;
+    let _ = diagnostics;
+    Ok(module)
 }
 
 /// Like [`parse_module`] but applies `module_prefix` to all generated module
@@ -55,13 +91,42 @@ pub fn parse_module_with_prefix(
     module_name: &str,
     module_prefix: &str,
 ) -> FrontendResult<factorio_ir::module::Module> {
+    let lints = LintConfig::allow_all();
+    let mut diagnostics = Vec::new();
+    let module = parse_module_with_options(
+        source,
+        module_name,
+        &ParseOptions::new(&lints).with_prefix(module_prefix),
+        &mut diagnostics,
+    )?;
+    let _ = diagnostics;
+    Ok(module)
+}
+
+/// Parse with explicit lint configuration; appends `warn`-level diagnostics.
+///
+/// # Errors
+/// Returns `Err` if lowering fails (including deny-level lints).
+pub fn parse_module_with_options(
+    source: &str,
+    module_name: &str,
+    options: &ParseOptions<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> FrontendResult<factorio_ir::module::Module> {
     let file = syn::parse_file(source)?;
     let stage = factorio_ir::stage::Stage::from_module_name(module_name).ok_or_else(|| {
         FrontendError::InvalidModuleStage {
             module: module_name.to_string(),
         }
     })?;
-    lower_items(&file.items, module_name, stage, module_prefix)
+    lower_items(
+        &file.items,
+        module_name,
+        stage,
+        options.module_prefix,
+        options.lints,
+        diagnostics,
+    )
 }
 
 /// Lower a discovered module into IR.
@@ -83,11 +148,31 @@ pub fn parse_discovered_module_with_prefix(
     discovered: &crate::discovery::DiscoveredModule,
     module_prefix: &str,
 ) -> FrontendResult<factorio_ir::module::Module> {
+    let lints = LintConfig::allow_all();
+    let mut diagnostics = Vec::new();
+    parse_discovered_module_with_options(
+        discovered,
+        &ParseOptions::new(&lints).with_prefix(module_prefix),
+        &mut diagnostics,
+    )
+}
+
+/// Lower a discovered module with lint configuration.
+///
+/// # Errors
+/// Returns `Err` if lowering fails (including deny-level lints).
+pub fn parse_discovered_module_with_options(
+    discovered: &crate::discovery::DiscoveredModule,
+    options: &ParseOptions<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> FrontendResult<factorio_ir::module::Module> {
     lower_items(
         &discovered.items,
         &discovered.module_name,
         discovered.stage,
-        module_prefix,
+        options.module_prefix,
+        options.lints,
+        diagnostics,
     )
 }
 
@@ -96,6 +181,8 @@ fn lower_items(
     module_name: &str,
     stage: factorio_ir::stage::Stage,
     module_prefix: &str,
+    lints: &LintConfig,
+    diagnostics: &mut Vec<Diagnostic>,
 ) -> FrontendResult<factorio_ir::module::Module> {
     let mut body = Vec::new();
     let mut symbols = Vec::new();
@@ -109,6 +196,8 @@ fn lower_items(
         module_prefix,
         bare_import_renames: std::collections::HashMap::new(),
         binding_types: std::collections::HashMap::new(),
+        lints,
+        diagnostics,
     };
     let mut module_state = ModuleLowerState {
         module_name,

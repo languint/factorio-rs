@@ -2,7 +2,7 @@
 //!
 //! Stubs exist for `cargo check` / IDE support only. Calls lower to the real Lua
 //! library methods. Overloads that need distinct Rust names (`random_int`,
-//! `format_2`, …) are remapped to the Lua name by the frontend.
+//! `format_2`, ...) are remapped to the Lua name by the frontend.
 
 /// Lua `math` library (Factorio uses deterministic implementations).
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -81,10 +81,15 @@ fn generate_inline_table_structs(
         let type_name_str = format!("{class_name_str}{pascal_attr}");
         let type_ident = make_ident(&type_name_str);
 
-        let fields = params.iter().map(|(field_name, field_type, _optional)| {
+        let fields = params.iter().map(|(field_name, field_type, optional)| {
             let ident = make_ident(field_name);
             // Use copy-compatible field types
-            let ty = map_copy_field_type(field_type, known);
+            let base = map_copy_field_type(field_type, known);
+            let ty = if *optional {
+                quote!(Option<#base>)
+            } else {
+                base
+            };
             quote! { pub #ident: #ty, }
         });
 
@@ -234,7 +239,12 @@ fn build_takes_table_structs(
 
             let fields = method.parameters.iter().map(|p| {
                 let ident = make_ident(&p.name);
-                let ty = map_field_type_unboxed(&p.type_name, known);
+                let base = map_field_type_unboxed(&p.type_name, known);
+                let ty = if p.optional {
+                    quote!(Option<#base>)
+                } else {
+                    base
+                };
                 if p.description.is_empty() {
                     quote! { pub #ident: #ty, }
                 } else {

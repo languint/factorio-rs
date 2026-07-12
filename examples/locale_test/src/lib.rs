@@ -2,7 +2,7 @@ factorio_rs::control_mod! {
     use factorio_rs::prelude::*;
 
     /// Locale keys for greetings (`__1__` is the player name).
-    /// Indices are 1-based in the `/greet <n>` command (`/greet 1` … `/greet 3`).
+    /// Indices are 1-based in the `/greet <n>` command (`/greet 1` ... `/greet 3`).
     const GREETINGS: &[&str] = &[
         "greetings.hello",
         "greetings.welcome",
@@ -47,15 +47,21 @@ factorio_rs::control_mod! {
     }
 
     pub fn greet(command: CustomCommandData) {
-        if let Some(player) = game.get_player(command.player_index.into()) {
-            if command.parameter == "1" {
-                player.print([GREETINGS[0], player.name()], None);
-            } else if command.parameter == "2" {
-                player.print([GREETINGS[1], player.name()], None);
-            } else if command.parameter == "3" {
-                player.print([GREETINGS[2], player.name()], None);
-            } else {
-                player.print(["greetings.usage"], None);
+        if let Some(player_index) = command.player_index {
+            if let Some(player) = game.get_player(player_index.into()) {
+                if let Some(parameter) = command.parameter {
+                    if parameter == "1" {
+                        player.print([GREETINGS[0], player.name()], None);
+                    } else if parameter == "2" {
+                        player.print([GREETINGS[1], player.name()], None);
+                    } else if parameter == "3" {
+                        player.print([GREETINGS[2], player.name()], None);
+                    } else {
+                        player.print(["greetings.usage"], None);
+                    }
+                } else {
+                    player.print(["greetings.usage"], None);
+                }
             }
         }
     }

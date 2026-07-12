@@ -8,7 +8,8 @@ mod paths;
 pub use discovery::{DiscoveredModule, discover_modules};
 pub use error::{FrontendError, FrontendResult};
 pub use lower::{
-    parse_discovered_module, parse_discovered_module_with_prefix, parse_module,
+    ParseOptions, parse_discovered_module, parse_discovered_module_with_options,
+    parse_discovered_module_with_prefix, parse_module, parse_module_with_options,
     parse_module_with_prefix,
 };
 pub use paths::{lua_output_path, module_name_from_source, require_local_name};

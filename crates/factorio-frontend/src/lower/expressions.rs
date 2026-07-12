@@ -3,9 +3,7 @@ use syn::{BinOp, Expr, ExprBinary, ExprLit, ExprPath, Lit, Member, UnOp};
 use crate::error::{FrontendError, FrontendResult};
 
 use super::{
-    context::LowerContext,
-    print::lower_macro_expression,
-    serde_json::serde_json_path_name,
+    context::LowerContext, print::lower_macro_expression, serde_json::serde_json_path_name,
     util::location,
 };
 
@@ -86,6 +84,16 @@ pub fn lower_expression(
         Expr::Index(index) => {
             let base = lower_expression(&index.expr, ctx, self_type)?;
             let key = lower_expression(&index.index, ctx, self_type)?;
+            if !matches!(
+                key,
+                factorio_ir::expression::Expression::Literal(factorio_ir::literal::Literal::Int(_))
+            ) {
+                ctx.emit_lint(
+                    factorio_ir::lint::LintId::VariableIndex,
+                    "non-literal index is not shifted for Lua's 1-based tables (literals are `n -> n+1`; variables are passed through)",
+                    location(index),
+                )?;
+            }
             Ok(factorio_ir::expression::Expression::Index {
                 base: Box::new(base),
                 key: Box::new(key),
@@ -96,7 +104,7 @@ pub fn lower_expression(
         Expr::Cast(cast) => lower_expression(&cast.expr, ctx, self_type),
         // `(expr)` - transparent grouping.
         Expr::Paren(paren) => lower_expression(&paren.expr, ctx, self_type),
-        // `if cond { a } else { b }` as an expression -> Lua `cond and a or b` ternary idiom.
+        // `if cond { a } else { b }` as an expression -> safe Lua if/else (not `and`/`or`).
         Expr::If(if_expr) => lower_if_expr(if_expr, ctx, self_type),
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
         other => Err(FrontendError::UnsupportedExpression {
@@ -157,10 +165,7 @@ fn lower_call_expression(
         #[cfg(feature = "serde")]
         {
             let Some(kind) = classify_serde_json_fn(&func_name) else {
-                return Err(unsupported_serde_json_fn_error(
-                    &func_name,
-                    &location(call),
-                ));
+                return Err(unsupported_serde_json_fn_error(&func_name, &location(call)));
             };
             let mut args = call.args.iter();
             let Some(arg) = args.next() else {
@@ -184,6 +189,16 @@ fn lower_call_expression(
         }
     }
 
+    if let Some(type_name) = identification_ctor_type(&call.func) {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::IdentificationCtor,
+            format!(
+                "`{type_name}::...(...)` is not lowered to Lua; pass a payload with `.into()` (e.g. `force.into()` or `\"enemy\".into()`)"
+            ),
+            location(call),
+        )?;
+    }
+
     let func = lower_expression(&call.func, ctx, self_type)?;
     let args = call
         .args
@@ -194,6 +209,28 @@ fn lower_call_expression(
         func: Box::new(func),
         args,
     })
+}
+
+/// `ForceID::Name(...)` / `concepts::ForceID::Name(...)` → type name when Identification.
+fn identification_ctor_type(func: &Expr) -> Option<String> {
+    let Expr::Path(path) = func else {
+        return None;
+    };
+    let segments: Vec<String> = path
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect();
+    if segments.len() < 2 {
+        return None;
+    }
+    let type_name = segments[segments.len() - 2].as_str();
+    if factorio_api::debug_types::is_identification_type(type_name) {
+        Some(type_name.to_string())
+    } else {
+        None
+    }
 }
 
 fn is_option_some_constructor(func: &Expr) -> bool {
@@ -217,10 +254,12 @@ fn is_lua_fn_helper(func: &Expr) -> bool {
     let Expr::Path(path) = func else {
         return false;
     };
-    path.path
-        .segments
-        .last()
-        .is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "lua_fn" | "lua_fn0" | "lua_fn2"))
+    path.path.segments.last().is_some_and(|segment| {
+        matches!(
+            segment.ident.to_string().as_str(),
+            "lua_fn" | "lua_fn0" | "lua_fn2"
+        )
+    })
 }
 
 fn lower_method_call(
@@ -230,7 +269,6 @@ fn lower_method_call(
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     const TRANSPARENT_METHODS: &[&str] = &[
         "into",
-        "unwrap",
         "clone",
         "as_str",
         "as_ref",
@@ -239,11 +277,24 @@ fn lower_method_call(
         "to_string",
         "to_owned",
     ];
-    if TRANSPARENT_METHODS.contains(&call.method.to_string().as_str()) && call.args.is_empty() {
+    let method = call.method.to_string();
+    if method == "unwrap" && call.args.is_empty() {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::Unwrap,
+            "`.unwrap()` does not check for nil in Lua; use `if let Some(...)` instead",
+            location(call),
+        )?;
         return lower_expression(&call.receiver, ctx, self_type);
     }
-    // `expect("…")` discards the message; keep the receiver (e.g. after serde_json).
-    if call.method == "expect" && call.args.len() == 1 {
+    if method == "expect" && call.args.len() == 1 {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::Expect,
+            "`.expect(...)` does not check for nil in Lua; the message is discarded",
+            location(call),
+        )?;
+        return lower_expression(&call.receiver, ctx, self_type);
+    }
+    if TRANSPARENT_METHODS.contains(&method.as_str()) && call.args.is_empty() {
         return lower_expression(&call.receiver, ctx, self_type);
     }
     let receiver = lower_expression(&call.receiver, ctx, self_type)?;
@@ -254,7 +305,7 @@ fn lower_method_call(
         .collect::<FrontendResult<Vec<_>>>()?;
     Ok(factorio_ir::expression::Expression::MethodCall {
         receiver: Box::new(receiver),
-        method: lua_method_name(&call.method.to_string()),
+        method: lua_method_name(&method),
         args,
     })
 }
@@ -302,16 +353,10 @@ fn lower_if_expr(
         },
         e => lower_expression(e, ctx, self_type)?,
     };
-    // `cond and then_val or else_val`
-    let and_part = factorio_ir::expression::Expression::BinaryOp {
-        lhs: Box::new(condition),
-        op: factorio_ir::operator::Operator::And,
-        rhs: Box::new(then_val),
-    };
-    Ok(factorio_ir::expression::Expression::BinaryOp {
-        lhs: Box::new(and_part),
-        op: factorio_ir::operator::Operator::Or,
-        rhs: Box::new(else_val),
+    Ok(factorio_ir::expression::Expression::If {
+        condition: Box::new(condition),
+        then_expr: Box::new(then_val),
+        else_expr: Box::new(else_val),
     })
 }
 

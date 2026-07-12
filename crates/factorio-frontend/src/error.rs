@@ -57,6 +57,9 @@ pub enum FrontendError {
 
     #[error("invalid locale entry: {message}")]
     InvalidLocale { message: String },
+
+    #[error("{0}")]
+    Lint(factorio_ir::lint::Diagnostic),
 }
 
 pub type FrontendResult<T> = Result<T, FrontendError>;

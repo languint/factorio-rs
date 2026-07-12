@@ -14,6 +14,16 @@ pub fn generate_debug_types(api: &RuntimeApi, known: &KnownTypes<'_>) -> String 
         quote!(#lit)
     });
 
+    let identification_match = if known.identifications.is_empty() {
+        quote! { false }
+    } else {
+        let ident_arms = known.identifications.iter().map(|name| {
+            let lit = name.as_str();
+            quote!(#lit)
+        });
+        quote! { matches!(name, #( #ident_arms )|*) }
+    };
+
     let mut field_arms = Vec::new();
     for event in &api.events {
         let struct_name = format!("{}Event", event_rust_name(&event.name));
@@ -30,7 +40,7 @@ pub fn generate_debug_types(api: &RuntimeApi, known: &KnownTypes<'_>) -> String 
         }
     }
 
-    // Also index concept table fields (Color, MapPosition, …).
+    // Also index concept table fields (Color, MapPosition, ...).
     for concept in &api.concepts {
         if !known.concepts.contains(&concept.name) {
             continue;
@@ -56,6 +66,12 @@ pub fn generate_debug_types(api: &RuntimeApi, known: &KnownTypes<'_>) -> String 
         #[must_use]
         pub fn is_userdata_class(name: &str) -> bool {
             matches!(name, #( #class_arms )|*)
+        }
+
+        /// Concept names generated as Identification-style enums (`ForceID`, ...).
+        #[must_use]
+        pub fn is_identification_type(name: &str) -> bool {
+            #identification_match
         }
 
         /// Field type key for generated event/concept structs (last path segment form).

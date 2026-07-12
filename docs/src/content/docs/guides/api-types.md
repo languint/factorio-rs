@@ -16,19 +16,21 @@ Table concepts (`Color`, `MapPosition`, `BoundingBox`, `PrintSettings`, ...) are
 game.print(
     "hi",
     Some(PrintSettings {
-        color: Color {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        },
+        color: Some(Color {
+            r: Some(1.0),
+            g: Some(0.0),
+            b: Some(0.0),
+            a: Some(1.0),
+        }),
         ..Default::default()
     }),
 );
 ```
 
-`..Default::default()` is ignored when lowering so only fields you set appear in
-Lua (sparse Factorio parameter tables).
+Optional concept / takes-table fields are `Option<T>` so you can omit them with
+`None` (or `..Default::default()`). Only fields you set appear in the generated
+Lua table (sparse Factorio parameter tables). `None` field values are omitted
+from the Lua table as well.
 
 String aliases (`SoundPath`, ...) and numeric aliases (`RealOrientation`,
 `Weight`, ...) are Rust type aliases.
@@ -50,12 +52,16 @@ pub enum ForceID {
 
 // ForceSet also accepts LuaForce / &str / u8 via From
 surface.find_entities_filtered(EntitySearchFilters {
-    area,
-    force: source.force().into(),
-    name: source.name().into(),
+    area: Some(area),
+    force: Some(source.force().into()),
+    name: Some(source.name().into()),
     ..Default::default()
 });
 ```
+
+Prefer `.into()` on payloads (`force.into()`, `"enemy".into()`) over enum
+constructors like `ForceID::Name(...)`, which are rejected by the
+`identification_ctor` lint.
 
 `T | array<T>` in the schema collapses to `T` at the stub layer (the array form
 is still valid in Lua; it just isn’t modeled in Rust yet).
@@ -118,7 +124,7 @@ table.insert(list, value);
 ```
 
 Overloads that need distinct Rust names (`random_int`, `format_2`, `insert_at`,
-…) lower to the real Lua method (`random`, `format`, `insert`).
+...) lower to the real Lua method (`random`, `format`, `insert`).
 
 Plus global functions `log`, `localised_print`, and `table_size`.
 
@@ -128,7 +134,7 @@ Data-stage `data` / settings registration helpers live in `factorio_api::setting
 ## `serde_json`
 
 Enable `factorio-rs` feature `serde`. Calls lower to `helpers.table_to_json` /
-`json_to_table`, with binary via `string.pack("s", …)`. Details:
+`json_to_table`, with binary via `string.pack("s", ...)`. Details:
 [Serde / JSON](serde/).
 
 ## See also

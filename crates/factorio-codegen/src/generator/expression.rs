@@ -94,6 +94,11 @@ impl LuaGenerator {
                 let inner = self.generate_expression(inner);
                 format!("#{inner}")
             }
+            Expression::If {
+                condition,
+                then_expr,
+                else_expr,
+            } => self.generate_if_expr(condition, then_expr, else_expr),
             Expression::BinaryOp { .. } => {
                 unreachable!("binary operators are handled by generate_expression_prec")
             }
@@ -148,11 +153,7 @@ impl LuaGenerator {
         }
 
         let func = self.generate_expression(func);
-        let args = args
-            .iter()
-            .map(|arg| self.generate_expression(arg))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let args = self.generate_arg_list(args);
         format!("{func}({args})")
     }
 
@@ -184,19 +185,29 @@ impl LuaGenerator {
             return format!("#{receiver} == 0");
         }
 
-        if args.is_empty() {
+        let trimmed = trim_trailing_nils(args);
+        if trimmed.is_empty() {
             let receiver = self.generate_expression(receiver);
-            return format!("{receiver}.{method}");
+            // Zero-arg API attributes are property reads (`entity.surface`).
+            // Calls that only passed trailing `None`s stay invocations (`entity.die()`).
+            if args.is_empty() {
+                return format!("{receiver}.{method}");
+            }
+            return format!("{receiver}.{method}()");
         }
 
         let receiver = self.generate_expression(receiver);
-        let args_lua = args
+        let args_lua = self.generate_arg_list(trimmed);
+        format!("{receiver}.{method}({args_lua})")
+    }
+
+    /// Join call arguments, omitting trailing `nil` so Factorio optional params stay unset.
+    fn generate_arg_list(&self, args: &[Expression]) -> String {
+        trim_trailing_nils(args)
             .iter()
             .map(|arg| self.generate_expression(arg))
             .collect::<Vec<_>>()
-            .join(", ");
-
-        format!("{receiver}.{method}({args_lua})")
+            .join(", ")
     }
 
     fn generate_struct_literal(
@@ -209,7 +220,15 @@ impl LuaGenerator {
 
         let field_strs = fields
             .iter()
-            .filter(|(name, _)| injected_type.is_none() || (name != "type" && name != "r#type"))
+            .filter(|(name, value)| {
+                if matches!(
+                    value,
+                    Expression::Literal(factorio_ir::literal::Literal::Nil)
+                ) {
+                    return false;
+                }
+                injected_type.is_none() || (name != "type" && name != "r#type")
+            })
             .map(|(name, value)| {
                 let lua_name = if name == "r#type" {
                     "type"
@@ -238,7 +257,7 @@ impl LuaGenerator {
     fn generate_index(&self, base: &Expression, key: &Expression) -> String {
         let base = self.generate_expression(base);
 
-        // Lua is 1-indexed: shift Rust integer literals (`0` -> `1`, `1` -> `2`, …).
+        // Lua is 1-indexed: shift Rust integer literals (`0` -> `1`, `1` -> `2`, ...).
         // Variable indices are left as-is (callers should use 1-based values).
         let key = match key {
             Expression::Literal(factorio_ir::literal::Literal::Int(index)) => {
@@ -270,4 +289,31 @@ impl LuaGenerator {
             format!("not {inner_str}")
         }
     }
+
+    /// Emit a real Lua if/else inside an IIFE so falsey then-arms stay correct.
+    fn generate_if_expr(
+        &self,
+        condition: &Expression,
+        then_expr: &Expression,
+        else_expr: &Expression,
+    ) -> String {
+        let condition = self.generate_expression(condition);
+        let then_expr = self.generate_expression(then_expr);
+        let else_expr = self.generate_expression(else_expr);
+        format!(
+            "(function() if {condition} then return {then_expr} else return {else_expr} end end)()"
+        )
+    }
+}
+
+/// Drop trailing `nil` literals from call/method argument lists.
+fn trim_trailing_nils(args: &[Expression]) -> &[Expression] {
+    let mut end = args.len();
+    while end > 0 {
+        match &args[end - 1] {
+            Expression::Literal(factorio_ir::literal::Literal::Nil) => end -= 1,
+            _ => break,
+        }
+    }
+    &args[..end]
 }

@@ -75,21 +75,23 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | Paths / fields / calls / methods    | Including `crate::` (auto-require)                             |
 | Named struct literals               | -> Lua tables                                                  |
 | `[a, b]`                            | -> `{ a, b }`                                                  |
-| `a[i]`                              | Integer literal indices are +1 for Lua (`0`->`1`, `1`->`2`, …) |
+| `a[i]`                              | Integer literal indices are +1 for Lua (`0`->`1`, `1`->`2`, ...); non-literal indices lint `variable_index` |
 | `&x`, `*x`, `x as T`, `(x)`         | Transparent                                                    |
 | `!` / `-`                           | `not` / unary minus                                            |
 | `+ - * / % == != < <= > >= && \|\|` |                                                                |
-| `if c { a } else { b }`             | Each arm must be a **single** expression; emits `c and a or b` |
+| `if c { a } else { b }`             | Each arm must be a **single** expression; safe Lua `if`/`else` (IIFE) |
 | `println!(...)`                     | -> `game.print(...)` with `..` concatenation                   |
 | `format!(...)`                      | -> string via `..` concatenation                               |
 | `tracing::info!` / `warn!` / ...      | -> colored `game.print` (CLI `tracing` feature; default on)    |
-| `serde_json::to_string` / `from_str` / … | -> `helpers` JSON / `string.pack` (`serde` feature)           |
+| `serde_json::to_string` / `from_str` / ... | -> `helpers` JSON / `string.pack` (`serde` feature)           |
 | Literal string unions               | e.g. `GuiDirection::Horizontal` -> `"horizontal"`              |
 
-**Transparent zero-arg methods** (receiver kept): `into`, `unwrap`, `clone`,
+**Transparent zero-arg methods** (receiver kept): `into`, `clone`,
 `as_str`, `as_ref`, `as_slice`, `as_deref`, `to_string`, `to_owned`.
 
-**Transparent one-arg:** `.expect("…")` keeps the receiver (message discarded).
+`.unwrap()` and `.expect("...")` are also stripped to the receiver, but emit
+lints `unwrap` / `expect` (default **deny**; configure in
+[`Factorio.toml` `[lints]`](../reference/factorio-toml/#lints)).
 
 **Special method lowering:**
 
@@ -100,7 +102,7 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | `.is_empty()`       | `#recv == 0`                      |
 | `.push(x)`          | `table.insert(recv, x)`           |
 | `.random_int(n)` / `.random_range(m, n)` | `recv.random(...)` (math) |
-| `.format_1`…`.format_4` | `recv.format(...)` (string) |
+| `.format_1`...`.format_4` | `recv.format(...)` (string) |
 | `.insert_at(list, pos, value)` | `table.insert(...)` |
 | zero-arg API method | `recv.method` (property)          |
 | method with args    | `recv.method(args)` (`.` not `:`) |
@@ -203,9 +205,28 @@ Enable `factorio-rs` feature `tracing` in the mod `Cargo.toml` so those macros
 type-check. Details: [Tracing](tracing/).
 
 Supported template forms: `{}`, `{0}`, `{name}`, `{:?}` / `{:#?}` / `{name:?}`,
-and `{{` / `}}` escapes. Other format specs after `:` (e.g. `{:.2}`) are ignored.
+and `{{` / `}}` escapes. Other format specs after `:` (e.g. `{:.2}`) trigger the
+`format_spec` lint (default **deny**).
 
 Other macros in expression position fail with `UnsupportedMacro`.
+
+## Safety
+
+`cargo check` only validates against stubs that never run. Patterns that type-check
+can still miscompile or nil-crash in Factorio. factorio-rs either emits correct Lua
+or fails the build with a lint code (see [`[lints]`](../reference/factorio-toml/#lints)).
+
+| Trap | What happens | Fix |
+| --- | --- | --- |
+| `.unwrap()` / `.expect(...)` | Stripped; no nil check | `if let Some(x) = ...` (or allow lint) |
+| `arr[i]` with variable `i` | Not +1 for Lua | Use a 1-based index, or literal indices |
+| `{:.2}` / other format specs | Ignored output | Use `{}` / `{:?}` only |
+| `ForceID::Name(...)` etc. | Not a real Lua ctor | `"enemy".into()` / `force.into()` |
+| Trailing `None` args | Omitted from Lua calls | Prefer omit / `None` only for unused tails |
+| `if c { a } else { b }` when `a` is falsey | Was wrong with `and`/`or`; now safe IIFE | Prefer statement `if` for complex arms |
+| `if let Some` / truthiness | Skips `0` / `false` / `""` | Explicit comparisons when needed |
+| Optional table fields | Typed `Option<T>`; `None` omitted | Set `Some(...)` only for fields you need |
+| Stringly callback names under prune | Prefer fn items / `lua_fn` | Pass the function value, not only a string |
 
 ## Common errors
 

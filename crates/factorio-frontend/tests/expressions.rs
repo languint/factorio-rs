@@ -188,7 +188,12 @@ pub fn shout(message: &str) {
     game.print(
         message,
         Some(PrintSettings {
-            color: Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+            color: Some(Color {
+                r: Some(1.0),
+                g: Some(0.0),
+                b: Some(0.0),
+                a: Some(1.0),
+            }),
             ..Default::default()
         }),
     );

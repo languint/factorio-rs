@@ -53,6 +53,31 @@ If `thumbnail` is set and the file is missing, the build fails.
 
 See [Profiles](../guides/profiles/).
 
+## `[lints]`
+
+Transpile-time safety checks. Each key is a lint **identifier**; the value is
+`allow`, `warn`, or `deny`. Unspecified lints default to **`deny`**.
+
+| Identifier | Meaning |
+| --- | --- |
+| `unwrap` | `.unwrap()` does not check for nil in Lua |
+| `expect` | `.expect(...)` does not check for nil; message is discarded |
+| `format_spec` | Non-`?` format specs (e.g. `{:.2}`) are ignored when lowering |
+| `variable_index` | Non-literal indices are not shifted for Lua's 1-based tables |
+| `identification_ctor` | Identification enum constructors are not lowered; use `.into()` |
+
+```toml
+[lints]
+unwrap = "allow"
+expect = "warn"
+format_spec = "deny"
+variable_index = "deny"
+identification_ctor = "deny"
+```
+
+`allow` disables the lint. `warn` prints a warning and continues. `deny` fails
+the build.
+
 ## Example
 
 ```toml
@@ -67,6 +92,9 @@ thumbnail = "thumbnail.png"
 
 [emit]
 lua_module_prefix = "mm"
+
+[lints]
+unwrap = "allow"
 
 [profiles.debug]
 debug_level = 2

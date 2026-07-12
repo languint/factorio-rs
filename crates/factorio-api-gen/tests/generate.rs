@@ -148,6 +148,51 @@ fn emits_identification_enums() {
 }
 
 #[test]
+fn optional_concept_fields_are_option() {
+    let generated = generate_from_bundled_api().expect("generate");
+    let concepts = &generated.concepts;
+    assert!(
+        concepts.contains("pub a : Option <")
+            || concepts.contains("pub a: Option<")
+            || concepts.contains("pub a : Option<"),
+        "Color.a should be Option<_>, got concepts without Option a"
+    );
+    assert!(
+        concepts.contains("pub color : Option <")
+            || concepts.contains("pub color: Option<")
+            || concepts.contains("pub color : Option<"),
+        "PrintSettings.color should be Option<_>"
+    );
+}
+
+#[test]
+fn optional_takes_table_fields_are_option() {
+    let generated = generate_from_bundled_api().expect("generate");
+    let classes = &generated.classes;
+    assert!(
+        classes.contains("pub force : Option <")
+            || classes.contains("pub force: Option<")
+            || classes.contains("pub force : Option<"),
+        "LuaEntityMineParams.force should be Option<_>"
+    );
+}
+
+#[test]
+fn emits_is_identification_type_helper() {
+    let generated = generate_from_bundled_api().expect("generate");
+    assert!(
+        generated
+            .debug_types
+            .contains("fn is_identification_type"),
+        "debug_types should expose is_identification_type"
+    );
+    assert!(
+        generated.debug_types.contains("ForceID"),
+        "is_identification_type should match ForceID"
+    );
+}
+
+#[test]
 fn function_parameters_use_lua_function() {
     let generated = generate_from_bundled_api().expect("generate");
     let classes = &generated.classes;

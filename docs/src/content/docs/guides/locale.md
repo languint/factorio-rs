@@ -58,7 +58,7 @@ msr-casual-mode=Casual mode
 
 `locale!` only writes `.cfg` files. To print a translated string in-game, pass a
 Factorio localised string: a plain string, or a table
-`{ "category.key", arg1, ... }` where `__1__`, `__2__`, … in the locale value
+`{ "category.key", arg1, ... }` where `__1__`, `__2__`, ... in the locale value
 are filled from those args.
 
 ```rust

@@ -3,6 +3,7 @@ pub mod debug;
 pub mod expression;
 pub mod function;
 pub mod literal;
+pub mod lint;
 pub mod locale;
 pub mod module;
 pub mod operator;

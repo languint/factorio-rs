@@ -50,6 +50,12 @@ pub enum CliError {
         source: toml::de::Error,
     },
 
+    #[error("invalid `[lints]` configuration: {message}")]
+    InvalidLints { message: String },
+
+    #[error("{0}")]
+    Lint(factorio_ir::lint::Diagnostic),
+
     #[error("failed to parse `{path}`")]
     CargoManifestParse {
         path: PathBuf,

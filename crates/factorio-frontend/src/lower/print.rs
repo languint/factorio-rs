@@ -256,7 +256,7 @@ fn lower_format_template(
     template: &str,
     args: &[factorio_ir::expression::Expression],
     location: String,
-    ctx: &LowerContext<'_>,
+    ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let pieces = parse_format_pieces(template);
     let sequential_count = pieces
@@ -286,6 +286,18 @@ fn lower_format_template(
         }
     }
 
+    for piece in &pieces {
+        if let Some(spec) = piece.ignored_spec() {
+            ctx.emit_lint(
+                factorio_ir::lint::LintId::FormatSpec,
+                format!(
+                    "format spec `:{spec}` is ignored when lowering (only `:?` / `:#?` are supported)"
+                ),
+                location.clone(),
+            )?;
+        }
+    }
+
     let mut parts = Vec::new();
     let mut sequential_index = 0;
 
@@ -296,7 +308,7 @@ fn lower_format_template(
                     factorio_ir::literal::Literal::String(value),
                 ));
             }
-            FormatPiece::PositionalArg { debug } => {
+            FormatPiece::PositionalArg { debug, .. } => {
                 let Some(arg) = args.get(sequential_index).cloned() else {
                     return Err(FrontendError::FormatArgumentMismatch {
                         template: template.to_string(),
@@ -308,10 +320,10 @@ fn lower_format_template(
                 parts.push(maybe_debug_format(arg, debug, ctx));
                 sequential_index += 1;
             }
-            FormatPiece::PositionalIndex { index, debug } => {
+            FormatPiece::PositionalIndex { index, debug, .. } => {
                 parts.push(maybe_debug_format(args[index].clone(), debug, ctx));
             }
-            FormatPiece::NamedCapture { name, debug } => {
+            FormatPiece::NamedCapture { name, debug, .. } => {
                 parts.push(maybe_debug_format(
                     factorio_ir::expression::Expression::Identifier(name),
                     debug,
@@ -422,9 +434,39 @@ fn debug_uses_json(type_key: Option<&str>) -> bool {
 
 enum FormatPiece {
     Literal(String),
-    PositionalArg { debug: bool },
-    PositionalIndex { index: usize, debug: bool },
-    NamedCapture { name: String, debug: bool },
+    PositionalArg {
+        debug: bool,
+        ignored_spec: Option<String>,
+    },
+    PositionalIndex {
+        index: usize,
+        debug: bool,
+        ignored_spec: Option<String>,
+    },
+    NamedCapture {
+        name: String,
+        debug: bool,
+        ignored_spec: Option<String>,
+    },
+}
+
+impl FormatPiece {
+    fn ignored_spec(&self) -> Option<&str> {
+        match self {
+            Self::Literal(_) => None,
+            Self::PositionalArg { ignored_spec, .. }
+            | Self::PositionalIndex { ignored_spec, .. }
+            | Self::NamedCapture { ignored_spec, .. } => ignored_spec.as_deref(),
+        }
+    }
+}
+
+/// Specs supported for Debug formatting; anything else is silently ignored today.
+fn ignored_format_spec(spec: Option<&str>) -> Option<String> {
+    match spec {
+        None | Some("?") | Some("#?") => None,
+        Some(other) => Some(other.to_string()),
+    }
 }
 
 fn parse_format_pieces(template: &str) -> Vec<FormatPiece> {
@@ -485,25 +527,37 @@ fn parse_format_placeholder(contents: &str) -> FormatPiece {
         Some((name, spec)) => (name, Some(spec)),
         None => (contents, None),
     };
-    // `:?` / `:#?` (and similar) -> JSON or tostring chosen at compile time.
-    let debug = spec.is_some_and(|s| s.contains('?'));
+    // `:?` / `:#?` -> JSON or tostring chosen at compile time.
+    let debug = matches!(spec, Some("?") | Some("#?"));
+    let ignored_spec = ignored_format_spec(spec);
 
     if name.is_empty() {
-        return FormatPiece::PositionalArg { debug };
+        return FormatPiece::PositionalArg {
+            debug,
+            ignored_spec,
+        };
     }
 
     if let Ok(index) = name.parse::<usize>() {
-        return FormatPiece::PositionalIndex { index, debug };
+        return FormatPiece::PositionalIndex {
+            index,
+            debug,
+            ignored_spec,
+        };
     }
 
     if is_format_ident(name) {
         return FormatPiece::NamedCapture {
             name: name.to_string(),
             debug,
+            ignored_spec,
         };
     }
 
-    FormatPiece::PositionalArg { debug }
+    FormatPiece::PositionalArg {
+        debug,
+        ignored_spec,
+    }
 }
 
 fn is_format_ident(name: &str) -> bool {

@@ -1,8 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use factorio_codegen::LuaGenerator;
-use factorio_frontend::{discover_modules, lua_output_path, parse_discovered_module_with_prefix};
-use factorio_ir::{module::Module, prune::prune_modules};
+use factorio_frontend::{
+    FrontendError, ParseOptions, discover_modules, lua_output_path,
+    parse_discovered_module_with_options,
+};
+use factorio_ir::{lint::Diagnostic, module::Module, prune::prune_modules};
 
 use crate::{
     assets,
@@ -68,6 +71,9 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
         source,
     })?;
 
+    let lint_config = config.lints.resolve()?;
+    let mut lint_diagnostics = Vec::<Diagnostic>::new();
+
     let mut outputs = Vec::new();
     let mut event_registrations = Vec::new();
     let mut stage_modules = StageModules::new();
@@ -81,11 +87,24 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
         let discovered = discover_modules(&source_dir, &source_path, &source)?;
 
         let lua_module_prefix_early = config.emit.lua_module_prefix.as_deref().unwrap_or("");
+        let parse_options =
+            ParseOptions::new(&lint_config).with_prefix(lua_module_prefix_early);
         for module_spec in discovered {
-            let module =
-                parse_discovered_module_with_prefix(&module_spec, lua_module_prefix_early)?;
+            let module = parse_discovered_module_with_options(
+                &module_spec,
+                &parse_options,
+                &mut lint_diagnostics,
+            )
+            .map_err(|err| match err {
+                FrontendError::Lint(diagnostic) => CliError::Lint(diagnostic),
+                other => CliError::Frontend(other),
+            })?;
             discovered_modules.push((module_spec, module));
         }
+    }
+
+    for diagnostic in &lint_diagnostics {
+        eprintln!("warning: {diagnostic}");
     }
 
     if discovered_modules.is_empty() {

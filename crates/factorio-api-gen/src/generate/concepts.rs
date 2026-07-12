@@ -104,9 +104,14 @@ fn generate_concept(concept: &Concept, known: &KnownTypes<'_>) -> Option<TokenSt
         });
     }
 
-    let fields = params.iter().map(|(field_name, field_type, _optional)| {
+    let fields = params.iter().map(|(field_name, field_type, optional)| {
         let ident = make_ident(field_name);
-        let ty = map_copy_field_type_for_concept(field_type, known, &concept.name);
+        let base = map_copy_field_type_for_concept(field_type, known, &concept.name);
+        let ty = if *optional {
+            quote!(Option<#base>)
+        } else {
+            base
+        };
         quote! { pub #ident: #ty, }
     });
 

@@ -8,12 +8,14 @@ use serde::Deserialize;
 use crate::{
     config::{
         emit::EmitConfig,
+        lints::LintsConfig,
         profile::{ProfileSettings, ResolvedProfile, resolve_profile},
     },
     error::{CliError, CliResult},
 };
 
 pub mod emit;
+pub mod lints;
 pub mod profile;
 
 const CONFIG_FILE: &str = "Factorio.toml";
@@ -64,6 +66,10 @@ pub struct Config {
     /// Named transpile profiles (`[profiles.debug]`, `[profiles.release]`, ...).
     #[serde(default)]
     pub profiles: BTreeMap<String, ProfileSettings>,
+
+    /// Transpile-time safety lint levels (`[lints] unwrap = "allow"`, ...).
+    #[serde(default)]
+    pub lints: LintsConfig,
 }
 
 impl Config {

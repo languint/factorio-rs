@@ -9,7 +9,7 @@ use crate::error::FrontendError;
 
 use super::util::location;
 
-/// If `func` is `…::serde_json::name`, return the function name.
+/// If `func` is `...::serde_json::name`, return the function name.
 pub fn serde_json_path_name(func: &Expr) -> Option<String> {
     let Expr::Path(path) = func else {
         return None;
@@ -145,6 +145,4 @@ mod lower {
 }
 
 #[cfg(feature = "serde")]
-pub use lower::{
-    classify_serde_json_fn, lower_serde_json_fn, unsupported_serde_json_fn_error,
-};
+pub use lower::{classify_serde_json_fn, lower_serde_json_fn, unsupported_serde_json_fn_error};

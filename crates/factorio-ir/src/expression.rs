@@ -49,4 +49,10 @@ pub enum Expression {
     Not(Box<Self>),
     /// Length operator `#EXPR` in Lua.
     Len(Box<Self>),
+    /// Safe if-expression (avoids falsey `and`/`or` pitfalls).
+    If {
+        condition: Box<Self>,
+        then_expr: Box<Self>,
+        else_expr: Box<Self>,
+    },
 }

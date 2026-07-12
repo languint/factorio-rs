@@ -47,7 +47,7 @@ See [Locale](../guides/locale/).
 
 In executable code, **`println!`**, **`format!`**, (with the `tracing`
 feature) **`tracing::{error,warn,info,debug,trace}!`**, and (with the `serde`
-feature) **`serde_json::{to_string,from_str,…}`** calls are lowered:
+feature) **`serde_json::{to_string,from_str,...}`** calls are lowered:
 
 - `println!(...)` -> `game.print(...)`
 - `format!(...)` -> Lua string concatenation with `..`
