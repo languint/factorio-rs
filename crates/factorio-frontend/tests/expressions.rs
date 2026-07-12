@@ -303,3 +303,29 @@ pub fn check(value: Option<i32>) {
         }
     ));
 }
+
+#[test]
+fn remaps_lua_library_overload_method_names() {
+    let source = r"
+pub fn sample(n: i64) -> i64 {
+    math.random_int(n)
+}
+";
+
+    let module = must_ok_parse(parse_module(source, "control.lua_libs"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        assert_eq!(1, 0, "expected function declaration");
+        return;
+    };
+
+    let Statement::Return(Some(Expression::MethodCall {
+        method, args, ..
+    })) = &function.body.statements[0]
+    else {
+        assert_eq!(1, 0, "expected return of method call");
+        return;
+    };
+
+    assert_eq!(method, "random");
+    assert_eq!(args.len(), 1);
+}

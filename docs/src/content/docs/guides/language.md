@@ -86,6 +86,9 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | `.len()`            | `#recv`                           |
 | `.is_empty()`       | `#recv == 0`                      |
 | `.push(x)`          | `table.insert(recv, x)`           |
+| `.random_int(n)` / `.random_range(m, n)` | `recv.random(...)` (math) |
+| `.format_1`…`.format_4` | `recv.format(...)` (string) |
+| `.insert_at(list, pos, value)` | `table.insert(...)` |
 | zero-arg API method | `recv.method` (property)          |
 | method with args    | `recv.method(args)` (`.` not `:`) |
 

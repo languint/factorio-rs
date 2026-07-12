@@ -172,9 +172,20 @@ fn lower_method_call(
         .collect::<FrontendResult<Vec<_>>>()?;
     Ok(factorio_ir::expression::Expression::MethodCall {
         receiver: Box::new(receiver),
-        method: strip_raw_prefix(call.method.to_string()),
+        method: lua_method_name(&call.method.to_string()),
         args,
     })
+}
+
+/// Remap Rust overload aliases to the real Lua library method name.
+fn lua_method_name(method: &str) -> String {
+    let name = strip_raw_prefix(method.to_string());
+    match name.as_str() {
+        "random_int" | "random_range" => "random".to_string(),
+        "format_1" | "format_2" | "format_3" | "format_4" => "format".to_string(),
+        "insert_at" => "insert".to_string(),
+        _ => name,
+    }
 }
 
 fn lower_if_expr(

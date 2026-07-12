@@ -108,6 +108,16 @@ include:
 
 - `storage` (`LuaStorage`) - persistent mod-local table
 - `serpent` - table pretty-printer (`block` / `line` / `dump`)
+- `math` / `string` / `table` - standard Lua libraries
+
+```rust
+let x = math.floor(position.x);
+let label = string.format_1("tick %d", game.tick().into());
+table.insert(list, value);
+```
+
+Overloads that need distinct Rust names (`random_int`, `format_2`, `insert_at`,
+…) lower to the real Lua method (`random`, `format`, `insert`).
 
 Plus global functions `log`, `localised_print`, and `table_size`.
 

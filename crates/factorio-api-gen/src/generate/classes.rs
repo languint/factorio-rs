@@ -397,6 +397,18 @@ pub fn generate_globals(api: &RuntimeApi, known: &KnownTypes<'_>) -> String {
         /// See <https://lua-api.factorio.com/latest/auxiliary/libraries.html>.
         pub static serpent: std::sync::LazyLock<crate::Serpent> =
             std::sync::LazyLock::new(crate::Serpent::default);
+
+        /// Standard Lua `math` library (Factorio-deterministic).
+        pub static math: std::sync::LazyLock<crate::LuaMath> =
+            std::sync::LazyLock::new(crate::LuaMath::default);
+
+        /// Standard Lua `string` library (includes Factorio `pack` / `unpack`).
+        pub static string: std::sync::LazyLock<crate::LuaStringLib> =
+            std::sync::LazyLock::new(crate::LuaStringLib::default);
+
+        /// Standard Lua `table` library.
+        pub static table: std::sync::LazyLock<crate::LuaTableLib> =
+            std::sync::LazyLock::new(crate::LuaTableLib::default);
     };
 
     let global_functions = api.global_functions.iter().map(|function| {
@@ -404,7 +416,7 @@ pub fn generate_globals(api: &RuntimeApi, known: &KnownTypes<'_>) -> String {
         let return_type = map_return_type(&function.return_values, known);
         let body = stub_expr(&map_return_stub(&function.return_values, known));
         let params = function.parameters.iter().map(|parameter| {
-            let param_name = make_ident(&parameter.name);
+            let param_name = global_function_param_ident(&parameter.name);
             let param_type = map_parameter_type(parameter, known);
             quote!( #param_name: #param_type )
         });
@@ -421,4 +433,29 @@ pub fn generate_globals(api: &RuntimeApi, known: &KnownTypes<'_>) -> String {
         #( #global_functions )*
     };
     tokens.to_string()
+}
+
+/// Parameter names that would collide with generated global statics.
+fn global_function_param_ident(name: &str) -> proc_macro2::Ident {
+    const SHADOWING: &[&str] = &[
+        "commands",
+        "game",
+        "helpers",
+        "math",
+        "prototypes",
+        "rcon",
+        "remote",
+        "rendering",
+        "script",
+        "serpent",
+        "settings",
+        "storage",
+        "string",
+        "table",
+    ];
+    if SHADOWING.contains(&name) {
+        make_ident(&format!("{name}_arg"))
+    } else {
+        make_ident(name)
+    }
 }

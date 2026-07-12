@@ -34,14 +34,13 @@ fn emits_all_runtime_and_auxiliary_globals() {
     }
 
     // Auxiliary (not in global_objects)
-    assert!(
-        globals.contains("pub static storage") || globals.contains("pub static storage "),
-        "missing auxiliary global `storage`"
-    );
-    assert!(
-        globals.contains("pub static serpent") || globals.contains("pub static serpent "),
-        "missing auxiliary global `serpent`"
-    );
+    for name in ["storage", "serpent", "math", "string", "table"] {
+        assert!(
+            globals.contains(&format!("pub static {name}"))
+                || globals.contains(&format!("pub static {name} ")),
+            "missing auxiliary global `{name}`"
+        );
+    }
 
     // Global functions from the schema / libraries page
     for name in ["log", "localised_print", "table_size"] {
