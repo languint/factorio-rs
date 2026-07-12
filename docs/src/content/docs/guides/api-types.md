@@ -124,6 +124,12 @@ Plus global functions `log`, `localised_print`, and `table_size`.
 Data-stage `data` / settings registration helpers live in `factorio_api::settings`
 (also re-exported from the prelude).
 
+## `serde_json`
+
+Enable `factorio-rs` feature `serde`. Calls lower to `helpers.table_to_json` /
+`json_to_table`, with binary via `string.pack("s", …)`. Details:
+[Serde / JSON](serde/).
+
 ## See also
 
 - [Language support](language/)

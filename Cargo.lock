@@ -262,6 +262,8 @@ version = "0.1.2"
 dependencies = [
  "factorio-api",
  "factorio-macros",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 

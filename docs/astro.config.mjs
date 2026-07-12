@@ -42,8 +42,14 @@ export default defineConfig({
             { label: "Events and filters", slug: "guides/events" },
             { label: "Mod settings", slug: "guides/mod-settings" },
             { label: "Locale", slug: "guides/locale" },
-            { label: "Tracing", slug: "guides/tracing" },
             { label: "Profiles", slug: "guides/profiles" },
+          ],
+        },
+        {
+          label: "Features",
+          items: [
+            { label: "Tracing", slug: "guides/tracing" },
+            { label: "Serde / JSON", slug: "guides/serde" },
           ],
         },
         {

@@ -13,8 +13,9 @@ name = "factorio-rs"
 path = "src/main.rs"
 
 [features]
-default = ["tracing"]
+default = ["tracing", "serde"]
 tracing = ["factorio-frontend/tracing"]
+serde = ["factorio-frontend/serde"]
 
 [dependencies]
 anyhow = "1.0.103"

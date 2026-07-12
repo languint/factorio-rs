@@ -2,7 +2,17 @@ use syn::{BinOp, Expr, ExprBinary, ExprLit, ExprPath, Lit, Member, UnOp};
 
 use crate::error::{FrontendError, FrontendResult};
 
-use super::{context::LowerContext, print::lower_macro_expression, util::location};
+use super::{
+    context::LowerContext,
+    print::lower_macro_expression,
+    serde_json::serde_json_path_name,
+    util::location,
+};
+
+#[cfg(feature = "serde")]
+use super::serde_json::{
+    classify_serde_json_fn, lower_serde_json_fn, unsupported_serde_json_fn_error,
+};
 
 #[allow(clippy::missing_const_for_fn)]
 fn expr_kind_name(expression: &Expr) -> &'static str {
@@ -116,6 +126,48 @@ fn lower_call_expression(
         return lower_expression(arg, ctx, self_type);
     }
 
+    if let Some(func_name) = serde_json_path_name(&call.func) {
+        #[cfg(not(feature = "serde"))]
+        {
+            let _ = func_name;
+            return Err(FrontendError::UnsupportedExpression {
+                location: format!(
+                    "{} (serde_json lowering requires the `serde` feature on \
+                     factorio-rs-cli / factorio-frontend)",
+                    location(call)
+                ),
+            });
+        }
+        #[cfg(feature = "serde")]
+        {
+            let Some(kind) = classify_serde_json_fn(&func_name) else {
+                return Err(unsupported_serde_json_fn_error(
+                    &func_name,
+                    &location(call),
+                ));
+            };
+            let mut args = call.args.iter();
+            let Some(arg) = args.next() else {
+                return Err(FrontendError::UnsupportedExpression {
+                    location: format!(
+                        "{} (serde_json::{func_name} expects exactly one argument)",
+                        location(call)
+                    ),
+                });
+            };
+            if args.next().is_some() {
+                return Err(FrontendError::UnsupportedExpression {
+                    location: format!(
+                        "{} (serde_json::{func_name} expects exactly one argument)",
+                        location(call)
+                    ),
+                });
+            }
+            let value = lower_expression(arg, ctx, self_type)?;
+            return Ok(lower_serde_json_fn(kind, value));
+        }
+    }
+
     let func = lower_expression(&call.func, ctx, self_type)?;
     let args = call
         .args
@@ -162,6 +214,10 @@ fn lower_method_call(
         "to_owned",
     ];
     if TRANSPARENT_METHODS.contains(&call.method.to_string().as_str()) && call.args.is_empty() {
+        return lower_expression(&call.receiver, ctx, self_type);
+    }
+    // `expect("…")` discards the message; keep the receiver (e.g. after serde_json).
+    if call.method == "expect" && call.args.len() == 1 {
         return lower_expression(&call.receiver, ctx, self_type);
     }
     let receiver = lower_expression(&call.receiver, ctx, self_type)?;

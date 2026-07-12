@@ -11,6 +11,7 @@ description = "Rust frontend that lowers Factorio mod sources into factorio-ir"
 [features]
 default = []
 tracing = []
+serde = []
 
 [dependencies]
 factorio-api.workspace = true

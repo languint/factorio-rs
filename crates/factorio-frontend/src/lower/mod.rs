@@ -18,6 +18,7 @@ mod locale;
 pub mod metadata;
 mod mod_settings;
 pub mod print;
+mod serde_json;
 pub mod statements;
 pub mod structs;
 pub mod types;

@@ -13,6 +13,11 @@ pub use factorio_macros::{
 #[cfg(feature = "tracing")]
 pub use tracing;
 
+#[cfg(feature = "serde")]
+pub use serde;
+#[cfg(feature = "serde")]
+pub use serde_json;
+
 pub mod prelude {
     pub use crate::{
         control, control_mod, data, data_final_fixes, data_final_fixes_mod, data_mod, data_updates,
@@ -24,4 +29,7 @@ pub mod prelude {
 
     #[cfg(feature = "tracing")]
     pub use tracing::{debug, error, info, trace, warn};
+
+    #[cfg(feature = "serde")]
+    pub use serde::{Deserialize, Serialize};
 }

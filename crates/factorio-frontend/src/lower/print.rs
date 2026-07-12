@@ -3,7 +3,10 @@ use syn::{Expr, ExprMacro, LitStr, Path};
 
 use crate::error::{FrontendError, FrontendResult};
 
-use super::{context::LowerContext, expressions::lower_expression, util::location};
+use super::{
+    context::LowerContext, expressions::lower_expression, serde_json::reject_serde_json_macro,
+    util::location,
+};
 
 struct FormatMacroInput {
     format: LitStr,
@@ -28,6 +31,10 @@ pub fn lower_macro_expression(
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
+    if let Some(error) = reject_serde_json_macro(mac) {
+        return Err(error);
+    }
+
     #[cfg(feature = "tracing")]
     if let Some(level) = tracing_level_from_path(&mac.mac.path) {
         return lower_tracing_macro(mac, ctx, self_type, level);

@@ -27,9 +27,15 @@ Optional features:
 ```toml
 # Type-check `tracing::info!` etc.; CLI lowers them to colored game.print
 factorio-rs = { version = "0.1.2", features = ["tracing"] }
+
+# Type-check serde / serde_json; CLI lowers to helpers.table_to_json / string.pack
+factorio-rs = { version = "0.1.2", features = ["serde"] }
+
+# Both
+factorio-rs = { version = "0.1.2", features = ["tracing", "serde"] }
 ```
 
-See [Tracing](guides/tracing/) for details.
+See [Tracing](guides/tracing/) and [Serde / JSON](guides/serde/) for details.
 
 `factorio-rs init` scaffolds a project with this pin and `edition = "2024"`.
 

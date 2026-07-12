@@ -73,10 +73,13 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | `println!(...)`                     | -> `game.print(...)` with `..` concatenation                   |
 | `format!(...)`                      | -> string via `..` concatenation                               |
 | `tracing::info!` / `warn!` / ...      | -> colored `game.print` (CLI `tracing` feature; default on)    |
+| `serde_json::to_string` / `from_str` / … | -> `helpers` JSON / `string.pack` (`serde` feature)           |
 | Literal string unions               | e.g. `GuiDirection::Horizontal` -> `"horizontal"`              |
 
 **Transparent zero-arg methods** (receiver kept): `into`, `unwrap`, `clone`,
 `as_str`, `as_ref`, `as_slice`, `as_deref`, `to_string`, `to_owned`.
+
+**Transparent one-arg:** `.expect("…")` keeps the receiver (message discarded).
 
 **Special method lowering:**
 
@@ -91,6 +94,11 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 | `.insert_at(list, pos, value)` | `table.insert(...)` |
 | zero-arg API method | `recv.method` (property)          |
 | method with args    | `recv.method(args)` (`.` not `:`) |
+
+### `serde_json`
+
+Enable `factorio-rs` feature `serde` (CLI default includes lowering). Serde does
+**not** run in Factorio - see [Serde / JSON](serde/) for the full mapping.
 
 **Constructors:** `Vec::new()`, `Type::default()`, `LuaAny::new()` -> `{}` or
 `nil` as appropriate. Prefer typed concepts over `LuaAny` when the stubs expose
