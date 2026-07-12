@@ -9,7 +9,7 @@ use super::{
     statements::lower_block,
     types::{
         lower_binding_pattern, lower_type, receiver_source_string, return_type_string,
-        type_source_string,
+        rust_type_key, type_source_string,
     },
 };
 
@@ -40,10 +40,14 @@ fn lower_function_parts(
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::function::Function> {
     let event_attr = resolve_event_handler(function);
+    let binding_snapshot = ctx.binding_types.clone();
+    let params = lower_parameters(&function.sig, ctx)?;
+    let body = lower_block(&function.block, ctx, self_type)?;
+    ctx.binding_types = binding_snapshot;
     Ok(factorio_ir::function::Function {
         name: function.sig.ident.to_string(),
-        params: lower_parameters(&function.sig)?,
-        body: lower_block(&function.block, ctx, self_type)?,
+        params,
+        body,
         doc: extract_doc_comments(&function.attrs),
         debug: Some(factorio_ir::debug::FunctionDebug {
             header_comment: function_header_comment(&function.vis, &function.sig),
@@ -56,15 +60,19 @@ fn lower_function_parts(
 
 fn lower_parameters(
     signature: &Signature,
+    ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<Vec<factorio_ir::function::Parameter>> {
     signature
         .inputs
         .iter()
-        .map(lower_parameter)
+        .map(|input| lower_parameter(input, ctx))
         .collect::<FrontendResult<Vec<_>>>()
 }
 
-fn lower_parameter(input: &syn::FnArg) -> FrontendResult<factorio_ir::function::Parameter> {
+fn lower_parameter(
+    input: &syn::FnArg,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<factorio_ir::function::Parameter> {
     match input {
         syn::FnArg::Receiver(receiver) => Ok(factorio_ir::function::Parameter {
             name: "self".to_string(),
@@ -74,6 +82,9 @@ fn lower_parameter(input: &syn::FnArg) -> FrontendResult<factorio_ir::function::
         syn::FnArg::Typed(PatType { pat, ty, .. }) => {
             let name = lower_binding_pattern(pat)?;
             let r#type = lower_type(ty)?;
+            if let Some(key) = rust_type_key(ty) {
+                ctx.bind_type(name.clone(), key);
+            }
 
             Ok(factorio_ir::function::Parameter {
                 name,

@@ -108,6 +108,7 @@ fn lower_items(
         imports: &mut inline_imports,
         module_prefix,
         bare_import_renames: std::collections::HashMap::new(),
+        binding_types: std::collections::HashMap::new(),
     };
     let mut module_state = ModuleLowerState {
         module_name,

@@ -183,14 +183,17 @@ macros are lowered:
 | `format!(...)` | string built with `..` (no `game.print`) |
 | `tracing::info!` / `warn!` / `error!` / `debug!` / `trace!` | `game.print` with `[LEVEL]` prefix + color |
 
-`{:?}` / `{:#?}` (and `{name:?}`) wrap the value in `helpers.table_to_json(...)`
-so Factorio tables / API values dump as JSON. Plain `{}` still concatenates the value as-is.
+`{:?}` / `{:#?}` (and `{name:?}`) dump values for Factorio using the static Rust
+type: plain tables (event data, concepts) go through `helpers.table_to_json`,
+and userdata / scalars / unknown types use `tostring` (LuaObjects like
+`LuaEntity` are userdata, so JSON alone would error). Applies to `println!`,
+`format!`, and `tracing::*!`. Plain `{}` still concatenates the value as-is.
 
 Enable `factorio-rs` feature `tracing` in the mod `Cargo.toml` so those macros
 type-check. Details: [Tracing](tracing/).
 
-Supported template forms: `{}`, `{0}`, `{name}`, and `{{` / `}}` escapes.
-Format specs after `:` (e.g. `{:.2}`) are ignored.
+Supported template forms: `{}`, `{0}`, `{name}`, `{:?}` / `{:#?}` / `{name:?}`,
+and `{{` / `}}` escapes. Other format specs after `:` (e.g. `{:.2}`) are ignored.
 
 Other macros in expression position fail with `UnsupportedMacro`.
 

@@ -17,9 +17,21 @@ pub struct LowerContext<'a> {
     /// Only populated for bare module imports (`use crate::foo`), NOT item imports
     /// (`use crate::foo::Bar`) - this keeps Factorio globals like `settings` safe.
     pub bare_import_renames: HashMap<String, String>,
+    /// Binding name → Rust type key (last path segment, `Option`/`&` peeled) for
+    /// compile-time `{:?}` Debug format selection.
+    pub binding_types: HashMap<String, String>,
 }
 
 impl LowerContext<'_> {
+    pub fn bind_type(&mut self, name: impl Into<String>, type_key: impl Into<String>) {
+        self.binding_types.insert(name.into(), type_key.into());
+    }
+
+    #[must_use]
+    pub fn binding_type(&self, name: &str) -> Option<&str> {
+        self.binding_types.get(name).map(String::as_str)
+    }
+
     /// Compute the Lua local name for a module path, with the configured prefix.
     pub fn prefixed_local(&self, module_path: &str) -> String {
         let base = require_local_name(module_path);

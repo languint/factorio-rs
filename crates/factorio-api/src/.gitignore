@@ -1,5 +1,6 @@
 classes.rs
 concepts.rs
+debug_types.rs
 defines.rs
 event_data.rs
 event_filters.rs

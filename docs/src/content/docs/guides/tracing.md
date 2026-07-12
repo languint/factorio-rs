@@ -77,8 +77,14 @@ game.print("[ERROR] Oopsies!", { color = { r = 1, g = 0.25, b = 0.25, a = 1 } })
 Same subset as `println!` / `format!`:
 
 - `{}`, `{0}`, `{name}`
+- `{:?}` / `{:#?}` / `{name:?}` -> `helpers.table_to_json(v)` for known table types, otherwise `tostring(v)` (chosen at compile time from the Rust type)
 - `{{` / `}}` escapes
-- Format specs after `:` (e.g. `{:.2}`) are ignored
+- Other format specs after `:` (e.g. `{:.2}`) are ignored
+
+```rust
+tracing::info!("built {:?}", event.entity);
+// -> game.print("[INFO] built " .. tostring(event.entity), { color = ... })
+```
 
 **Not supported:** structured fields (`info!(foo = 1, "hi")`), `target:`, spans,
 or runtime level filtering. Every lowered call always prints in-game.

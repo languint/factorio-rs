@@ -1,5 +1,6 @@
 mod classes;
 mod concepts;
+mod debug_types;
 mod defines;
 mod event_filters;
 mod events;
@@ -10,6 +11,7 @@ mod unions;
 
 pub use classes::{class_names, generate_classes, generate_globals};
 pub use concepts::{event_filter_concept_names, generatable_concept_names, generate_concepts};
+pub use debug_types::generate_debug_types;
 pub use defines::generate_defines;
 pub use event_filters::{generate_event_data, generate_event_filters};
 pub use events::{

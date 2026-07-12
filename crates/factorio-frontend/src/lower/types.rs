@@ -97,6 +97,29 @@ pub const fn infer_type_from_expression(
     }
 }
 
+/// Last-segment type name for Debug format selection (`Option` / references peeled).
+#[must_use]
+pub fn rust_type_key(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Reference(reference) => rust_type_key(&reference.elem),
+        Type::Path(path) => {
+            let segment = path.path.segments.last()?;
+            let name = segment.ident.to_string();
+            if matches!(name.as_str(), "Option" | "Box")
+                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+            {
+                for arg in &args.args {
+                    if let syn::GenericArgument::Type(inner) = arg {
+                        return rust_type_key(inner);
+                    }
+                }
+            }
+            Some(name)
+        }
+        _ => None,
+    }
+}
+
 pub fn type_source_string(ty: &Type) -> String {
     match ty {
         Type::Path(path) => path

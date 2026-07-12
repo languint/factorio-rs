@@ -249,13 +249,14 @@ fn lower_format_macro_message(
         .iter()
         .map(|arg| lower_expression(arg, ctx, self_type))
         .collect::<FrontendResult<Vec<_>>>()?;
-    lower_format_template(&template, &lowered_args, location(mac))
+    lower_format_template(&template, &lowered_args, location(mac), ctx)
 }
 
 fn lower_format_template(
     template: &str,
     args: &[factorio_ir::expression::Expression],
     location: String,
+    ctx: &LowerContext<'_>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let pieces = parse_format_pieces(template);
     let sequential_count = pieces
@@ -304,16 +305,17 @@ fn lower_format_template(
                         location,
                     });
                 };
-                parts.push(maybe_debug_format(arg, debug));
+                parts.push(maybe_debug_format(arg, debug, ctx));
                 sequential_index += 1;
             }
             FormatPiece::PositionalIndex { index, debug } => {
-                parts.push(maybe_debug_format(args[index].clone(), debug));
+                parts.push(maybe_debug_format(args[index].clone(), debug, ctx));
             }
             FormatPiece::NamedCapture { name, debug } => {
                 parts.push(maybe_debug_format(
                     factorio_ir::expression::Expression::Identifier(name),
                     debug,
+                    ctx,
                 ));
             }
         }
@@ -332,20 +334,89 @@ fn lower_format_template(
     Ok(factorio_ir::expression::Expression::FormatConcat { parts })
 }
 
-/// `{:?}` / `{:#?}` dump tables via Factorio JSON.
+/// Resolve a binding/expression type key for Debug format selection.
+#[must_use]
+pub fn infer_debug_type_key(
+    value: &factorio_ir::expression::Expression,
+    ctx: &LowerContext<'_>,
+) -> Option<String> {
+    match value {
+        factorio_ir::expression::Expression::Identifier(name) => {
+            ctx.binding_type(name).map(str::to_string)
+        }
+        factorio_ir::expression::Expression::FieldAccess { base, field } => {
+            let base_key = infer_debug_type_key(base, ctx)?;
+            factorio_api::debug_types::struct_field_type(&base_key, field).map(str::to_string)
+        }
+        factorio_ir::expression::Expression::StructLiteral {
+            struct_name: Some(name),
+            ..
+        } => Some(name.clone()),
+        factorio_ir::expression::Expression::StructLiteral {
+            struct_name: None, ..
+        }
+        | factorio_ir::expression::Expression::Array { .. } => Some("table".to_string()),
+        factorio_ir::expression::Expression::Literal(literal) => match literal {
+            factorio_ir::literal::Literal::String(_) => Some("string".to_string()),
+            factorio_ir::literal::Literal::Int(_) | factorio_ir::literal::Literal::Float(_) => {
+                Some("number".to_string())
+            }
+            factorio_ir::literal::Literal::Bool(_) => Some("boolean".to_string()),
+            factorio_ir::literal::Literal::Nil => Some("nil".to_string()),
+        },
+        _ => None,
+    }
+}
+
+/// `{:?}` / `{:#?}`: choose `helpers.table_to_json` or `tostring` from known types.
 fn maybe_debug_format(
     value: factorio_ir::expression::Expression,
     debug: bool,
+    ctx: &LowerContext<'_>,
 ) -> factorio_ir::expression::Expression {
     if !debug {
         return value;
     }
-    factorio_ir::expression::Expression::MethodCall {
-        receiver: Box::new(factorio_ir::expression::Expression::Identifier(
-            "helpers".to_string(),
+
+    if debug_uses_json(infer_debug_type_key(&value, ctx).as_deref()) {
+        return factorio_ir::expression::Expression::MethodCall {
+            receiver: Box::new(factorio_ir::expression::Expression::Identifier(
+                "helpers".to_string(),
+            )),
+            method: "table_to_json".to_string(),
+            args: vec![value],
+        };
+    }
+
+    factorio_ir::expression::Expression::Call {
+        func: Box::new(factorio_ir::expression::Expression::Identifier(
+            "tostring".to_string(),
         )),
-        method: "table_to_json".to_string(),
         args: vec![value],
+    }
+}
+
+fn debug_uses_json(type_key: Option<&str>) -> bool {
+    let Some(key) = type_key else {
+        // Unknown -> `tostring` (safe for userdata; tables print poorly but won't crash).
+        return false;
+    };
+
+    if key.starts_with("defines.") {
+        return false;
+    }
+
+    match key {
+        "table" => true,
+        "string" | "number" | "boolean" | "nil" | "str" | "String" | "bool" | "char" | "LuaAny"
+        | "LuaFunction" | "LuaStorage" | "Serpent" | "LocalisedString" => false,
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
+        | "usize" | "f32" | "f64" | "uint8" | "uint16" | "uint32" | "uint64" | "uint" | "int8"
+        | "int16" | "int32" | "int64" | "int" | "float" | "double" | "MapTick" | "Tick"
+        | "ItemStackIndex" | "ItemCountType" => false,
+        other if factorio_api::debug_types::is_userdata_class(other) => false,
+        // Event data structs, concepts, and other plain Lua tables.
+        _ => true,
     }
 }
 
@@ -414,7 +485,7 @@ fn parse_format_placeholder(contents: &str) -> FormatPiece {
         Some((name, spec)) => (name, Some(spec)),
         None => (contents, None),
     };
-    // `:?` / `:#?` (and similar) → JSON dump via helpers.table_to_json.
+    // `:?` / `:#?` (and similar) -> JSON or tostring chosen at compile time.
     let debug = spec.is_some_and(|s| s.contains('?'));
 
     if name.is_empty() {

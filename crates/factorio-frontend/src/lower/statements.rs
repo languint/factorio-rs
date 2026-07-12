@@ -6,7 +6,8 @@ use super::{
     context::LowerContext,
     expressions::{lower_assignment_target, lower_expression},
     functions::lower_function,
-    types::{infer_type_from_expression, inferred_source_type, lower_binding},
+    print::infer_debug_type_key,
+    types::{infer_type_from_expression, inferred_source_type, lower_binding, rust_type_key},
     util::{item_name, location},
 };
 
@@ -58,6 +59,9 @@ fn lower_statement(
                     let ty = infer_type_from_expression(&value)
                         .unwrap_or(factorio_ir::r#type::Type::Void);
                     let source_type = inferred_source_type(&ty);
+                    if let Some(key) = infer_debug_type_key(&value, ctx) {
+                        ctx.bind_type(name.clone(), key);
+                    }
                     stmts.push(factorio_ir::statement::Statement::VariableDecl {
                         name,
                         ty,
@@ -78,6 +82,13 @@ fn lower_statement(
                 let source_type = inferred_source_type(&ty);
                 (ty, source_type)
             };
+            if let syn::Pat::Type(pat_type) = &local.pat {
+                if let Some(key) = rust_type_key(&pat_type.ty) {
+                    ctx.bind_type(name.clone(), key);
+                }
+            } else if let Some(key) = infer_debug_type_key(&value, ctx) {
+                ctx.bind_type(name.clone(), key);
+            }
 
             Ok(vec![factorio_ir::statement::Statement::VariableDecl {
                 name,
@@ -367,6 +378,9 @@ fn lower_let_chain_clauses(
         }
         [CondClause::Let { binding, value }, rest @ ..] => {
             let rhs = lower_expression(value, ctx, self_type)?;
+            if let Some(key) = infer_debug_type_key(&rhs, ctx) {
+                ctx.bind_type(binding.clone(), key);
+            }
             let nested =
                 lower_let_chain_clauses(rest, then_block, else_block.clone(), ctx, self_type)?;
             Ok(vec![

@@ -109,7 +109,7 @@ pub fn message() -> String {
 }
 
 #[test]
-fn parses_println_debug_format_via_table_to_json() {
+fn parses_println_debug_format_userdata_via_tostring() {
     let source = r#"
 pub fn on_init(entity: LuaEntity) {
     println!("built {:?}", entity);
@@ -120,13 +120,38 @@ pub fn on_init(entity: LuaEntity) {
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert!(
-        lua.contains(r#"game.print("built " .. helpers.table_to_json(entity))"#),
+        lua.contains(r#"game.print("built " .. tostring(entity))"#),
         "unexpected lua:\n{lua}"
+    );
+    assert!(
+        !lua.contains("table_to_json") && !lua.contains(r#"type(entity)"#),
+        "userdata Debug should not use runtime type check:\n{lua}"
     );
 }
 
 #[test]
-fn parses_format_named_debug_capture() {
+fn parses_println_debug_format_event_field_via_tostring() {
+    let source = r#"
+pub fn on_built(event: OnBuiltEntityEvent) {
+    println!("built {:?}", event.entity);
+}
+"#;
+
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
+    let lua = must_ok(LuaGenerator::new().generate_module(&module));
+
+    assert!(
+        lua.contains("tostring(event.entity)"),
+        "unexpected lua:\n{lua}"
+    );
+    assert!(
+        !lua.contains("table_to_json"),
+        "LuaEntity field should not use table_to_json:\n{lua}"
+    );
+}
+
+#[test]
+fn parses_format_named_debug_capture_unknown_via_tostring() {
     let source = r#"
 pub fn message(filters: LuaAny) -> String {
     format!("filters={filters:?}")
@@ -137,15 +162,15 @@ pub fn message(filters: LuaAny) -> String {
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert!(
-        lua.contains(r#"return "filters=" .. helpers.table_to_json(filters)"#),
+        lua.contains("tostring(filters)") && !lua.contains("table_to_json"),
         "unexpected lua:\n{lua}"
     );
 }
 
 #[test]
-fn parses_format_pretty_debug_as_table_to_json() {
+fn parses_format_pretty_debug_table_via_table_to_json() {
     let source = r#"
-pub fn message(data: LuaAny) -> String {
+pub fn message(data: OnBuiltEntityEvent) -> String {
     format!("{:#?}", data)
 }
 "#;
@@ -154,7 +179,7 @@ pub fn message(data: LuaAny) -> String {
     let lua = must_ok(LuaGenerator::new().generate_module(&module));
 
     assert!(
-        lua.contains(r#"return helpers.table_to_json(data)"#),
+        lua.contains("helpers.table_to_json(data)") && !lua.contains("tostring(data)"),
         "unexpected lua:\n{lua}"
     );
 }
@@ -194,6 +219,25 @@ pub fn on_init() {
 
     assert!(
         lua.contains(r#"game.print("[WARN] missing " .. name"#),
+        "unexpected lua:\n{lua}"
+    );
+    assert!(lua.contains("color = {"), "expected color settings:\n{lua}");
+}
+
+#[cfg(feature = "tracing")]
+#[test]
+fn lowers_tracing_debug_format_userdata_via_tostring() {
+    let source = r#"
+pub fn on_init(entity: LuaEntity) {
+    tracing::info!("built {:?}", entity);
+}
+"#;
+
+    let module = must_ok_parse(parse_module(source, "control.on_init"));
+    let lua = must_ok(LuaGenerator::new().generate_module(&module));
+
+    assert!(
+        lua.contains("tostring(entity)") && !lua.contains("table_to_json"),
         "unexpected lua:\n{lua}"
     );
     assert!(lua.contains("color = {"), "expected color settings:\n{lua}");

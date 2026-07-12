@@ -60,6 +60,7 @@ pub struct GeneratedApi {
     pub globals: String,
     pub concepts: String,
     pub unions: String,
+    pub debug_types: String,
 }
 
 pub fn parse_runtime_api(json: &str) -> Result<RuntimeApi, serde_json::Error> {
@@ -106,6 +107,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
         globals: generate::generate_globals(api, &known),
         concepts,
         unions: generate::generate_unions(&union_registry),
+        debug_types: generate::generate_debug_types(api, &known),
     }
 }
 
@@ -133,6 +135,7 @@ pub fn write_generated_api(output_dir: &Path, generated: &GeneratedApi) -> std::
              #[allow(unused, clippy::all, clippy::pedantic, clippy::nursery)]\n\n\
              pub mod classes;\n\
              pub mod concepts;\n\
+             pub mod debug_types;\n\
              pub mod defines;\n\
              pub mod event_data;\n\
              pub mod event_filters;\n\
@@ -152,6 +155,7 @@ pub fn write_generated_api(output_dir: &Path, generated: &GeneratedApi) -> std::
     write_module(output_dir, "globals.rs", &generated.globals)?;
     write_module(output_dir, "concepts.rs", &generated.concepts)?;
     write_module(output_dir, "unions.rs", &generated.unions)?;
+    write_module(output_dir, "debug_types.rs", &generated.debug_types)?;
 
     Ok(())
 }

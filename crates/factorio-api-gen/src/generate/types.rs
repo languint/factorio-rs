@@ -16,7 +16,7 @@ pub struct KnownTypes<'a> {
     pub concepts: &'a BTreeSet<String>,
     /// Identification / mixed-union enums emitted into `crate::concepts`.
     pub identifications: &'a BTreeSet<String>,
-    /// Sorted arm signature keys → identification concept name.
+    /// Sorted arm signature keys -> identification concept name.
     pub identification_signatures: &'a HashMap<Vec<String>, String>,
     /// `crate::unions::*` - Copy unit enums for homog string-literal unions.
     pub unions: &'a BTreeSet<String>,
