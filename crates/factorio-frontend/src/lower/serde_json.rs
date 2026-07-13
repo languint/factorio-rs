@@ -74,14 +74,14 @@ mod lower {
 
     pub fn unsupported_serde_json_fn_error(
         func_name: &str,
-        call_span_location: &str,
+        call_location: factorio_ir::span::SourceLoc,
     ) -> FrontendError {
         FrontendError::UnsupportedExpression {
-            location: format!(
-                "{call_span_location} (unsupported serde_json::{func_name}; \
+            location: call_location.with_note(format!(
+                "unsupported serde_json::{func_name}; \
                  supported: to_string, to_string_pretty, from_str, to_value, \
-                 from_value, to_vec, from_slice)"
-            ),
+                 from_value, to_vec, from_slice"
+            )),
         }
     }
 

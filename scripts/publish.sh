@@ -92,7 +92,7 @@ for crate in "${CRATES[@]}"; do
   ver="$(crate_version "$crate")"
   versions+=("$ver")
   if crates_io_has_version "$crate" "$ver"; then
-    echo "  - ${crate}@${ver}  (already on crates.io — will skip)"
+    echo "  - ${crate}@${ver}  (already on crates.io - will skip)"
   else
     echo "  - ${crate}@${ver}"
   fi

@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use crate::span::SourceLoc;
+
 /// Stable lint identifier used in diagnostics and `[lints]` config keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LintId {
@@ -20,7 +22,7 @@ pub enum LintId {
 }
 
 impl LintId {
-    /// Config / diagnostic code (`unwrap`, `expect`, ...).
+    /// Config / diagnostic name (`unwrap`, `expect`, ...) for `Factorio.toml` `[lints]`.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -29,6 +31,49 @@ impl LintId {
             Self::FormatSpec => "format_spec",
             Self::VariableIndex => "variable_index",
             Self::IdentificationCtor => "identification_ctor",
+        }
+    }
+
+    /// Rustc-style diagnostic code shown in reports (`E0001`, ...).
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Unwrap => "E0001",
+            Self::Expect => "E0002",
+            Self::FormatSpec => "E0003",
+            Self::VariableIndex => "E0004",
+            Self::IdentificationCtor => "E0005",
+        }
+    }
+
+    /// Default severity when unset in `Factorio.toml`.
+    ///
+    /// Most lints default to deny (they can miscompile). `format_spec` only
+    /// drops unsupported precision/width and still emits working Lua, so it
+    /// defaults to warn.
+    #[must_use]
+    pub const fn default_level(self) -> LintLevel {
+        match self {
+            Self::FormatSpec => LintLevel::Warn,
+            Self::Unwrap | Self::Expect | Self::VariableIndex | Self::IdentificationCtor => {
+                LintLevel::Deny
+            }
+        }
+    }
+
+    /// Short help shown under ariadne reports.
+    #[must_use]
+    pub const fn help(self) -> &'static str {
+        match self {
+            Self::Unwrap => "use `if let Some(x) = ...` (or set `[lints] unwrap = \"allow\"`)",
+            Self::Expect => "use `if let Some(x) = ...` (or set `[lints] expect = \"allow\"`)",
+            Self::FormatSpec => "only `{}`, `{:?}`, and `{:#?}` are supported when lowering",
+            Self::VariableIndex => {
+                "literal indices are shifted `n → n+1`; pass a 1-based index or use a literal"
+            }
+            Self::IdentificationCtor => {
+                "pass a payload with `.into()` instead, e.g. `force.into()` or `\"enemy\".into()`"
+            }
         }
     }
 
@@ -53,7 +98,7 @@ impl LintId {
 
 impl std::fmt::Display for LintId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
+        f.write_str(self.code())
     }
 }
 
@@ -92,7 +137,7 @@ impl Default for LintConfig {
         Self {
             levels: LintId::all()
                 .iter()
-                .map(|id| (*id, LintLevel::Deny))
+                .map(|id| (*id, id.default_level()))
                 .collect(),
         }
     }
@@ -135,7 +180,10 @@ impl LintConfig {
 
     #[must_use]
     pub fn level(&self, id: LintId) -> LintLevel {
-        self.levels.get(&id).copied().unwrap_or(LintLevel::Deny)
+        self.levels
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| id.default_level())
     }
 
     #[must_use]
@@ -157,7 +205,7 @@ pub struct Diagnostic {
     pub id: LintId,
     pub level: LintLevel,
     pub message: String,
-    pub location: String,
+    pub loc: SourceLoc,
 }
 
 impl Diagnostic {
@@ -166,13 +214,13 @@ impl Diagnostic {
         id: LintId,
         level: LintLevel,
         message: impl Into<String>,
-        location: impl Into<String>,
+        loc: impl Into<SourceLoc>,
     ) -> Self {
         Self {
             id,
             level,
             message: message.into(),
-            location: location.into(),
+            loc: loc.into(),
         }
     }
 
@@ -186,11 +234,12 @@ impl std::fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {}: {} at {}",
+            "{} {}: {} ({}) at {}",
             self.level.as_str(),
-            self.id,
+            self.id.code(),
             self.message,
-            self.location
+            self.id.as_str(),
+            self.loc
         )
     }
 }
@@ -217,10 +266,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_denies_all() {
+    fn default_levels() {
         let config = LintConfig::default();
         assert_eq!(config.level(LintId::Unwrap), LintLevel::Deny);
-        assert_eq!(config.level(LintId::FormatSpec), LintLevel::Deny);
+        assert_eq!(config.level(LintId::FormatSpec), LintLevel::Warn);
     }
 
     #[test]
@@ -238,5 +287,14 @@ mod tests {
         table.insert("not_a_lint".to_string(), LintLevel::Allow);
         let err = LintConfig::default().with_overrides(&table).unwrap_err();
         assert!(err.contains("not_a_lint"));
+    }
+
+    #[test]
+    fn lint_codes_are_stable() {
+        assert_eq!(LintId::Unwrap.code(), "E0001");
+        assert_eq!(LintId::Expect.code(), "E0002");
+        assert_eq!(LintId::FormatSpec.code(), "E0003");
+        assert_eq!(LintId::VariableIndex.code(), "E0004");
+        assert_eq!(LintId::IdentificationCtor.code(), "E0005");
     }
 }

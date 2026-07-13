@@ -1,13 +1,12 @@
-use factorio_frontend::{
-    FrontendError, ParseOptions, parse_module_with_options,
-};
+use factorio_frontend::parse_module_with_options;
+use factorio_frontend::ParseOptions;
 use factorio_ir::{
     lint::{LintConfig, LintId, LintLevel},
     statement::Statement,
 };
 
 #[test]
-fn deny_unwrap_fails_parse() {
+fn deny_unwrap_collects_diagnostic() {
     let source = r"
 pub fn f(x: Option<i32>) -> i32 {
     x.unwrap()
@@ -15,20 +14,39 @@ pub fn f(x: Option<i32>) -> i32 {
 ";
     let lints = LintConfig::default();
     let mut diagnostics = Vec::new();
-    let err = parse_module_with_options(
+    parse_module_with_options(
         source,
         "control",
         &ParseOptions::new(&lints),
         &mut diagnostics,
     )
-    .unwrap_err();
-    match err {
-        FrontendError::Lint(diag) => {
-            assert_eq!(diag.id, LintId::Unwrap);
-            assert_eq!(diag.level, LintLevel::Deny);
-        }
-        other => panic!("expected Lint error, got {other:?}"),
-    }
+    .expect("deny lints should not abort lowering");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::Unwrap);
+    assert_eq!(diagnostics[0].level, LintLevel::Deny);
+}
+
+#[test]
+fn collects_multiple_deny_lints() {
+    let source = r"
+pub fn f(x: Option<i32>, y: Option<i32>) -> i32 {
+    let a = x.unwrap();
+    let b = y.unwrap();
+    a + b
+}
+";
+    let lints = LintConfig::default();
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )
+    .expect("should collect both unwraps");
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().all(|d| d.id == LintId::Unwrap));
+    assert!(diagnostics.iter().all(|d| d.level == LintLevel::Deny));
 }
 
 #[test]
@@ -77,7 +95,7 @@ pub fn f(x: Option<i32>) -> i32 {
 }
 
 #[test]
-fn deny_format_spec() {
+fn warn_format_spec() {
     let source = r#"
 pub fn f(n: f64) {
     println!("{:.2}", n);
@@ -85,21 +103,25 @@ pub fn f(n: f64) {
 "#;
     let lints = LintConfig::default();
     let mut diagnostics = Vec::new();
-    let err = parse_module_with_options(
+    parse_module_with_options(
         source,
         "control",
         &ParseOptions::new(&lints),
         &mut diagnostics,
     )
-    .unwrap_err();
-    match err {
-        FrontendError::Lint(diag) => assert_eq!(diag.id, LintId::FormatSpec),
-        other => panic!("expected format_spec lint, got {other:?}"),
-    }
+    .expect("format_spec is warn by default and should not fail the build");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::FormatSpec);
+    assert_eq!(diagnostics[0].level, LintLevel::Warn);
+    let snippet = &source[diagnostics[0].loc.span.range()];
+    assert_eq!(
+        snippet, "{:.2}",
+        "lint should cover the placeholder, got {snippet:?}"
+    );
 }
 
 #[test]
-fn deny_variable_index() {
+fn deny_variable_index_collects_diagnostic() {
     let source = r"
 pub fn f(items: LuaAny, i: usize) -> LuaAny {
     items[i]
@@ -107,21 +129,19 @@ pub fn f(items: LuaAny, i: usize) -> LuaAny {
 ";
     let lints = LintConfig::default();
     let mut diagnostics = Vec::new();
-    let err = parse_module_with_options(
+    parse_module_with_options(
         source,
         "control",
         &ParseOptions::new(&lints),
         &mut diagnostics,
     )
-    .unwrap_err();
-    match err {
-        FrontendError::Lint(diag) => assert_eq!(diag.id, LintId::VariableIndex),
-        other => panic!("expected variable_index lint, got {other:?}"),
-    }
+    .expect("deny lints should not abort lowering");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::VariableIndex);
 }
 
 #[test]
-fn deny_identification_ctor() {
+fn deny_identification_ctor_collects_diagnostic() {
     let source = r#"
 pub fn f() {
     let _id = ForceID::Name("enemy");
@@ -129,17 +149,15 @@ pub fn f() {
 "#;
     let lints = LintConfig::default();
     let mut diagnostics = Vec::new();
-    let err = parse_module_with_options(
+    parse_module_with_options(
         source,
         "control",
         &ParseOptions::new(&lints),
         &mut diagnostics,
     )
-    .unwrap_err();
-    match err {
-        FrontendError::Lint(diag) => assert_eq!(diag.id, LintId::IdentificationCtor),
-        other => panic!("expected identification_ctor lint, got {other:?}"),
-    }
+    .expect("deny lints should not abort lowering");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::IdentificationCtor);
 }
 
 #[test]
@@ -170,4 +188,3 @@ pub fn pick(flag: bool) -> i32 {
         factorio_ir::expression::Expression::If { .. }
     ));
 }
-

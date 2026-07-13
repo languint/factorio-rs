@@ -90,8 +90,7 @@ transparent so stub APIs typed as `Option<T>` still type-check in Rust.
 `as_str`, `as_ref`, `as_slice`, `as_deref`, `to_string`, `to_owned`.
 
 `.unwrap()` and `.expect("...")` are also stripped to the receiver, but emit
-lints `unwrap` / `expect` (default **deny**; configure in
-[`Factorio.toml` `[lints]`](../reference/factorio-toml/#lints)).
+lints `unwrap` / `expect` (default **deny**; see [Lints](lints/)).
 
 **Special method lowering:**
 
@@ -206,7 +205,7 @@ type-check. Details: [Tracing](tracing/).
 
 Supported template forms: `{}`, `{0}`, `{name}`, `{:?}` / `{:#?}` / `{name:?}`,
 and `{{` / `}}` escapes. Other format specs after `:` (e.g. `{:.2}`) trigger the
-`format_spec` lint (default **deny**).
+`format_spec` lint (default **warn**; see [Lints](lints/)).
 
 Other macros in expression position fail with `UnsupportedMacro`.
 
@@ -214,7 +213,7 @@ Other macros in expression position fail with `UnsupportedMacro`.
 
 `cargo check` only validates against stubs that never run. Patterns that type-check
 can still miscompile or nil-crash in Factorio. factorio-rs either emits correct Lua
-or fails the build with a lint code (see [`[lints]`](../reference/factorio-toml/#lints)).
+or fails the build with a lint code. Full reference: [Lints](lints/).
 
 | Trap | What happens | Fix |
 | --- | --- | --- |
@@ -247,3 +246,4 @@ or fails the build with a lint code (see [`[lints]`](../reference/factorio-toml/
 - [hello_world](../examples/hello-world/) - events, filters, `println!`
 - [tracing_test](../examples/tracing-test/) - optional `tracing` feature
 - [API types](api-types/) - concepts, Identification enums, `LuaAny`
+- [Lints](lints/) - transpile safety diagnostics and `[lints]` config

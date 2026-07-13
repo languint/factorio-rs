@@ -88,7 +88,10 @@ fn call_method_name(func: &Expr) -> Option<String> {
     }
 }
 
-fn string_literal(expr: &Expr, location: String) -> FrontendResult<String> {
+fn string_literal(
+    expr: &Expr,
+    location: factorio_ir::span::SourceLoc,
+) -> FrontendResult<String> {
     let Expr::Lit(ExprLit {
         lit: Lit::Str(string),
         ..

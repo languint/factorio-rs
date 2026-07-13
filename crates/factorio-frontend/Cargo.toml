@@ -18,9 +18,11 @@ factorio-api.workspace = true
 factorio-ir.workspace = true
 
 syn = { version = "2.0.114", features = ["full"] }
-proc-macro2 = "1.0.106"
+proc-macro2 = { version = "1.0.106", features = ["span-locations"] }
 thiserror.workspace = true
 quote = "1.0.46"
+ariadne.workspace = true
+yansi.workspace = true
 
 [dev-dependencies]
 factorio-codegen = { workspace = true }

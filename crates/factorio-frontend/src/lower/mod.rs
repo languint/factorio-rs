@@ -103,10 +103,11 @@ pub fn parse_module_with_prefix(
     Ok(module)
 }
 
-/// Parse with explicit lint configuration; appends `warn`-level diagnostics.
+/// Parse with explicit lint configuration; appends warn/deny diagnostics.
 ///
 /// # Errors
-/// Returns `Err` if lowering fails (including deny-level lints).
+/// Returns `Err` on hard lowering failures (unsupported syntax, etc.). Lint
+/// denies are collected into `diagnostics` instead of failing immediately.
 pub fn parse_module_with_options(
     source: &str,
     module_name: &str,
@@ -160,7 +161,8 @@ pub fn parse_discovered_module_with_prefix(
 /// Lower a discovered module with lint configuration.
 ///
 /// # Errors
-/// Returns `Err` if lowering fails (including deny-level lints).
+/// Returns `Err` on hard lowering failures. Lint denies are collected into
+/// `diagnostics` instead of failing immediately.
 pub fn parse_discovered_module_with_options(
     discovered: &crate::discovery::DiscoveredModule,
     options: &ParseOptions<'_>,

@@ -2,10 +2,10 @@ use std::path::{Path, PathBuf};
 
 use factorio_codegen::LuaGenerator;
 use factorio_frontend::{
-    FrontendError, ParseOptions, discover_modules, lua_output_path,
-    parse_discovered_module_with_options,
+    ParseOptions, discover_modules, display_filename, eprint_diagnostic, eprint_frontend_error,
+    lua_output_path, parse_discovered_module_with_options,
 };
-use factorio_ir::{lint::Diagnostic, module::Module, prune::prune_modules};
+use factorio_ir::{module::Module, prune::prune_modules};
 
 use crate::{
     assets,
@@ -72,12 +72,12 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
     })?;
 
     let lint_config = config.lints.resolve()?;
-    let mut lint_diagnostics = Vec::<Diagnostic>::new();
 
     let mut outputs = Vec::new();
     let mut event_registrations = Vec::new();
     let mut stage_modules = StageModules::new();
     let mut discovered_modules = Vec::new();
+    let mut failed = false;
 
     for source_path in sources {
         let source = std::fs::read_to_string(&source_path).map_err(|err| CliError::ReadFile {
@@ -85,30 +85,46 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
             source: err,
         })?;
         let discovered = discover_modules(&source_dir, &source_path, &source)?;
+        let filename = display_filename(&source_path);
 
         let lua_module_prefix_early = config.emit.lua_module_prefix.as_deref().unwrap_or("");
         let parse_options =
             ParseOptions::new(&lint_config).with_prefix(lua_module_prefix_early);
         for module_spec in discovered {
-            let module = parse_discovered_module_with_options(
+            let mut file_diagnostics = Vec::new();
+            match parse_discovered_module_with_options(
                 &module_spec,
                 &parse_options,
-                &mut lint_diagnostics,
-            )
-            .map_err(|err| match err {
-                FrontendError::Lint(diagnostic) => CliError::Lint(diagnostic),
-                other => CliError::Frontend(other),
-            })?;
-            discovered_modules.push((module_spec, module));
+                &mut file_diagnostics,
+            ) {
+                Ok(module) => {
+                    for diagnostic in &file_diagnostics {
+                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                        if diagnostic.is_error() {
+                            failed = true;
+                        }
+                    }
+                    discovered_modules.push((module_spec, module));
+                }
+                Err(err) => {
+                    // Hard error for this module; still report any lints found first,
+                    // then continue so later files can contribute diagnostics too.
+                    for diagnostic in &file_diagnostics {
+                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                    }
+                    let _ = eprint_frontend_error(&filename, &source, &err);
+                    failed = true;
+                }
+            }
         }
     }
 
-    for diagnostic in &lint_diagnostics {
-        eprintln!("warning: {diagnostic}");
+    if discovered_modules.is_empty() && !failed {
+        return Err(CliError::NoSourceFiles { path: source_dir });
     }
 
-    if discovered_modules.is_empty() {
-        return Err(CliError::NoSourceFiles { path: source_dir });
+    if failed {
+        return Err(CliError::Reported);
     }
 
     if profile.prune_dead_code {

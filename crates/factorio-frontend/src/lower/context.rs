@@ -24,27 +24,28 @@ pub struct LowerContext<'a> {
     pub binding_types: HashMap<String, String>,
     /// Lint levels from `Factorio.toml` `[lints]` (defaults deny).
     pub lints: &'a LintConfig,
-    /// Collected `warn`-level diagnostics (deny fails immediately).
+    /// Collected warn/deny diagnostics (allow is skipped). Deny no longer aborts
+    /// lowering so multiple findings can be reported together.
     pub diagnostics: &'a mut Vec<Diagnostic>,
 }
 
 impl LowerContext<'_> {
-    /// Emit a lint at `location`, or return `Ok(())` when the lint is allowed.
+    /// Emit a lint at `loc`, or return `Ok(())` when the lint is allowed.
+    ///
+    /// Warn and deny both append to [`Self::diagnostics`]. Callers (and the CLI)
+    /// decide whether deny findings fail the build after all files are processed.
     pub fn emit_lint(
         &mut self,
         id: LintId,
         message: impl Into<String>,
-        location: impl Into<String>,
+        loc: impl Into<factorio_ir::span::SourceLoc>,
     ) -> FrontendResult<()> {
         let level = self.lints.level(id);
         if matches!(level, LintLevel::Allow) {
             return Ok(());
         }
-        let diagnostic = Diagnostic::new(id, level, message, location);
-        if diagnostic.is_error() {
-            return Err(FrontendError::Lint(diagnostic));
-        }
-        self.diagnostics.push(diagnostic);
+        self.diagnostics
+            .push(Diagnostic::new(id, level, message, loc));
         Ok(())
     }
 
@@ -104,14 +105,15 @@ impl LowerContext<'_> {
         segments.remove(0);
         if segments.is_empty() {
             return Err(FrontendError::UnsupportedExpression {
-                location: "crate".to_string(),
+                location: factorio_ir::span::SourceLoc::default().with_note("crate"),
             });
         }
 
         let (module_path, rest) = split_crate_path(segments);
         if module_path.is_empty() {
             return Err(FrontendError::UnsupportedExpression {
-                location: segments.join("::"),
+                location: factorio_ir::span::SourceLoc::default()
+                    .with_note(segments.join("::")),
             });
         }
 

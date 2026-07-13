@@ -9,6 +9,7 @@ pub mod module;
 pub mod operator;
 pub mod prune;
 pub mod scope;
+pub mod span;
 pub mod stage;
 pub mod statement;
 pub mod structure;

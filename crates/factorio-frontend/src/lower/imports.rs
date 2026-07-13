@@ -94,7 +94,7 @@ fn finalize_use_binding(
     if module_path.is_empty() {
         return Err(FrontendError::UnsupportedItem {
             item: format!("use {}", binding.segments.join("::")),
-            location: "use".to_string(),
+            location: factorio_ir::span::SourceLoc::default().with_note("use"),
         });
     }
 
@@ -129,7 +129,7 @@ fn finalize_use_binding(
 
     Err(FrontendError::UnsupportedItem {
         item: format!("use {}", binding.segments.join("::")),
-        location: "use".to_string(),
+        location: factorio_ir::span::SourceLoc::default().with_note("use"),
     })
 }
 

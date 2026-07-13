@@ -23,11 +23,11 @@ output_dir = "dist"
 title = "Factorio Mod"
 factorio_version = "2.0"
 
-# Transpile safety lints (default: deny). Levels: allow | warn | deny
+# Transpile safety lints (defaults: deny, except format_spec = warn). Levels: allow | warn | deny
 # [lints]
 # unwrap = "allow"
 # expect = "allow"
-# format_spec = "deny"
+# format_spec = "allow"
 # variable_index = "deny"
 # identification_ctor = "deny"
 

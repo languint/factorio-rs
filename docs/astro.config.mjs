@@ -42,6 +42,7 @@ export default defineConfig({
             { label: "Events and filters", slug: "guides/events" },
             { label: "Mod settings", slug: "guides/mod-settings" },
             { label: "Locale", slug: "guides/locale" },
+            { label: "Lints", slug: "guides/lints" },
             { label: "Profiles", slug: "guides/profiles" },
           ],
         },

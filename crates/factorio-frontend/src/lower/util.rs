@@ -1,9 +1,11 @@
 use syn::ImplItem;
 use syn::spanned::Spanned;
 
-/// Returns a source location string for error reporting.
-pub fn location(span: &impl Spanned) -> String {
-    format!("{:?}", span.span())
+use factorio_ir::span::{SourceLoc, SourceSpan};
+
+/// Returns a byte-accurate source location for error reporting.
+pub fn location(span: &impl Spanned) -> SourceLoc {
+    SourceLoc::new(SourceSpan::from(span.span().byte_range()))
 }
 
 /// Returns a short description of a top-level item for error reporting.

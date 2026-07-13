@@ -249,19 +249,20 @@ fn lower_format_macro_message(
         .iter()
         .map(|arg| lower_expression(arg, ctx, self_type))
         .collect::<FrontendResult<Vec<_>>>()?;
-    lower_format_template(&template, &lowered_args, location(mac), ctx)
+    lower_format_template(&template, &lowered_args, location(mac), &input.format, ctx)
 }
 
 fn lower_format_template(
     template: &str,
     args: &[factorio_ir::expression::Expression],
-    location: String,
+    location: factorio_ir::span::SourceLoc,
+    format_lit: &LitStr,
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let pieces = parse_format_pieces(template);
     let sequential_count = pieces
         .iter()
-        .filter(|piece| matches!(piece, FormatPiece::PositionalArg { .. }))
+        .filter(|(piece, _)| matches!(piece, FormatPiece::PositionalArg { .. }))
         .count();
 
     if sequential_count > args.len() {
@@ -273,7 +274,7 @@ fn lower_format_template(
         });
     }
 
-    for piece in &pieces {
+    for (piece, _) in &pieces {
         if let FormatPiece::PositionalIndex { index, .. } = piece
             && *index >= args.len()
         {
@@ -286,14 +287,18 @@ fn lower_format_template(
         }
     }
 
-    for piece in &pieces {
+    for (piece, placeholder_range) in &pieces {
         if let Some(spec) = piece.ignored_spec() {
+            let loc = placeholder_range.as_ref().map_or_else(
+                || location.clone(),
+                |range| lit_str_subspan(format_lit, range.clone()),
+            );
             ctx.emit_lint(
                 factorio_ir::lint::LintId::FormatSpec,
                 format!(
                     "format spec `:{spec}` is ignored when lowering (only `:?` / `:#?` are supported)"
                 ),
-                location.clone(),
+                loc,
             )?;
         }
     }
@@ -301,7 +306,7 @@ fn lower_format_template(
     let mut parts = Vec::new();
     let mut sequential_index = 0;
 
-    for piece in pieces {
+    for (piece, _) in pieces {
         match piece {
             FormatPiece::Literal(value) => {
                 parts.push(factorio_ir::expression::Expression::Literal(
@@ -432,6 +437,27 @@ fn debug_uses_json(type_key: Option<&str>) -> bool {
     }
 }
 
+/// Map a byte range inside a format-string *value* onto the `LitStr` source span.
+///
+/// Assumes a normal `"..."` literal without escapes before/within the range (the
+/// common case for `println!` / `format!` templates). Falls back to the whole
+/// literal when the mapped range would be invalid.
+fn lit_str_subspan(
+    lit: &LitStr,
+    value_range: std::ops::Range<usize>,
+) -> factorio_ir::span::SourceLoc {
+    let lit_range = lit.span().byte_range();
+    // Content sits between the opening and closing `"`.
+    let content_start = lit_range.start.saturating_add(1);
+    let content_end = lit_range.end.saturating_sub(1);
+    let start = content_start.saturating_add(value_range.start);
+    let end = content_start.saturating_add(value_range.end);
+    if start < end && end <= content_end && start >= content_start {
+        return factorio_ir::span::SourceLoc::new(factorio_ir::span::SourceSpan::new(start, end));
+    }
+    location(lit)
+}
+
 enum FormatPiece {
     Literal(String),
     PositionalArg {
@@ -469,54 +495,76 @@ fn ignored_format_spec(spec: Option<&str>) -> Option<String> {
     }
 }
 
-fn parse_format_pieces(template: &str) -> Vec<FormatPiece> {
+/// Parse format pieces, returning an optional byte range covering `{...}` when the
+/// placeholder has an ignored format spec (for precise diagnostics).
+fn parse_format_pieces(template: &str) -> Vec<(FormatPiece, Option<std::ops::Range<usize>>)> {
     let mut pieces = Vec::new();
     let mut literal = String::new();
-    let mut chars = template.chars().peekable();
+    let mut i = 0;
 
-    while let Some(ch) = chars.next() {
+    while i < template.len() {
+        let ch = template[i..].chars().next().expect("valid char boundary");
+        let ch_len = ch.len_utf8();
         match ch {
             '{' => {
-                if matches!(chars.peek(), Some('{')) {
-                    chars.next();
+                if template
+                    .get(i + ch_len..)
+                    .is_some_and(|rest| rest.starts_with('{'))
+                {
                     literal.push('{');
+                    i += ch_len + '{'.len_utf8();
                     continue;
                 }
 
                 if !literal.is_empty() {
-                    pieces.push(FormatPiece::Literal(std::mem::take(&mut literal)));
+                    pieces.push((FormatPiece::Literal(std::mem::take(&mut literal)), None));
                 }
 
-                let mut contents = String::new();
+                let open = i;
+                i += ch_len;
+                let contents_start = i;
                 let mut closed = false;
-                for c in chars.by_ref() {
+                while i < template.len() {
+                    let c = template[i..].chars().next().expect("valid char boundary");
                     if c == '}' {
+                        let contents = &template[contents_start..i];
+                        i += c.len_utf8();
+                        let close_end = i;
+                        let piece = parse_format_placeholder(contents);
+                        let range = piece.ignored_spec().map(|_| open..close_end);
+                        pieces.push((piece, range));
                         closed = true;
                         break;
                     }
-                    contents.push(c);
+                    i += c.len_utf8();
                 }
 
                 if !closed {
                     literal.push('{');
-                    literal.push_str(&contents);
-                    continue;
+                    literal.push_str(&template[contents_start..]);
+                    break;
                 }
-
-                pieces.push(parse_format_placeholder(&contents));
             }
             '}' => {
-                if matches!(chars.peek(), Some('}')) {
-                    chars.next();
+                if template
+                    .get(i + ch_len..)
+                    .is_some_and(|rest| rest.starts_with('}'))
+                {
+                    i += ch_len + '}'.len_utf8();
+                } else {
+                    i += ch_len;
                 }
                 literal.push('}');
             }
-            other => literal.push(other),
+            other => {
+                literal.push(other);
+                i += ch_len;
+            }
         }
     }
 
     if !literal.is_empty() {
-        pieces.push(FormatPiece::Literal(literal));
+        pieces.push((FormatPiece::Literal(literal), None));
     }
 
     pieces

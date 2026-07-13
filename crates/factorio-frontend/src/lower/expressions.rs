@@ -108,7 +108,7 @@ pub fn lower_expression(
         Expr::If(if_expr) => lower_if_expr(if_expr, ctx, self_type),
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
         other => Err(FrontendError::UnsupportedExpression {
-            location: format!("{} ({})", location(expression), expr_kind_name(other)),
+            location: location(expression).with_note(expr_kind_name(other)),
         }),
     }
 }
@@ -123,12 +123,12 @@ fn lower_call_expression(
         let mut args = call.args.iter();
         let Some(arg) = args.next() else {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!("{} (Some expects exactly one argument)", location(call)),
+                location: location(call).with_note("Some expects exactly one argument"),
             });
         };
         if args.next().is_some() {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!("{} (Some expects exactly one argument)", location(call)),
+                location: location(call).with_note("Some expects exactly one argument"),
             });
         }
         return lower_expression(arg, ctx, self_type);
@@ -139,12 +139,12 @@ fn lower_call_expression(
         let mut args = call.args.iter();
         let Some(arg) = args.next() else {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!("{} (lua_fn expects exactly one argument)", location(call)),
+                location: location(call).with_note("lua_fn expects exactly one argument"),
             });
         };
         if args.next().is_some() {
             return Err(FrontendError::UnsupportedExpression {
-                location: format!("{} (lua_fn expects exactly one argument)", location(call)),
+                location: location(call).with_note("lua_fn expects exactly one argument"),
             });
         }
         return lower_expression(arg, ctx, self_type);
@@ -155,33 +155,33 @@ fn lower_call_expression(
         {
             let _ = func_name;
             return Err(FrontendError::UnsupportedExpression {
-                location: format!(
-                    "{} (serde_json lowering requires the `serde` feature on \
-                     factorio-rs-cli / factorio-frontend)",
-                    location(call)
+                location: location(call).with_note(
+                    "serde_json lowering requires the `serde` feature on \
+                     factorio-rs-cli / factorio-frontend",
                 ),
             });
         }
         #[cfg(feature = "serde")]
         {
             let Some(kind) = classify_serde_json_fn(&func_name) else {
-                return Err(unsupported_serde_json_fn_error(&func_name, &location(call)));
+                return Err(unsupported_serde_json_fn_error(
+                    &func_name,
+                    location(call),
+                ));
             };
             let mut args = call.args.iter();
             let Some(arg) = args.next() else {
                 return Err(FrontendError::UnsupportedExpression {
-                    location: format!(
-                        "{} (serde_json::{func_name} expects exactly one argument)",
-                        location(call)
-                    ),
+                    location: location(call).with_note(format!(
+                        "serde_json::{func_name} expects exactly one argument"
+                    )),
                 });
             };
             if args.next().is_some() {
                 return Err(FrontendError::UnsupportedExpression {
-                    location: format!(
-                        "{} (serde_json::{func_name} expects exactly one argument)",
-                        location(call)
-                    ),
+                    location: location(call).with_note(format!(
+                        "serde_json::{func_name} expects exactly one argument"
+                    )),
                 });
             }
             let value = lower_expression(arg, ctx, self_type)?;

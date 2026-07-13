@@ -61,7 +61,7 @@ surface.find_entities_filtered(EntitySearchFilters {
 
 Prefer `.into()` on payloads (`force.into()`, `"enemy".into()`) over enum
 constructors like `ForceID::Name(...)`, which are rejected by the
-`identification_ctor` lint.
+[`identification_ctor`](lints/#identification_ctor-e0005) lint.
 
 `T | array<T>` in the schema collapses to `T` at the stub layer (the array form
 is still valid in Lua; it just isn’t modeled in Rust yet).

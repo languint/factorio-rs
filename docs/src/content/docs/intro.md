@@ -45,8 +45,9 @@ You typically iterate with both: check with Cargo, emit the mod with the CLI.
 
 Only a subset of Rust is transpiled. See
 [Language support](guides/language/) for statements, expressions, `Option` /
-`Vec` behaviour, and common unsupported constructs. Optional
-[Tracing](guides/tracing/) macros lower to colored `game.print`. Optional
-[Serde / JSON](guides/serde/) lowers `serde_json` to `helpers.table_to_json`.
-Generated API stubs prefer concrete concepts and
+`Vec` behaviour, and common unsupported constructs. Transpile-time
+[Lints](guides/lints/) catch traps that type-check in Rust but miscompile in
+Lua. Optional [Tracing](guides/tracing/) macros lower to colored `game.print`.
+Optional [Serde / JSON](guides/serde/) lowers `serde_json` to
+`helpers.table_to_json`. Generated API stubs prefer concrete concepts and
 [Identification enums](guides/api-types/) over `LuaAny`.

@@ -55,28 +55,29 @@ See [Profiles](../guides/profiles/).
 
 ## `[lints]`
 
-Transpile-time safety checks. Each key is a lint **identifier**; the value is
-`allow`, `warn`, or `deny`. Unspecified lints default to **`deny`**.
+Transpile-time safety checks. Full guide: [Lints](../guides/lints/).
 
-| Identifier | Meaning |
-| --- | --- |
-| `unwrap` | `.unwrap()` does not check for nil in Lua |
-| `expect` | `.expect(...)` does not check for nil; message is discarded |
-| `format_spec` | Non-`?` format specs (e.g. `{:.2}`) are ignored when lowering |
-| `variable_index` | Non-literal indices are not shifted for Lua's 1-based tables |
-| `identification_ctor` | Identification enum constructors are not lowered; use `.into()` |
+Each key is a lint **identifier**; the value is `allow`, `warn`, or `deny`.
+Unspecified lints use their defaults (`deny`, except `format_spec` → `warn`).
+
+| Identifier | Code | Default | Meaning |
+| --- | --- | --- | --- |
+| `unwrap` | `E0001` | deny | `.unwrap()` does not check for nil in Lua |
+| `expect` | `E0002` | deny | `.expect(...)` does not check for nil; message is discarded |
+| `format_spec` | `E0003` | warn | Non-`?` format specs (e.g. `{:.2}`) are ignored when lowering |
+| `variable_index` | `E0004` | deny | Non-literal indices are not shifted for Lua's 1-based tables |
+| `identification_ctor` | `E0005` | deny | Identification enum constructors are not lowered; use `.into()` |
 
 ```toml
 [lints]
 unwrap = "allow"
 expect = "warn"
-format_spec = "deny"
-variable_index = "deny"
-identification_ctor = "deny"
+format_spec = "allow"
 ```
 
-`allow` disables the lint. `warn` prints a warning and continues. `deny` fails
-the build.
+`allow` disables the lint. `warn` prints a warning and continues. `deny` prints
+an error; the build fails after all diagnostics are shown (no Lua is written).
+Reports use rustc-style codes (`error[E0001]:`, `warning[E0003]:`).
 
 ## Example
 

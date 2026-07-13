@@ -53,8 +53,8 @@ pub enum CliError {
     #[error("invalid `[lints]` configuration: {message}")]
     InvalidLints { message: String },
 
-    #[error("{0}")]
-    Lint(factorio_ir::lint::Diagnostic),
+    #[error("transpile failed due to previous errors")]
+    Reported,
 
     #[error("failed to parse `{path}`")]
     CargoManifestParse {
