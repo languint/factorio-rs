@@ -174,4 +174,5 @@ supported construct (see [Language support](language/)).
 
 - [`[lints]` in Factorio.toml](../reference/factorio-toml/#lints) - config keys
 - [Language support](language/) - what lowers, and the safety trap table
+- [Option and Result](option-and-result/) - nil / `{ ok }` / `{ err }` / `?`
 - [API types](api-types/) - Identification enums and `.into()`

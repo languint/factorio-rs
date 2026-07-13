@@ -111,10 +111,43 @@ pub fn lower_expression(
         }
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
         Expr::Closure(closure) => lower_closure(closure, ctx, self_type),
+        Expr::Try(try_expr) => lower_try_expression(try_expr, ctx, self_type),
         other => Err(FrontendError::UnsupportedExpression {
             location: location(expression).with_note(expr_kind_name(other)),
         }),
     }
+}
+
+/// Lower `expr?` for `Result`: hoist early-return on `.err`, yield `.ok`.
+fn lower_try_expression(
+    try_expr: &syn::ExprTry,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let inner = lower_expression(&try_expr.expr, ctx, self_type)?;
+    let tmp = ctx.alloc_try_tmp();
+    ctx.try_hoists
+        .push(factorio_ir::statement::Statement::VariableDecl {
+            name: tmp.clone(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: inner,
+        });
+    ctx.try_hoists
+        .push(factorio_ir::statement::Statement::Conditional {
+            condition: ne_nil(factorio_ir::expression::Expression::FieldAccess {
+                base: Box::new(factorio_ir::expression::Expression::Identifier(tmp.clone())),
+                field: "err".to_string(),
+            }),
+            then_block: vec![factorio_ir::statement::Statement::Return(Some(
+                factorio_ir::expression::Expression::Identifier(tmp.clone()),
+            ))],
+            else_block: vec![],
+        });
+    Ok(factorio_ir::expression::Expression::FieldAccess {
+        base: Box::new(factorio_ir::expression::Expression::Identifier(tmp)),
+        field: "ok".to_string(),
+    })
 }
 
 fn lower_call_expression(
@@ -136,6 +169,11 @@ fn lower_call_expression(
             });
         }
         return lower_expression(arg, ctx, self_type);
+    }
+
+    // `Ok(x)` / `Result::Ok(x)` -> `{ ok = x }`; `Err(e)` / `Result::Err(e)` -> `{ err = e }`.
+    if let Some(kind) = result_constructor_kind(&call.func) {
+        return lower_result_constructor(call, kind, ctx, self_type);
     }
 
     // `lua_fn(handler)` / `lua_fn0` / `lua_fn2` - stub-only coercion helpers; emit the fn name.
@@ -251,6 +289,55 @@ fn is_option_some_constructor(func: &Expr) -> bool {
     }
 }
 
+/// Returns `"Ok"` or `"Err"` when `func` is a Result constructor path.
+fn result_constructor_kind(func: &Expr) -> Option<&'static str> {
+    let Expr::Path(path) = func else {
+        return None;
+    };
+    let segments: Vec<_> = path
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect();
+    match segments.as_slice() {
+        [name] if name == "Ok" => Some("Ok"),
+        [name] if name == "Err" => Some("Err"),
+        [.., result, name] if result == "Result" && name == "Ok" => Some("Ok"),
+        [.., result, name] if result == "Result" && name == "Err" => Some("Err"),
+        _ => None,
+    }
+}
+
+fn lower_result_constructor(
+    call: &syn::ExprCall,
+    kind: &str,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let mut args = call.args.iter();
+    let Some(arg) = args.next() else {
+        return Err(FrontendError::UnsupportedExpression {
+            location: location(call).with_note(format!("{kind} expects exactly one argument")),
+        });
+    };
+    if args.next().is_some() {
+        return Err(FrontendError::UnsupportedExpression {
+            location: location(call).with_note(format!("{kind} expects exactly one argument")),
+        });
+    }
+    let value = lower_expression(arg, ctx, self_type)?;
+    let field = match kind {
+        "Ok" => "ok",
+        "Err" => "err",
+        _ => unreachable!(),
+    };
+    Ok(factorio_ir::expression::Expression::StructLiteral {
+        struct_name: Some("Result".to_string()),
+        fields: vec![(field.to_string(), value)],
+    })
+}
+
 fn is_lua_fn_helper(func: &Expr) -> bool {
     let Expr::Path(path) = func else {
         return false;
@@ -279,6 +366,32 @@ fn lower_method_call(
         "to_owned",
     ];
     let method = call.method.to_string();
+
+    // Result-typed receivers: prefer Result helpers (including unwrap -> `.ok`).
+    if receiver_is_result(&call.receiver, ctx) {
+        if method == "unwrap" && call.args.is_empty() {
+            ctx.emit_lint(
+                factorio_ir::lint::LintId::Unwrap,
+                "`.unwrap()` does not check for Err in Lua; use `if let Ok(...)` or `?` instead",
+                location(call),
+            )?;
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            return Ok(result_ok_field(receiver));
+        }
+        if method == "expect" && call.args.len() == 1 {
+            ctx.emit_lint(
+                factorio_ir::lint::LintId::Expect,
+                "`.expect(...)` does not check for Err in Lua; the message is discarded",
+                location(call),
+            )?;
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            return Ok(result_ok_field(receiver));
+        }
+        if let Some(expr) = lower_result_method(call, ctx, self_type)? {
+            return Ok(expr);
+        }
+    }
+
     if method == "unwrap" && call.args.is_empty() {
         ctx.emit_lint(
             factorio_ir::lint::LintId::Unwrap,
@@ -299,6 +412,13 @@ fn lower_method_call(
         return lower_expression(&call.receiver, ctx, self_type);
     }
 
+    // Result methods that do not overlap Option names (safe without type info).
+    if matches!(method.as_str(), "is_ok" | "is_err" | "map_err")
+        && let Some(expr) = lower_result_method(call, ctx, self_type)?
+    {
+        return Ok(expr);
+    }
+
     if let Some(expr) = lower_option_method(call, ctx, self_type)? {
         return Ok(expr);
     }
@@ -314,6 +434,223 @@ fn lower_method_call(
         method: lua_method_name(&method),
         args,
     })
+}
+
+fn receiver_is_result(receiver: &Expr, ctx: &LowerContext<'_>) -> bool {
+    match receiver {
+        Expr::Path(path) if path.path.segments.len() == 1 => ctx
+            .binding_type(&path.path.segments[0].ident.to_string())
+            .is_some_and(|key| key == "Result"),
+        Expr::Paren(paren) => receiver_is_result(&paren.expr, ctx),
+        Expr::Reference(reference) => receiver_is_result(&reference.expr, ctx),
+        _ => false,
+    }
+}
+
+fn result_ok_field(
+    receiver: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    factorio_ir::expression::Expression::FieldAccess {
+        base: Box::new(receiver),
+        field: "ok".to_string(),
+    }
+}
+
+fn result_err_field(
+    receiver: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    factorio_ir::expression::Expression::FieldAccess {
+        base: Box::new(receiver),
+        field: "err".to_string(),
+    }
+}
+
+fn result_is_ok(
+    receiver: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    eq_nil(result_err_field(receiver))
+}
+
+fn result_is_err(
+    receiver: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    ne_nil(result_err_field(receiver))
+}
+
+fn result_ok_wrap(
+    value: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    factorio_ir::expression::Expression::StructLiteral {
+        struct_name: Some("Result".to_string()),
+        fields: vec![("ok".to_string(), value)],
+    }
+}
+
+fn result_err_wrap(
+    value: factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    factorio_ir::expression::Expression::StructLiteral {
+        struct_name: Some("Result".to_string()),
+        fields: vec![("err".to_string(), value)],
+    }
+}
+
+fn receiver_is_trivial(expr: &factorio_ir::expression::Expression) -> bool {
+    matches!(
+        expr,
+        factorio_ir::expression::Expression::Identifier(_)
+            | factorio_ir::expression::Expression::Literal(_)
+    )
+}
+
+/// Evaluate `receiver` once when `build` may mention it more than once.
+///
+/// Non-trivial receivers (calls, field chains, ...) are bound to a local inside an
+/// IIFE so side-effecting expressions are not duplicated.
+fn with_receiver_once(
+    receiver: factorio_ir::expression::Expression,
+    build: impl FnOnce(factorio_ir::expression::Expression) -> factorio_ir::expression::Expression,
+) -> factorio_ir::expression::Expression {
+    if receiver_is_trivial(&receiver) {
+        return build(receiver);
+    }
+
+    let tmp = "__o".to_string();
+    let bound = factorio_ir::expression::Expression::Identifier(tmp.clone());
+    let value = build(bound);
+    let mut statements = vec![factorio_ir::statement::Statement::VariableDecl {
+        name: tmp,
+        ty: factorio_ir::r#type::Type::Void,
+        source_type: None,
+        value: receiver,
+    }];
+    match value {
+        factorio_ir::expression::Expression::If {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
+            statements.push(factorio_ir::statement::Statement::Conditional {
+                condition: *condition,
+                then_block: vec![factorio_ir::statement::Statement::Return(Some(*then_expr))],
+                else_block: vec![factorio_ir::statement::Statement::Return(Some(*else_expr))],
+            });
+        }
+        other => {
+            statements.push(factorio_ir::statement::Statement::Return(Some(other)));
+        }
+    }
+
+    factorio_ir::expression::Expression::Call {
+        func: Box::new(factorio_ir::expression::Expression::Closure {
+            params: vec![],
+            body: factorio_ir::block::Block { statements },
+        }),
+        args: vec![],
+    }
+}
+
+/// Result helpers. Returns `Ok(None)` when the method is not a Result special.
+fn lower_result_method(
+    call: &syn::ExprMethodCall,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Option<factorio_ir::expression::Expression>> {
+    let method = call.method.to_string();
+    match method.as_str() {
+        "is_ok" if call.args.is_empty() => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            Ok(Some(result_is_ok(receiver)))
+        }
+        "is_err" if call.args.is_empty() => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            Ok(Some(result_is_err(receiver)))
+        }
+        "unwrap_or" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let default = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_ok(r.clone())),
+                    then_expr: Box::new(result_ok_field(r)),
+                    else_expr: Box::new(default),
+                }
+            })))
+        }
+        "map" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                let mapped = factorio_ir::expression::Expression::Call {
+                    func: Box::new(func),
+                    args: vec![result_ok_field(r.clone())],
+                };
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_ok(r.clone())),
+                    then_expr: Box::new(result_ok_wrap(mapped)),
+                    else_expr: Box::new(r),
+                }
+            })))
+        }
+        "map_err" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                let mapped = factorio_ir::expression::Expression::Call {
+                    func: Box::new(func),
+                    args: vec![result_err_field(r.clone())],
+                };
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_err(r.clone())),
+                    then_expr: Box::new(result_err_wrap(mapped)),
+                    else_expr: Box::new(r),
+                }
+            })))
+        }
+        "and_then" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_ok(r.clone())),
+                    then_expr: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(func),
+                        args: vec![result_ok_field(r.clone())],
+                    }),
+                    else_expr: Box::new(r),
+                }
+            })))
+        }
+        "or_else" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_ok(r.clone())),
+                    then_expr: Box::new(r.clone()),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(func),
+                        args: vec![result_err_field(r)],
+                    }),
+                }
+            })))
+        }
+        "unwrap_or_else" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(result_is_ok(r.clone())),
+                    then_expr: Box::new(result_ok_field(r.clone())),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(func),
+                        args: vec![result_err_field(r)],
+                    }),
+                }
+            })))
+        }
+        _ => Ok(None),
+    }
 }
 
 /// Nil-aware Option helpers. Returns `Ok(None)` when the method is not an Option special.
@@ -335,11 +672,13 @@ fn lower_option_method(
         "unwrap_or" | "or" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let default = lower_expression(&call.args[0], ctx, self_type)?;
-            Ok(Some(factorio_ir::expression::Expression::If {
-                condition: Box::new(ne_nil(receiver.clone())),
-                then_expr: Box::new(receiver),
-                else_expr: Box::new(default),
-            }))
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(r),
+                    else_expr: Box::new(default),
+                }
+            })))
         }
         "and" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
@@ -355,49 +694,83 @@ fn lower_option_method(
         "map" | "and_then" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let func = lower_expression(&call.args[0], ctx, self_type)?;
-            Ok(Some(factorio_ir::expression::Expression::If {
-                condition: Box::new(ne_nil(receiver.clone())),
-                then_expr: Box::new(factorio_ir::expression::Expression::Call {
-                    func: Box::new(func),
-                    args: vec![receiver],
-                }),
-                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
-                    factorio_ir::literal::Literal::Nil,
-                )),
-            }))
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(func),
+                        args: vec![r],
+                    }),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                        factorio_ir::literal::Literal::Nil,
+                    )),
+                }
+            })))
         }
         "unwrap_or_else" | "or_else" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let func = lower_expression(&call.args[0], ctx, self_type)?;
-            Ok(Some(factorio_ir::expression::Expression::If {
-                condition: Box::new(ne_nil(receiver.clone())),
-                then_expr: Box::new(receiver),
-                else_expr: Box::new(factorio_ir::expression::Expression::Call {
-                    func: Box::new(func),
-                    args: vec![],
-                }),
-            }))
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(r),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(func),
+                        args: vec![],
+                    }),
+                }
+            })))
         }
         "filter" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let pred = lower_expression(&call.args[0], ctx, self_type)?;
-            let keep = factorio_ir::expression::Expression::If {
-                condition: Box::new(factorio_ir::expression::Expression::Call {
-                    func: Box::new(pred),
-                    args: vec![receiver.clone()],
-                }),
-                then_expr: Box::new(receiver.clone()),
-                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
-                    factorio_ir::literal::Literal::Nil,
-                )),
-            };
-            Ok(Some(factorio_ir::expression::Expression::If {
-                condition: Box::new(ne_nil(receiver)),
-                then_expr: Box::new(keep),
-                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
-                    factorio_ir::literal::Literal::Nil,
-                )),
-            }))
+            Ok(Some(with_receiver_once(receiver, |r| {
+                let keep = factorio_ir::expression::Expression::If {
+                    condition: Box::new(factorio_ir::expression::Expression::Call {
+                        func: Box::new(pred),
+                        args: vec![r.clone()],
+                    }),
+                    then_expr: Box::new(r.clone()),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                        factorio_ir::literal::Literal::Nil,
+                    )),
+                };
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r)),
+                    then_expr: Box::new(keep),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                        factorio_ir::literal::Literal::Nil,
+                    )),
+                }
+            })))
+        }
+        // Option -> Result
+        "ok_or" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let err = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(result_ok_wrap(r)),
+                    else_expr: Box::new(result_err_wrap(err)),
+                }
+            })))
+        }
+        "ok_or_else" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(result_ok_wrap(r)),
+                    else_expr: Box::new(result_err_wrap(
+                        factorio_ir::expression::Expression::Call {
+                            func: Box::new(func),
+                            args: vec![],
+                        },
+                    )),
+                }
+            })))
         }
         _ => Ok(None),
     }

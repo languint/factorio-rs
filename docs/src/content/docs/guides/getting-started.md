@@ -94,6 +94,7 @@ Place an optional `thumbnail.png` in the project root (or set
 ## Next steps
 
 - [Language support](language/) - what Rust syntax you can use
+- [Option and Result](option-and-result/) - nil / errors / `?`
 - [Lints](lints/) - transpile safety diagnostics (`E0001` ...)
 - [Stages](stages/) - control / settings / data / shared
 - [Events and filters](events/)

@@ -57,5 +57,7 @@ end, { { filter = "name", name = "inserter" } })
 - Only events that declare a filter type accept `filter = ...`.
 - Handlers must live in a **control-stage** module.
 
-See also [Language support](language/) for `if let` / `Option` patterns
+See also [Option and Result](option-and-result/) for `if let Some(...)` /
+`ok_or` / `?` on event payloads, and [Language support](language/) for other
+syntax.
 commonly used inside handlers.

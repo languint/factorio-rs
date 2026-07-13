@@ -11,6 +11,20 @@ use super::{
     util::{item_name, location},
 };
 
+/// Lower an expression and collect any `?` early-return hoists it emitted.
+fn lower_expr(
+    expression: &Expr,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<(
+    Vec<factorio_ir::statement::Statement>,
+    factorio_ir::expression::Expression,
+)> {
+    let mark = ctx.try_hoist_mark();
+    let value = lower_expression(expression, ctx, self_type)?;
+    Ok((ctx.take_try_hoists_from(mark), value))
+}
+
 pub fn lower_block(
     block: &Block,
     ctx: &mut LowerContext<'_>,
@@ -55,25 +69,26 @@ fn lower_statement(
                             location: location(pat),
                         }
                     })?;
-                    let value = lower_expression(rhs, ctx, self_type)?;
+                    let (mut hoists, value) = lower_expr(rhs, ctx, self_type)?;
                     let ty = infer_type_from_expression(&value)
                         .unwrap_or(factorio_ir::r#type::Type::Void);
                     let source_type = inferred_source_type(&ty);
                     if let Some(key) = infer_debug_type_key(&value, ctx) {
                         ctx.bind_type(name.clone(), key);
                     }
-                    stmts.push(factorio_ir::statement::Statement::VariableDecl {
+                    hoists.push(factorio_ir::statement::Statement::VariableDecl {
                         name,
                         ty,
                         source_type,
                         value,
                     });
+                    stmts.extend(hoists);
                 }
                 return Ok(stmts);
             }
 
             let (name, annotated_type) = lower_binding(&local.pat)?;
-            let value = lower_expression(&init.expr, ctx, self_type)?;
+            let (mut hoists, value) = lower_expr(&init.expr, ctx, self_type)?;
             let (ty, source_type) = if let Some((ty, source_type)) = annotated_type {
                 (ty, Some(source_type))
             } else {
@@ -90,12 +105,13 @@ fn lower_statement(
                 ctx.bind_type(name.clone(), key);
             }
 
-            Ok(vec![factorio_ir::statement::Statement::VariableDecl {
+            hoists.push(factorio_ir::statement::Statement::VariableDecl {
                 name,
                 ty,
                 source_type,
                 value,
-            }])
+            });
+            Ok(hoists)
         }
         Stmt::Item(syn::Item::Fn(function)) => {
             Ok(vec![factorio_ir::statement::Statement::FunctionDecl(
@@ -145,9 +161,11 @@ fn lower_expression_statement(
         Expr::Match(match_expr) => {
             // Tail value-producing `match` becomes an IIFE so arm results can be returned.
             if is_tail && !has_semi {
-                return Ok(vec![factorio_ir::statement::Statement::Return(Some(
-                    lower_match_expression(match_expr, ctx, self_type)?,
-                ))]);
+                let mark = ctx.try_hoist_mark();
+                let value = lower_match_expression(match_expr, ctx, self_type)?;
+                let mut stmts = ctx.take_try_hoists_from(mark);
+                stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+                return Ok(stmts);
             }
             return lower_match_statements(match_expr, ctx, self_type);
         }
@@ -155,13 +173,11 @@ fn lower_expression_statement(
     }
 
     if has_semi {
-        return Ok(vec![lower_semicolon_expression(
-            expression, ctx, self_type,
-        )?]);
+        return lower_semicolon_statements(expression, ctx, self_type);
     }
 
     if is_tail {
-        return Ok(vec![lower_tail_expression(expression, ctx, self_type)?]);
+        return lower_tail_statements(expression, ctx, self_type);
     }
 
     Err(FrontendError::UnsupportedStatement {
@@ -169,115 +185,81 @@ fn lower_expression_statement(
     })
 }
 
-fn lower_tail_expression(
+fn lower_tail_statements(
     expression: &Expr,
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
-) -> FrontendResult<factorio_ir::statement::Statement> {
+) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
     match expression {
-        Expr::If(if_expression) => {
-            let stmts = lower_if_expression(if_expression, ctx, self_type)?;
-            // If let expansions produce >1 statement; wrap in a no-op Return for the tail slot.
-            // In practice the last statement is always a Conditional.
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
+        Expr::If(if_expression) => lower_if_expression(if_expression, ctx, self_type),
+        Expr::ForLoop(for_loop) => lower_for_loop(for_loop, ctx, self_type),
+        Expr::While(while_expr) => lower_while_loop(while_expr, ctx, self_type),
+        Expr::Loop(loop_expr) => lower_infinite_loop(loop_expr, ctx, self_type),
+        Expr::Match(match_expr) => {
+            let mark = ctx.try_hoist_mark();
+            let value = lower_match_expression(match_expr, ctx, self_type)?;
+            let mut stmts = ctx.take_try_hoists_from(mark);
+            stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+            Ok(stmts)
         }
-        Expr::ForLoop(for_loop) => {
-            let stmts = lower_for_loop(for_loop, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
+        Expr::Return(return_expression) => match return_expression.expr.as_deref() {
+            Some(value) => {
+                let (mut stmts, value) = lower_expr(value, ctx, self_type)?;
+                stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+                Ok(stmts)
+            }
+            None => Ok(vec![factorio_ir::statement::Statement::Return(None)]),
+        },
+        Expr::Continue(_) => Ok(vec![factorio_ir::statement::Statement::Continue]),
+        Expr::Break(break_expr) => Ok(vec![lower_break(break_expr)?]),
+        _ => {
+            let (mut stmts, value) = lower_expr(expression, ctx, self_type)?;
+            stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+            Ok(stmts)
         }
-        Expr::While(while_expr) => {
-            let stmts = lower_while_loop(while_expr, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
-        Expr::Loop(loop_expr) => {
-            let stmts = lower_infinite_loop(loop_expr, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
-        Expr::Match(match_expr) => Ok(factorio_ir::statement::Statement::Return(Some(
-            lower_match_expression(match_expr, ctx, self_type)?,
-        ))),
-        Expr::Return(return_expression) => Ok(factorio_ir::statement::Statement::Return(
-            match return_expression.expr.as_deref() {
-                Some(value) => Some(lower_expression(value, ctx, self_type)?),
-                None => None,
-            },
-        )),
-        Expr::Continue(_) => Ok(factorio_ir::statement::Statement::Continue),
-        Expr::Break(break_expr) => lower_break(break_expr),
-        _ => Ok(factorio_ir::statement::Statement::Return(Some(
-            lower_expression(expression, ctx, self_type)?,
-        ))),
     }
 }
 
-fn lower_semicolon_expression(
+fn lower_semicolon_statements(
     expression: &Expr,
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
-) -> FrontendResult<factorio_ir::statement::Statement> {
+) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
     match expression {
-        Expr::Return(return_expression) => Ok(factorio_ir::statement::Statement::Return(
-            match return_expression.expr.as_deref() {
-                Some(value) => Some(lower_expression(value, ctx, self_type)?),
-                None => None,
-            },
-        )),
-        Expr::Assign(assign) => Ok(lower_assign_statement(assign, ctx, self_type)?),
+        Expr::Return(return_expression) => match return_expression.expr.as_deref() {
+            Some(value) => {
+                let (mut stmts, value) = lower_expr(value, ctx, self_type)?;
+                stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+                Ok(stmts)
+            }
+            None => Ok(vec![factorio_ir::statement::Statement::Return(None)]),
+        },
+        Expr::Assign(assign) => {
+            let mark = ctx.try_hoist_mark();
+            let stmt = lower_assign_statement(assign, ctx, self_type)?;
+            let mut stmts = ctx.take_try_hoists_from(mark);
+            stmts.push(stmt);
+            Ok(stmts)
+        }
         Expr::Binary(binary) if is_compound_assign(&binary.op) => {
-            Ok(lower_compound_assign_statement(binary, ctx, self_type)?)
+            let mark = ctx.try_hoist_mark();
+            let stmt = lower_compound_assign_statement(binary, ctx, self_type)?;
+            let mut stmts = ctx.take_try_hoists_from(mark);
+            stmts.push(stmt);
+            Ok(stmts)
         }
-        Expr::If(if_expression) => {
-            let stmts = lower_if_expression(if_expression, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
+        Expr::If(if_expression) => lower_if_expression(if_expression, ctx, self_type),
+        Expr::Call(_) | Expr::MethodCall(_) | Expr::Macro(_) | Expr::Try(_) => {
+            let (mut stmts, value) = lower_expr(expression, ctx, self_type)?;
+            stmts.push(factorio_ir::statement::Statement::Expr(value));
+            Ok(stmts)
         }
-        Expr::Call(_) | Expr::MethodCall(_) | Expr::Macro(_) => Ok(
-            factorio_ir::statement::Statement::Expr(lower_expression(expression, ctx, self_type)?),
-        ),
-        Expr::Continue(_) => Ok(factorio_ir::statement::Statement::Continue),
-        Expr::Break(break_expr) => lower_break(break_expr),
-        Expr::ForLoop(for_loop) => {
-            let stmts = lower_for_loop(for_loop, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
-        Expr::While(while_expr) => {
-            let stmts = lower_while_loop(while_expr, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
-        Expr::Loop(loop_expr) => {
-            let stmts = lower_infinite_loop(loop_expr, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
-        Expr::Match(match_expr) => {
-            let stmts = lower_match_statements(match_expr, ctx, self_type)?;
-            Ok(stmts
-                .into_iter()
-                .last()
-                .unwrap_or(factorio_ir::statement::Statement::Return(None)))
-        }
+        Expr::Continue(_) => Ok(vec![factorio_ir::statement::Statement::Continue]),
+        Expr::Break(break_expr) => Ok(vec![lower_break(break_expr)?]),
+        Expr::ForLoop(for_loop) => lower_for_loop(for_loop, ctx, self_type),
+        Expr::While(while_expr) => lower_while_loop(while_expr, ctx, self_type),
+        Expr::Loop(loop_expr) => lower_infinite_loop(loop_expr, ctx, self_type),
+        Expr::Match(match_expr) => lower_match_statements(match_expr, ctx, self_type),
         _ => Err(FrontendError::UnsupportedStatement {
             location: location(expression),
         }),
@@ -294,13 +276,14 @@ fn lower_for_loop(
             location: location(&for_loop.pat),
         }
     })?;
-    let iter = lower_expression(&for_loop.expr, ctx, self_type)?;
+    let (mut stmts, iter) = lower_expr(&for_loop.expr, ctx, self_type)?;
     let body = lower_block_statements(&for_loop.body.stmts, ctx, self_type)?;
-    Ok(vec![factorio_ir::statement::Statement::ForIn {
+    stmts.push(factorio_ir::statement::Statement::ForIn {
         var,
         iter,
         body,
-    }])
+    });
+    Ok(stmts)
 }
 
 fn lower_while_loop(
@@ -308,12 +291,13 @@ fn lower_while_loop(
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
-    let condition = lower_expression(&while_expr.cond, ctx, self_type)?;
+    let (mut stmts, condition) = lower_expr(&while_expr.cond, ctx, self_type)?;
     let body = lower_block_statements(&while_expr.body.stmts, ctx, self_type)?;
-    Ok(vec![factorio_ir::statement::Statement::While {
+    stmts.push(factorio_ir::statement::Statement::While {
         condition,
         body,
-    }])
+    });
+    Ok(stmts)
 }
 
 fn lower_infinite_loop(
@@ -415,19 +399,34 @@ fn lower_if_expression(
     }
 
     // Plain `if cond` (no `let` bindings in the condition).
-    let condition = lower_expression(&if_expression.cond, ctx, self_type)?;
-    Ok(vec![factorio_ir::statement::Statement::Conditional {
+    let (mut stmts, condition) = lower_expr(&if_expression.cond, ctx, self_type)?;
+    stmts.push(factorio_ir::statement::Statement::Conditional {
         condition,
         then_block,
         else_block,
-    }])
+    });
+    Ok(stmts)
 }
 
 enum CondClause<'a> {
     /// A normal boolean expression.
     Expr(&'a Expr),
-    /// `let Some(name) = expr` / `let name = expr`.
-    Let { binding: String, value: &'a Expr },
+    /// `let Some(name) = expr` / `let Ok(name) = expr` / `let Err(name) = expr` / plain.
+    Let {
+        kind: LetPatKind,
+        binding: String,
+        value: &'a Expr,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum LetPatKind {
+    /// Option-style: bind value, then `binding ~= nil`.
+    OptionSome,
+    /// Result Ok: temp Result, `tmp.err == nil`, bind `tmp.ok`.
+    ResultOk,
+    /// Result Err: temp Result, `tmp.err ~= nil`, bind `tmp.err`.
+    ResultErr,
 }
 
 fn flatten_and_clauses(expr: &Expr) -> Vec<CondClause<'_>> {
@@ -438,10 +437,11 @@ fn flatten_and_clauses(expr: &Expr) -> Vec<CondClause<'_>> {
             clauses.extend(flatten_and_clauses(&binary.right));
             clauses
         }
-        Expr::Let(let_expr) => extract_some_binding(&let_expr.pat).map_or_else(
+        Expr::Let(let_expr) => extract_let_pattern(&let_expr.pat).map_or_else(
             || vec![CondClause::Expr(expr)],
-            |binding| {
+            |(kind, binding)| {
                 vec![CondClause::Let {
+                    kind,
                     binding,
                     value: let_expr.expr.as_ref(),
                 }]
@@ -461,61 +461,182 @@ fn lower_let_chain_clauses(
     match clauses {
         [] => Ok(then_block),
         [CondClause::Expr(condition), rest @ ..] => {
-            let condition = lower_expression(condition, ctx, self_type)?;
+            let (mut stmts, condition) = lower_expr(condition, ctx, self_type)?;
             let nested =
                 lower_let_chain_clauses(rest, then_block, else_block.clone(), ctx, self_type)?;
-            Ok(vec![factorio_ir::statement::Statement::Conditional {
+            stmts.push(factorio_ir::statement::Statement::Conditional {
                 condition,
                 then_block: nested,
                 else_block,
-            }])
+            });
+            Ok(stmts)
         }
-        [CondClause::Let { binding, value }, rest @ ..] => {
-            let rhs = lower_expression(value, ctx, self_type)?;
-            if let Some(key) = infer_debug_type_key(&rhs, ctx) {
-                ctx.bind_type(binding.clone(), key);
-            }
+        [CondClause::Let {
+            kind,
+            binding,
+            value,
+        }, rest @ ..] => {
+            let (mut stmts, rhs) = lower_expr(value, ctx, self_type)?;
             let nested =
                 lower_let_chain_clauses(rest, then_block, else_block.clone(), ctx, self_type)?;
-            Ok(vec![
-                factorio_ir::statement::Statement::VariableDecl {
-                    name: binding.clone(),
-                    ty: factorio_ir::r#type::Type::Void,
-                    source_type: None,
-                    value: rhs,
-                },
-                factorio_ir::statement::Statement::Conditional {
-                    condition: factorio_ir::expression::Expression::BinaryOp {
-                        lhs: Box::new(factorio_ir::expression::Expression::Identifier(
-                            binding.clone(),
-                        )),
-                        op: factorio_ir::operator::Operator::Ne,
-                        rhs: Box::new(factorio_ir::expression::Expression::Literal(
-                            factorio_ir::literal::Literal::Nil,
-                        )),
-                    },
-                    then_block: nested,
-                    else_block,
-                },
-            ])
+            stmts.extend(lower_let_pattern_binding(
+                *kind,
+                binding,
+                rhs,
+                nested,
+                else_block,
+                ctx,
+            ));
+            Ok(stmts)
         }
     }
 }
 
-/// Extract the inner binding name from `Some(x)` or plain `x` patterns used in `if let`.
-fn extract_some_binding(pat: &Pat) -> Option<String> {
+fn lower_let_pattern_binding(
+    kind: LetPatKind,
+    binding: &str,
+    rhs: factorio_ir::expression::Expression,
+    then_block: Vec<factorio_ir::statement::Statement>,
+    else_block: Vec<factorio_ir::statement::Statement>,
+    ctx: &mut LowerContext<'_>,
+) -> Vec<factorio_ir::statement::Statement> {
+    match kind {
+        LetPatKind::OptionSome => lower_let_option_some(binding, rhs, then_block, else_block, ctx),
+        LetPatKind::ResultOk => lower_let_result_ok(binding, rhs, then_block, else_block),
+        LetPatKind::ResultErr => lower_let_result_err(binding, rhs, then_block, else_block),
+    }
+}
+
+fn lower_let_option_some(
+    binding: &str,
+    rhs: factorio_ir::expression::Expression,
+    then_block: Vec<factorio_ir::statement::Statement>,
+    else_block: Vec<factorio_ir::statement::Statement>,
+    ctx: &mut LowerContext<'_>,
+) -> Vec<factorio_ir::statement::Statement> {
+    if let Some(key) = infer_debug_type_key(&rhs, ctx) {
+        ctx.bind_type(binding.to_string(), key);
+    }
+    vec![
+        factorio_ir::statement::Statement::VariableDecl {
+            name: binding.to_string(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: rhs,
+        },
+        factorio_ir::statement::Statement::Conditional {
+            condition: factorio_ir::expression::Expression::BinaryOp {
+                lhs: Box::new(factorio_ir::expression::Expression::Identifier(
+                    binding.to_string(),
+                )),
+                op: factorio_ir::operator::Operator::Ne,
+                rhs: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            },
+            then_block,
+            else_block,
+        },
+    ]
+}
+
+fn lower_let_result_ok(
+    binding: &str,
+    rhs: factorio_ir::expression::Expression,
+    then_block: Vec<factorio_ir::statement::Statement>,
+    else_block: Vec<factorio_ir::statement::Statement>,
+) -> Vec<factorio_ir::statement::Statement> {
+    let tmp = format!("__let_{binding}");
+    let mut inner = vec![factorio_ir::statement::Statement::VariableDecl {
+        name: binding.to_string(),
+        ty: factorio_ir::r#type::Type::Void,
+        source_type: None,
+        value: factorio_ir::expression::Expression::FieldAccess {
+            base: Box::new(factorio_ir::expression::Expression::Identifier(tmp.clone())),
+            field: "ok".to_string(),
+        },
+    }];
+    inner.extend(then_block);
+    vec![
+        factorio_ir::statement::Statement::VariableDecl {
+            name: tmp.clone(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: rhs,
+        },
+        factorio_ir::statement::Statement::Conditional {
+            condition: factorio_ir::expression::Expression::BinaryOp {
+                lhs: Box::new(factorio_ir::expression::Expression::FieldAccess {
+                    base: Box::new(factorio_ir::expression::Expression::Identifier(tmp)),
+                    field: "err".to_string(),
+                }),
+                op: factorio_ir::operator::Operator::Eq,
+                rhs: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            },
+            then_block: inner,
+            else_block,
+        },
+    ]
+}
+
+fn lower_let_result_err(
+    binding: &str,
+    rhs: factorio_ir::expression::Expression,
+    then_block: Vec<factorio_ir::statement::Statement>,
+    else_block: Vec<factorio_ir::statement::Statement>,
+) -> Vec<factorio_ir::statement::Statement> {
+    let tmp = format!("__let_{binding}");
+    let mut inner = vec![factorio_ir::statement::Statement::VariableDecl {
+        name: binding.to_string(),
+        ty: factorio_ir::r#type::Type::Void,
+        source_type: None,
+        value: factorio_ir::expression::Expression::FieldAccess {
+            base: Box::new(factorio_ir::expression::Expression::Identifier(tmp.clone())),
+            field: "err".to_string(),
+        },
+    }];
+    inner.extend(then_block);
+    vec![
+        factorio_ir::statement::Statement::VariableDecl {
+            name: tmp.clone(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: rhs,
+        },
+        factorio_ir::statement::Statement::Conditional {
+            condition: factorio_ir::expression::Expression::BinaryOp {
+                lhs: Box::new(factorio_ir::expression::Expression::FieldAccess {
+                    base: Box::new(factorio_ir::expression::Expression::Identifier(tmp)),
+                    field: "err".to_string(),
+                }),
+                op: factorio_ir::operator::Operator::Ne,
+                rhs: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            },
+            then_block: inner,
+            else_block,
+        },
+    ]
+}
+
+/// Extract binding kind + name from `Some(x)` / `Ok(x)` / `Err(x)` / plain `x`.
+fn extract_let_pattern(pat: &Pat) -> Option<(LetPatKind, String)> {
     match pat {
-        // `if let Some(x) = ...`
         Pat::TupleStruct(ts) => {
             let last = ts.path.segments.last()?;
-            if last.ident != "Some" {
-                return None;
-            }
+            let kind = match last.ident.to_string().as_str() {
+                "Some" => LetPatKind::OptionSome,
+                "Ok" => LetPatKind::ResultOk,
+                "Err" => LetPatKind::ResultErr,
+                _ => return None,
+            };
             let inner = ts.elems.first()?;
-            extract_plain_binding(inner)
+            Some((kind, extract_plain_binding(inner)?))
         }
-        // `if let x = ...` (plain binding without wrapper)
-        other => extract_plain_binding(other),
+        other => Some((LetPatKind::OptionSome, extract_plain_binding(other)?)),
     }
 }
 
@@ -565,13 +686,13 @@ fn lower_match_statements(
     self_type: Option<&str>,
 ) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
     let tmp = match_tmp_name(match_expr);
-    let scrutinee = lower_expression(&match_expr.expr, ctx, self_type)?;
-    let mut stmts = vec![factorio_ir::statement::Statement::VariableDecl {
+    let (mut stmts, scrutinee) = lower_expr(&match_expr.expr, ctx, self_type)?;
+    stmts.push(factorio_ir::statement::Statement::VariableDecl {
         name: tmp.clone(),
         ty: factorio_ir::r#type::Type::Void,
         source_type: None,
         value: scrutinee,
-    }];
+    });
     stmts.extend(fold_match_arms(
         &tmp,
         &match_expr.arms,
@@ -583,6 +704,9 @@ fn lower_match_statements(
 }
 
 /// Lower `match` as a value: `(function() ... end)()`.
+///
+/// Any `?` in the scrutinee leaves hoists on `ctx` for the enclosing statement
+/// (so `match foo()? { ... }` propagates from the outer function, not the IIFE).
 pub fn lower_match_expression(
     match_expr: &ExprMatch,
     ctx: &mut LowerContext<'_>,
@@ -704,13 +828,15 @@ fn lower_match_arm_body(
     match mode {
         MatchArmMode::Statement => match body {
             Expr::Block(block) => lower_block_statements(&block.block.stmts, ctx, self_type),
-            other => Ok(vec![lower_semicolon_expression(other, ctx, self_type)?]),
+            other => lower_semicolon_statements(other, ctx, self_type),
         },
         MatchArmMode::Value => match body {
             Expr::Block(block) => Ok(lower_block(&block.block, ctx, self_type)?.statements),
-            other => Ok(vec![factorio_ir::statement::Statement::Return(Some(
-                lower_expression(other, ctx, self_type)?,
-            ))]),
+            other => {
+                let (mut stmts, value) = lower_expr(other, ctx, self_type)?;
+                stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+                Ok(stmts)
+            }
         },
     }
 }
@@ -760,6 +886,33 @@ fn lower_match_pattern(
                 Some(and_conditions(ne_nil(scrutinee.clone()), inner_cond)),
                 inner_binds,
             ))
+        }
+        Pat::TupleStruct(ts) if is_ok_path(&ts.path) => {
+            let inner = ts.elems.first().ok_or_else(|| FrontendError::UnsupportedExpression {
+                location: location(pat).with_note("Ok(...) pattern requires one binding"),
+            })?;
+            let ok_field = factorio_ir::expression::Expression::FieldAccess {
+                base: Box::new(scrutinee.clone()),
+                field: "ok".to_string(),
+            };
+            let (inner_cond, inner_binds) = lower_match_pattern(inner, &ok_field)?;
+            let is_ok = eq_nil(factorio_ir::expression::Expression::FieldAccess {
+                base: Box::new(scrutinee.clone()),
+                field: "err".to_string(),
+            });
+            Ok((Some(and_conditions(is_ok, inner_cond)), inner_binds))
+        }
+        Pat::TupleStruct(ts) if is_err_path(&ts.path) => {
+            let inner = ts.elems.first().ok_or_else(|| FrontendError::UnsupportedExpression {
+                location: location(pat).with_note("Err(...) pattern requires one binding"),
+            })?;
+            let err_field = factorio_ir::expression::Expression::FieldAccess {
+                base: Box::new(scrutinee.clone()),
+                field: "err".to_string(),
+            };
+            let (inner_cond, inner_binds) = lower_match_pattern(inner, &err_field)?;
+            let is_err = ne_nil(err_field);
+            Ok((Some(and_conditions(is_err, inner_cond)), inner_binds))
         }
         Pat::Struct(struct_pat) => lower_struct_pattern(struct_pat, scrutinee),
         Pat::Or(or_pat) => lower_nested_or_pattern(or_pat, scrutinee),
@@ -939,6 +1092,14 @@ fn is_some_path(path: &syn::Path) -> bool {
     path.segments
         .last()
         .is_some_and(|seg| seg.ident == "Some")
+}
+
+fn is_ok_path(path: &syn::Path) -> bool {
+    path.segments.last().is_some_and(|seg| seg.ident == "Ok")
+}
+
+fn is_err_path(path: &syn::Path) -> bool {
+    path.segments.last().is_some_and(|seg| seg.ident == "Err")
 }
 
 fn match_tmp_name(match_expr: &ExprMatch) -> String {

@@ -6,10 +6,12 @@ description: What Rust syntax and patterns factorio-rs can transpile to Lua.
 factorio-rs does **not** implement a full Rust dialect. It lowers a Factorio-oriented subset of Rust into Lua. `cargo check` still type-checks against the SDK stubs;
 `factorio-rs build` only accepts constructs the frontend knows how to lower.
 
-This page is the inventory of that surface.
+This page is the inventory of that surface. For **`Option` / `Result` / `?`**
+in depth, see [Option and Result](option-and-result/).
 
 Lua has no enums, traits, or borrow checker. Option-like values are usually
-**value or `nil`**. Tables stand in for structs, arrays, and maps.
+**value or `nil`**; Results are tagged `{ ok }` / `{ err }` tables. Tables also
+stand in for structs, arrays, and maps.
 
 ## Top-level items
 
@@ -76,48 +78,34 @@ let n = match flag {
 ```
 
 Supported patterns: `_`, literals, `None` / `Option::None`, `Some(...)` (nested
-patterns ok), struct patterns (`Foo { a, b: 0, .. }`), or-patterns (`A | B`),
-plain bindings, and `if` guards. Guards that fail fall through to later arms.
-Struct patterns only destructure fields (no runtime type tag). Top-level
-`A | B => body` expands to nested arms so each alternative can bind differently;
-nested ors require identical bindings.
+patterns ok), `Ok(...)` / `Err(...)`, struct patterns (`Foo { a, b: 0, .. }`),
+or-patterns (`A | B`), plain bindings, and `if` guards. Guards that fail fall
+through to later arms. Struct patterns only destructure fields (no runtime type
+tag). Top-level `A | B => body` expands to nested arms so each alternative can
+bind differently; nested ors require identical bindings.
 
 Statement-position `match` becomes a temp plus nested `if`/`else`. Value-position
 `match` (including tail expressions and `let x = match ...`) becomes an IIFE.
 
-### `if let` and `Option`
+### `if let`, `Option`, and `Result`
+
+Factorio APIs are full of missing values and fallible helpers. Prefer Rust
+`Option` / `Result` at the source; the transpile maps them to nil and tagged
+tables.
 
 ```rust
 if let Some(player) = game.get_player(index.into()) {
-    // player is the Lua value; only `nil` skips the body
+    // ...
 }
 
-if let Some(flag) = maybe_bool {
-    // `Some(false)` still enters - condition is `flag ~= nil`, not truthiness
+fn load(name: &str) -> Result<i32, String> {
+    let n = parse(name)?;
+    Ok(n + 1)
 }
 ```
 
-`get_player` takes [`IndexOrName`](api-types/) (`u32` or `&str` via `.into()`).
-There is no real `Option` wrapper in Lua. `None` becomes `nil`, and `Some(x)` is
-transparent so stub APIs typed as `Option<T>` still type-check in Rust.
-
-`if let Some(x) = e` lowers to `local x = e` then `if x ~= nil then`, so
-`Some(false)` and `Some(0)` both enter the body. Plain `if cond { }` still uses
-Lua truthiness (`nil` / `false` are falsey; `0` and `""` are truthy).
-
-**Option methods** (nil-aware):
-
-| Rust | Lua |
-| --- | --- |
-| `x.is_some()` | `x ~= nil` |
-| `x.is_none()` | `x == nil` |
-| `x.unwrap_or(d)` / `x.or(d)` | safe if-expr: `x` if present else `d` |
-| `x.and(y)` | `y` if `x` present else `nil` |
-| `x.map(f)` / `x.and_then(f)` | if present, call `f(x)`, else `nil` |
-| `x.unwrap_or_else(f)` / `x.or_else(f)` | if present `x`, else `f()` |
-| `x.filter(p)` | keep `x` when present and `p(x)`, else `nil` |
-
-`.unwrap()` / `.expect(...)` still strip to the receiver and lint (no nil check).
+Full reference (Lua representation, methods, `?`, traps):
+[Option and Result](option-and-result/).
 
 ### Closures
 
@@ -143,6 +131,8 @@ value.
 | Literals                            | `i64`/`f64`/string/`bool`                                      |
 | `None`                              | -> `nil`                                                       |
 | `Some(x)` / `Option::Some(x)`       | -> `x` (for typed `Option` stub params)                        |
+| `Ok(v)` / `Err(e)`                  | -> `{ ok = v }` / `{ err = e }` — [Option and Result](option-and-result/) |
+| `expr?`                             | Result early-return — [Option and Result](option-and-result/) |
 | Paths / fields / calls / methods    | Including `crate::` (auto-require)                             |
 | Named struct literals               | -> Lua tables                                                  |
 | `[a, b]`                            | -> `{ a, b }`                                                  |
@@ -164,9 +154,8 @@ value.
 `.unwrap()` and `.expect("...")` are also stripped to the receiver, but emit
 lints `unwrap` / `expect` (default **deny**; see [Lints](lints/)).
 
-**Option methods** (nil-aware): `is_some` / `is_none` / `unwrap_or` / `or` /
-`and` / `map` / `and_then` / `unwrap_or_else` / `or_else` / `filter` — see
-[`if let` and `Option`](#if-let-and-option).
+**Option / Result helpers** (`is_some`, `ok_or`, `?`, `map`, ...): see
+[Option and Result](option-and-result/).
 
 **Special method lowering:**
 
@@ -293,7 +282,8 @@ or fails the build with a lint code. Full reference: [Lints](lints/).
 
 | Trap | What happens | Fix |
 | --- | --- | --- |
-| `.unwrap()` / `.expect(...)` | Stripped; no nil check | `if let Some(x) = ...` (or allow lint) |
+| `.unwrap()` / `.expect(...)` | Stripped; no nil/Err check | `if let` / `?` / `ok_or` — [Option and Result](option-and-result/) |
+| `if opt { ... }` on an Option | `Some(false)` skipped | `if let Some(...)` or `is_some()` |
 | `arr[i]` with variable `i` | Not +1 for Lua | Use a 1-based index, or literal indices |
 | `{:.2}` / other format specs | Ignored output | Use `{}` / `{:?}` only |
 | `ForceID::Name(...)` etc. | Not a real Lua ctor | `"enemy".into()` / `force.into()` |
@@ -315,6 +305,7 @@ or fails the build with a lint code. Full reference: [Lints](lints/).
 
 ## See also
 
+- [Option and Result](option-and-result/) - nil, `{ ok }` / `{ err }`, `?`, methods
 - [mandatory_spaghetti](../examples/mandatory-spaghetti/) - settings, locale,
   `Vec`, `for`, `while`, `loop`, `match`, `continue`, `break`, `..Default::default()`, let-chains
 - [locale_test](../examples/locale-test/) - console command + localized greetings

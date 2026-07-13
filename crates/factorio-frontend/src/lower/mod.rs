@@ -200,6 +200,8 @@ fn lower_items(
         binding_types: std::collections::HashMap::new(),
         lints,
         diagnostics,
+        try_hoists: Vec::new(),
+        try_tmp_counter: 0,
     };
     let mut module_state = ModuleLowerState {
         module_name,

@@ -27,6 +27,12 @@ pub struct LowerContext<'a> {
     /// Collected warn/deny diagnostics (allow is skipped). Deny no longer aborts
     /// lowering so multiple findings can be reported together.
     pub diagnostics: &'a mut Vec<Diagnostic>,
+    /// Statements hoisted by `?` (`local __try_N = ...; if __try_N.err ~= nil then return __try_N end`).
+    /// Callers of [`lower_expression`](super::expressions::lower_expression) must
+    /// drain these with [`Self::take_try_hoists_from`] immediately after.
+    pub try_hoists: Vec<factorio_ir::statement::Statement>,
+    /// Monotonic counter for `__try_N` temporaries.
+    pub try_tmp_counter: usize,
 }
 
 impl LowerContext<'_> {
@@ -56,6 +62,22 @@ impl LowerContext<'_> {
     #[must_use]
     pub fn binding_type(&self, name: &str) -> Option<&str> {
         self.binding_types.get(name).map(String::as_str)
+    }
+
+    /// Snapshot length before lowering an expression that may emit `?` hoists.
+    #[must_use]
+    pub const fn try_hoist_mark(&self) -> usize {
+        self.try_hoists.len()
+    }
+
+    /// Drain hoist statements pushed since `mark`.
+    pub fn take_try_hoists_from(&mut self, mark: usize) -> Vec<factorio_ir::statement::Statement> {
+        self.try_hoists.split_off(mark)
+    }
+
+    pub fn alloc_try_tmp(&mut self) -> String {
+        self.try_tmp_counter += 1;
+        format!("__try_{}", self.try_tmp_counter)
     }
 
     /// Compute the Lua local name for a module path, with the configured prefix.

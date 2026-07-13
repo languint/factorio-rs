@@ -42,6 +42,9 @@ The **CLI** lowers these calls by default (`factorio-rs-cli` feature `serde`).
 
 Binary uses Lua’s size-prefixed `"s"` format on Factorio’s `string.pack` /
 `unpack`. Prefer `.unwrap()` / `.expect(...)` on `Result` so types match real
+serde usage under `cargo check` — the transpile strips those calls (and may
+lint). For fallible gameplay code prefer `?` / `if let Ok` — see
+[Option and Result](option-and-result/).
 `serde_json`.
 
 `#[derive(Serialize, Deserialize)]` is **typecheck-only** - the transpiler

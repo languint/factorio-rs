@@ -140,5 +140,6 @@ Enable `factorio-rs` feature `serde`. Calls lower to `helpers.table_to_json` /
 ## See also
 
 - [Language support](language/)
+- [Option and Result](option-and-result/) - optional fields and fallible helpers
 - [mandatory_spaghetti](../examples/mandatory-spaghetti/) - typed filters and
   `ScriptRenderTarget`
