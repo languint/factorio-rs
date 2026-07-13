@@ -110,7 +110,7 @@ argument; only the formatting intent is lost.
 ### `variable_index` (`E0004`)
 
 Rust arrays are 0-based; Factorio Lua tables are 1-based. factorio-rs shifts
-**integer literal** indices (`arr[0]` → `arr[1]`). A **variable** index is
+**integer literal** indices (`arr[0]` -> `arr[1]`). A **variable** index is
 passed through unchanged, so `arr[i]` with a 0-based `i` reads the wrong slot
 (or `nil`).
 

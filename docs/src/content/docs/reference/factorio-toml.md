@@ -58,7 +58,7 @@ See [Profiles](../guides/profiles/).
 Transpile-time safety checks. Full guide: [Lints](../guides/lints/).
 
 Each key is a lint **identifier**; the value is `allow`, `warn`, or `deny`.
-Unspecified lints use their defaults (`deny`, except `format_spec` → `warn`).
+Unspecified lints use their defaults (`deny`, except `format_spec` -> `warn`).
 
 | Identifier | Code | Default | Meaning |
 | --- | --- | --- | --- |

@@ -239,6 +239,7 @@ fn collect_references_from_field_access(
 }
 
 /// Walk an expression tree and enqueue every referenced function, struct, or member.
+#[allow(clippy::too_many_lines)]
 pub fn collect_references_from_expression(
     graph: &ModuleGraph<'_>,
     module: &Module,
@@ -380,6 +381,17 @@ pub fn collect_references_from_expression(
                 module,
                 else_expr,
                 locals,
+                reachability,
+                pending,
+            );
+        }
+        Expression::Closure { body, .. } => {
+            let mut closure_locals = locals.clone();
+            collect_references_from_block(
+                graph,
+                module,
+                body,
+                &mut closure_locals,
                 reachability,
                 pending,
             );

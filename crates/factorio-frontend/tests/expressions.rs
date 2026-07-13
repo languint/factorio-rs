@@ -625,31 +625,130 @@ pub fn check(x: Option<i32>, y: Option<i32>) -> i32 {
 }
 
 #[test]
-fn rejects_option_map_and_unwrap_or_else() {
+fn lowers_option_map_and_unwrap_or_else() {
     let source = r"
-pub fn bad(x: Option<i32>) -> Option<i32> {
+pub fn mapped(x: Option<i32>) -> Option<i32> {
     x.map(|n| n + 1)
 }
 ";
-    let err = parse_module(source, "control.option_methods").expect_err("map unsupported");
-    let msg = err.to_string();
-    assert!(msg.contains("map"), "got {msg}");
-    assert!(
-        matches!(err, factorio_frontend::FrontendError::UnsupportedOptionMethod { .. }),
-        "got {err:?}"
-    );
+    let module = must_ok_parse(parse_module(source, "control.option_methods"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        panic!("expected function");
+    };
+    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
+        panic!("expected return");
+    };
+    let Expression::If {
+        condition,
+        then_expr,
+        else_expr,
+    } = expr
+    else {
+        panic!("expected If, got {expr:?}");
+    };
+    assert_eq!(condition.as_ref(), &ne_nil_ident("x"));
+    assert!(matches!(then_expr.as_ref(), Expression::Call { .. }));
+    assert_eq!(else_expr.as_ref(), &Expression::Literal(Literal::Nil));
 
     let source = r"
-pub fn bad(x: Option<i32>) -> i32 {
+pub fn or_else(x: Option<i32>) -> i32 {
     x.unwrap_or_else(|| 0)
 }
 ";
-    let err =
-        parse_module(source, "control.option_methods").expect_err("unwrap_or_else unsupported");
+    let module = must_ok_parse(parse_module(source, "control.option_methods"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        panic!("expected function");
+    };
+    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
+        panic!("expected return");
+    };
+    let Expression::If {
+        then_expr,
+        else_expr,
+        ..
+    } = expr
+    else {
+        panic!("expected If");
+    };
+    assert_eq!(then_expr.as_ref(), &Expression::Identifier("x".to_string()));
+    assert!(matches!(
+        else_expr.as_ref(),
+        Expression::Call { args, .. } if args.is_empty()
+    ));
+}
+
+#[test]
+fn lowers_option_filter() {
+    let source = r"
+pub fn keep(x: Option<i32>) -> Option<i32> {
+    x.filter(|n| n > 0)
+}
+";
+    let module = must_ok_parse(parse_module(source, "control.option_methods"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        panic!("expected function");
+    };
+    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
+        panic!("expected return");
+    };
+    assert!(matches!(expr, Expression::If { .. }));
+}
+
+#[test]
+fn lowers_closures_expr_and_block() {
+    let source = r"
+pub fn make() {
+    let f = |n| n + 1;
+    let g = |n| {
+        let m = n + 1;
+        m
+    };
+}
+";
+    let module = must_ok_parse(parse_module(source, "control.closures"));
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        panic!("expected function");
+    };
+    let Statement::VariableDecl { value: f, .. } = &function.body.statements[0] else {
+        panic!("expected f");
+    };
+    let Expression::Closure { params, body } = f else {
+        panic!("expected closure, got {f:?}");
+    };
+    assert_eq!(params, &["n".to_string()]);
+    assert!(matches!(
+        body.statements.as_slice(),
+        [Statement::Return(Some(Expression::BinaryOp { .. }))]
+    ));
+
+    let Statement::VariableDecl { value: g, .. } = &function.body.statements[1] else {
+        panic!("expected g");
+    };
+    let Expression::Closure { body, .. } = g else {
+        panic!("expected block closure");
+    };
+    assert!(body.statements.len() >= 2);
+}
+
+#[test]
+fn rejects_async_and_tuple_closure_params() {
+    let source = r"
+pub fn bad() {
+    let _f = async || 1;
+}
+";
+    let err = parse_module(source, "control.closures").expect_err("async");
+    assert!(err.to_string().contains("unsupported") || err.to_string().contains("async"), "{err}");
+
+    let source = r"
+pub fn bad() {
+    let _f = |(a, b)| a + b;
+}
+";
+    let err = parse_module(source, "control.closures").expect_err("tuple param");
     let msg = err.to_string();
-    assert!(msg.contains("unwrap_or_else"), "got {msg}");
     assert!(
-        matches!(err, factorio_frontend::FrontendError::UnsupportedOptionMethod { .. }),
-        "got {err:?}"
+        msg.contains("plain identifiers") || msg.contains("unsupported"),
+        "{msg}"
     );
 }

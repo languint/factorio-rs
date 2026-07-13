@@ -110,6 +110,23 @@ impl LuaGenerator {
         matches!(self.debug_level, Some(current) if current >= level)
     }
 
+    /// Clone generator state into a scratch buffer for emitting nested expression forms
+    /// (e.g. closures) without touching the primary output.
+    fn fork_expr_emitter(&self) -> Self {
+        Self {
+            output: String::new(),
+            indent_level: 0,
+            struct_table_context: self.struct_table_context.clone(),
+            debug_level: self.debug_level,
+            mod_name: self.mod_name.clone(),
+            for_depth: 0,
+            module_prefix: self.module_prefix.clone(),
+            profile: self.profile.clone(),
+            exported_functions: self.exported_functions.clone(),
+            current_module_table: self.current_module_table.clone(),
+        }
+    }
+
     pub const INDENT: &'static str = "\t";
 
     /// Returns a string indented to [`LuaGenerator::indent_level`].

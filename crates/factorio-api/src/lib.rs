@@ -154,23 +154,32 @@ impl<A, B, C, D, R> From<fn(A, B, C, D) -> R> for LuaFunction {
     }
 }
 
-/// Coerce a Rust `fn` item to [`LuaFunction`] for APIs like `commands.add_command`.
+/// Coerce a Rust `fn` item or closure to [`LuaFunction`].
 ///
-/// Fn item types do not implement `From`/`Into` for [`LuaFunction`] directly; this
-/// helper's `fn(...)` parameter is a coercion site.
+/// Prefer this for closures (`lua_fn(|e| { ... })`). Fn items also implement
+/// [`From`] for [`LuaFunction`] directly for common arities.
 #[must_use]
-pub fn lua_fn<A, R>(f: fn(A) -> R) -> LuaFunction {
-    f.into()
+pub fn lua_fn<F, A, R>(_f: F) -> LuaFunction
+where
+    F: Fn(A) -> R,
+{
+    LuaFunction
 }
 
 #[must_use]
-pub fn lua_fn0<R>(f: fn() -> R) -> LuaFunction {
-    f.into()
+pub fn lua_fn0<F, R>(_f: F) -> LuaFunction
+where
+    F: Fn() -> R,
+{
+    LuaFunction
 }
 
 #[must_use]
-pub fn lua_fn2<A, B, R>(f: fn(A, B) -> R) -> LuaFunction {
-    f.into()
+pub fn lua_fn2<F, A, B, R>(_f: F) -> LuaFunction
+where
+    F: Fn(A, B) -> R,
+{
+    LuaFunction
 }
 
 pub trait IntoOptionalLuaFunction {

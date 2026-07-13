@@ -104,6 +104,42 @@ fn generates_unwrap_or_preserving_falsey_some() {
     );
 }
 
+#[test]
+fn generates_closure_and_option_map() {
+    use factorio_ir::block::Block;
+    use factorio_ir::operator::Operator;
+
+    let closure = Expression::Closure {
+        params: vec!["n".to_string()],
+        body: Block {
+            statements: vec![Statement::Return(Some(Expression::BinaryOp {
+                lhs: Box::new(Expression::Identifier("n".to_string())),
+                op: Operator::Add,
+                rhs: Box::new(Expression::Literal(Literal::Int(1))),
+            }))],
+        },
+    };
+    let lua = LuaGenerator::new().generate_expression(&closure);
+    assert_eq!(lua, "function(n) return n + 1 end");
+
+    let map = Expression::If {
+        condition: Box::new(Expression::BinaryOp {
+            lhs: Box::new(Expression::Identifier("x".to_string())),
+            op: Operator::Ne,
+            rhs: Box::new(Expression::Literal(Literal::Nil)),
+        }),
+        then_expr: Box::new(Expression::Call {
+            func: Box::new(closure),
+            args: vec![Expression::Identifier("x".to_string())],
+        }),
+        else_expr: Box::new(Expression::Literal(Literal::Nil)),
+    };
+    let lua = LuaGenerator::new().generate_expression(&map);
+    assert!(lua.contains("x ~= nil"), "{lua}");
+    assert!(lua.contains("function(n) return n + 1 end"), "{lua}");
+    assert!(lua.contains("(function(n) return n + 1 end)(x)") || lua.contains("return (function"), "{lua}");
+}
+
 
 #[test]
 fn omits_nil_fields_from_struct_literals() {

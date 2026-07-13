@@ -1,4 +1,4 @@
-use crate::{literal::Literal, operator::Operator};
+use crate::{block::Block, literal::Literal, operator::Operator};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
@@ -54,5 +54,10 @@ pub enum Expression {
         condition: Box<Self>,
         then_expr: Box<Self>,
         else_expr: Box<Self>,
+    },
+    /// Anonymous Lua function value (`function(params) ... end`).
+    Closure {
+        params: Vec<String>,
+        body: Block,
     },
 }

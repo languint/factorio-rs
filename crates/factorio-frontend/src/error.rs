@@ -14,11 +14,6 @@ pub enum FrontendError {
     #[error("unsupported expression at {location}")]
     UnsupportedExpression { location: SourceLoc },
 
-    #[error(
-        "Option method `{method}` is not supported (closures are not lowered); use `if let Some(...)` or `.is_some()` / `.unwrap_or(...)` at {location}"
-    )]
-    UnsupportedOptionMethod { method: String, location: SourceLoc },
-
     #[error("unsupported type `{ty}` at {location}")]
     UnsupportedType { ty: String, location: SourceLoc },
 
@@ -85,7 +80,6 @@ impl FrontendError {
             Self::UnsupportedItem { location, .. }
             | Self::UnsupportedStatement { location }
             | Self::UnsupportedExpression { location }
-            | Self::UnsupportedOptionMethod { location, .. }
             | Self::UnsupportedType { location, .. }
             | Self::UnsupportedOperator { location }
             | Self::ExpectedIdentifierPattern { location }
@@ -117,9 +111,6 @@ impl FrontendError {
                 .map_or_else(|| "unsupported expression".to_string(), |n| {
                     format!("unsupported expression ({n})")
                 }),
-            Self::UnsupportedOptionMethod { method, .. } => format!(
-                "Option method `{method}` is not supported; use `if let Some(...)` or `.is_some()` / `.unwrap_or(...)`"
-            ),
             Self::UnsupportedType { ty, .. } => format!("unsupported type `{ty}`"),
             Self::UnsupportedOperator { .. } => "unsupported operator".to_string(),
             Self::ExpectedIdentifierPattern { .. } => {

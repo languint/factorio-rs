@@ -3,8 +3,8 @@ use syn::{BinOp, Expr, ExprBinary, ExprLit, ExprPath, Lit, Member, UnOp};
 use crate::error::{FrontendError, FrontendResult};
 
 use super::{
-    context::LowerContext, print::lower_macro_expression, serde_json::serde_json_path_name,
-    util::location,
+    context::LowerContext, functions::lower_closure, print::lower_macro_expression,
+    serde_json::serde_json_path_name, util::location,
 };
 
 #[cfg(feature = "serde")]
@@ -107,6 +107,7 @@ pub fn lower_expression(
         // `if cond { a } else { b }` as an expression -> safe Lua if/else (not `and`/`or`).
         Expr::If(if_expr) => lower_if_expr(if_expr, ctx, self_type),
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
+        Expr::Closure(closure) => lower_closure(closure, ctx, self_type),
         other => Err(FrontendError::UnsupportedExpression {
             location: location(expression).with_note(expr_kind_name(other)),
         }),
@@ -208,7 +209,7 @@ fn lower_call_expression(
     })
 }
 
-/// `ForceID::Name(...)` / `concepts::ForceID::Name(...)` → type name when Identification.
+/// `ForceID::Name(...)` / `concepts::ForceID::Name(...)` -> type name when Identification.
 fn identification_ctor_type(func: &Expr) -> Option<String> {
     let Expr::Path(path) = func else {
         return None;
@@ -274,8 +275,6 @@ fn lower_method_call(
         "to_string",
         "to_owned",
     ];
-    const UNSUPPORTED_OPTION_CLOSURE_METHODS: &[&str] =
-        &["unwrap_or_else", "map", "and_then", "or_else", "filter"];
     let method = call.method.to_string();
     if method == "unwrap" && call.args.is_empty() {
         ctx.emit_lint(
@@ -296,12 +295,6 @@ fn lower_method_call(
     if TRANSPARENT_METHODS.contains(&method.as_str()) && call.args.is_empty() {
         return lower_expression(&call.receiver, ctx, self_type);
     }
-    if UNSUPPORTED_OPTION_CLOSURE_METHODS.contains(&method.as_str()) {
-        return Err(FrontendError::UnsupportedOptionMethod {
-            method,
-            location: location(call),
-        });
-    }
 
     if let Some(expr) = lower_option_method(call, ctx, self_type)? {
         return Ok(expr);
@@ -320,8 +313,7 @@ fn lower_method_call(
     })
 }
 
-/// Nil-aware Option helpers (`is_some` / `unwrap_or` / ...). Returns `Ok(None)` when
-/// the method is not an Option special.
+/// Nil-aware Option helpers. Returns `Ok(None)` when the method is not an Option special.
 fn lower_option_method(
     call: &syn::ExprMethodCall,
     ctx: &mut LowerContext<'_>,
@@ -352,6 +344,53 @@ fn lower_option_method(
             Ok(Some(factorio_ir::expression::Expression::If {
                 condition: Box::new(ne_nil(receiver)),
                 then_expr: Box::new(other),
+                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            }))
+        }
+        "map" | "and_then" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(factorio_ir::expression::Expression::If {
+                condition: Box::new(ne_nil(receiver.clone())),
+                then_expr: Box::new(factorio_ir::expression::Expression::Call {
+                    func: Box::new(func),
+                    args: vec![receiver],
+                }),
+                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            }))
+        }
+        "unwrap_or_else" | "or_else" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let func = lower_expression(&call.args[0], ctx, self_type)?;
+            Ok(Some(factorio_ir::expression::Expression::If {
+                condition: Box::new(ne_nil(receiver.clone())),
+                then_expr: Box::new(receiver),
+                else_expr: Box::new(factorio_ir::expression::Expression::Call {
+                    func: Box::new(func),
+                    args: vec![],
+                }),
+            }))
+        }
+        "filter" if call.args.len() == 1 => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            let pred = lower_expression(&call.args[0], ctx, self_type)?;
+            let keep = factorio_ir::expression::Expression::If {
+                condition: Box::new(factorio_ir::expression::Expression::Call {
+                    func: Box::new(pred),
+                    args: vec![receiver.clone()],
+                }),
+                then_expr: Box::new(receiver.clone()),
+                else_expr: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Nil,
+                )),
+            };
+            Ok(Some(factorio_ir::expression::Expression::If {
+                condition: Box::new(ne_nil(receiver)),
+                then_expr: Box::new(keep),
                 else_expr: Box::new(factorio_ir::expression::Expression::Literal(
                     factorio_ir::literal::Literal::Nil,
                 )),

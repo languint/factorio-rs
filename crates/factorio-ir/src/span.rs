@@ -19,7 +19,7 @@ impl SourceSpan {
     }
 
     #[must_use]
-    pub fn range(self) -> Range<usize> {
+    pub const fn range(self) -> Range<usize> {
         self.start..self.end
     }
 }

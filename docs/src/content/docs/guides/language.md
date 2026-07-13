@@ -81,10 +81,28 @@ Lua truthiness (`nil` / `false` are falsey; `0` and `""` are truthy).
 | `x.is_none()` | `x == nil` |
 | `x.unwrap_or(d)` / `x.or(d)` | safe if-expr: `x` if present else `d` |
 | `x.and(y)` | `y` if `x` present else `nil` |
+| `x.map(f)` / `x.and_then(f)` | if present, call `f(x)`, else `nil` |
+| `x.unwrap_or_else(f)` / `x.or_else(f)` | if present `x`, else `f()` |
+| `x.filter(p)` | keep `x` when present and `p(x)`, else `nil` |
 
 `.unwrap()` / `.expect(...)` still strip to the receiver and lint (no nil check).
-Closure-taking methods (`map`, `and_then`, `unwrap_or_else`, ...) are unsupported -
-use `if let Some` instead.
+
+### Closures
+
+```rust
+let double = |n| n * 2;
+let y = x.map(|n| n + 1);
+table.sort(list, lua_fn2(|a, b| a < b));
+```
+
+Closures lower to Lua `function(...) ... end`. Outer locals are captured as Lua
+upvalues (`move` is ignored). Params must be plain identifiers (optional types
+ok: `|x: i32|`). Async closures are rejected.
+
+For Factorio callback APIs typed as `LuaFunction`, wrap closures with
+`lua_fn` / `lua_fn0` / `lua_fn2` so `cargo check` accepts them (fn items can
+still pass directly). The transpile strips `lua_fn(...)` to the inner function
+value.
 
 ## Expressions
 
@@ -101,6 +119,7 @@ use `if let Some` instead.
 | `!` / `-`                           | `not` / unary minus                                            |
 | `+ - * / % == != < <= > >= && \|\|` |                                                                |
 | `if c { a } else { b }`             | Each arm must be a **single** expression; safe Lua `if`/`else` (IIFE) |
+| `\|x\| ...` / `\|x\| { ... }`           | -> Lua `function(x) ... end` (see [Closures](#closures))         |
 | `println!(...)`                     | -> `game.print(...)` with `..` concatenation                   |
 | `format!(...)`                      | -> string via `..` concatenation                               |
 | `tracing::info!` / `warn!` / ...      | -> colored `game.print` (CLI `tracing` feature; default on)    |
@@ -114,8 +133,8 @@ use `if let Some` instead.
 lints `unwrap` / `expect` (default **deny**; see [Lints](lints/)).
 
 **Option methods** (nil-aware): `is_some` / `is_none` / `unwrap_or` / `or` /
-`and` - see [`if let` and `Option`](#if-let-and-option). Closure-taking Option
-methods (`map`, `and_then`, ...) error at transpile time.
+`and` / `map` / `and_then` / `unwrap_or_else` / `or_else` / `filter` — see
+[`if let` and `Option`](#if-let-and-option).
 
 **Special method lowering:**
 
@@ -248,7 +267,6 @@ or fails the build with a lint code. Full reference: [Lints](lints/).
 | `ForceID::Name(...)` etc. | Not a real Lua ctor | `"enemy".into()` / `force.into()` |
 | Trailing `None` args | Omitted from Lua calls | Prefer omit / `None` only for unused tails |
 | `if c { a } else { b }` when `a` is falsey | Was wrong with `and`/`or`; now safe IIFE | Prefer statement `if` for complex arms |
-| `Option.map` / `and_then` / `unwrap_or_else` | Unsupported (no closures) | `if let Some` / `.unwrap_or(value)` |
 | Optional table fields | Typed `Option<T>`; `None` omitted | Set `Some(...)` only for fields you need |
 | Stringly callback names under prune | Prefer fn items / `lua_fn` | Pass the function value, not only a string |
 

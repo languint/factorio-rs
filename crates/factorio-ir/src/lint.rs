@@ -67,9 +67,10 @@ impl LintId {
         match self {
             Self::Unwrap => "use `if let Some(x) = ...` (or set `[lints] unwrap = \"allow\"`)",
             Self::Expect => "use `if let Some(x) = ...` (or set `[lints] expect = \"allow\"`)",
+            #[allow(clippy::literal_string_with_formatting_args)]
             Self::FormatSpec => "only `{}`, `{:?}`, and `{:#?}` are supported when lowering",
             Self::VariableIndex => {
-                "literal indices are shifted `n → n+1`; pass a 1-based index or use a literal"
+                "literal indices are shifted `n -> n+1`; pass a 1-based index or use a literal"
             }
             Self::IdentificationCtor => {
                 "pass a payload with `.into()` instead, e.g. `force.into()` or `\"enemy\".into()`"
@@ -91,7 +92,7 @@ impl LintId {
 
     /// Parse a config key into a lint id.
     #[must_use]
-    pub fn from_str(name: &str) -> Option<Self> {
+    pub fn from_config_str(name: &str) -> Option<Self> {
         Self::all().iter().copied().find(|id| id.as_str() == name)
     }
 }
@@ -164,7 +165,7 @@ impl LintConfig {
         overrides: &BTreeMap<String, LintLevel>,
     ) -> Result<Self, String> {
         for (name, level) in overrides {
-            let Some(id) = LintId::from_str(name) else {
+            let Some(id) = LintId::from_config_str(name) else {
                 let known = LintId::all()
                     .iter()
                     .copied()
@@ -225,7 +226,7 @@ impl Diagnostic {
     }
 
     #[must_use]
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         matches!(self.level, LintLevel::Deny)
     }
 }

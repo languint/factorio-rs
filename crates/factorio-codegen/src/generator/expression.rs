@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use factorio_ir::expression::Expression;
 
 use crate::LuaGenerator;
@@ -99,6 +101,7 @@ impl LuaGenerator {
                 then_expr,
                 else_expr,
             } => self.generate_if_expr(condition, then_expr, else_expr),
+            Expression::Closure { params, body } => self.generate_closure(params, body),
             Expression::BinaryOp { .. } => {
                 unreachable!("binary operators are handled by generate_expression_prec")
             }
@@ -152,9 +155,14 @@ impl LuaGenerator {
             }
         }
 
+        let func_is_closure = matches!(func, Expression::Closure { .. });
         let func = self.generate_expression(func);
         let args = self.generate_arg_list(args);
-        format!("{func}({args})")
+        if func_is_closure {
+            format!("({func})({args})")
+        } else {
+            format!("{func}({args})")
+        }
     }
 
     fn generate_method_call(
@@ -303,6 +311,28 @@ impl LuaGenerator {
         format!(
             "(function() if {condition} then return {then_expr} else return {else_expr} end end)()"
         )
+    }
+
+    fn generate_closure(&self, params: &[String], body: &factorio_ir::block::Block) -> String {
+        let params = params.join(", ");
+        // Single-statement `return expr` -> compact one-liner.
+        if let [factorio_ir::statement::Statement::Return(Some(expr))] = body.statements.as_slice()
+        {
+            let expr = self.generate_expression(expr);
+            return format!("function({params}) return {expr} end");
+        }
+
+        let mut temp = self.fork_expr_emitter();
+        let _ = writeln!(temp.output, "function({params})");
+        temp.indent_level = 1;
+        let _ = temp.generate_block(body, None);
+        temp.indent_level = 0;
+        temp.write_line("end");
+        // Drop the trailing newline so call-sites can append `)` cleanly.
+        while temp.output.ends_with('\n') {
+            temp.output.pop();
+        }
+        temp.output
     }
 }
 

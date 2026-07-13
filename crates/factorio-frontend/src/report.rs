@@ -27,7 +27,7 @@ fn report_config() -> Config {
         .with_label_attach(LabelAttach::Start)
 }
 
-fn paint_header<'a>(text: &'a str, color: Color) -> Painted<&'a str> {
+fn paint_header(text: &str, color: Color) -> Painted<&str> {
     if color_enabled() {
         text.bold().fg(color)
     } else {
