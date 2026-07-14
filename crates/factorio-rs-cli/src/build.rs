@@ -17,6 +17,7 @@ use crate::{
         StageModules, collect_event_registrations, collect_remote_exports, collect_shared_consts,
         collect_shared_exports, collect_stage_module, write_mod_manifests,
     },
+    typecheck,
 };
 
 /// Options that select how a project is transpiled.
@@ -26,6 +27,8 @@ pub struct BuildOptions {
     pub profile: String,
     /// Optional CLI override for the profile's debug comment level.
     pub debug_level: Option<u8>,
+    /// When true, skip `cargo check` (escape hatch).
+    pub skip_typecheck: bool,
 }
 
 impl BuildOptions {
@@ -34,6 +37,7 @@ impl BuildOptions {
         Self {
             profile: profile.into(),
             debug_level: None,
+            skip_typecheck: false,
         }
     }
 
@@ -42,10 +46,32 @@ impl BuildOptions {
         self.debug_level = debug_level;
         self
     }
+
+    #[must_use]
+    pub const fn with_skip_typecheck(mut self, skip_typecheck: bool) -> Self {
+        self.skip_typecheck = skip_typecheck;
+        self
+    }
+}
+
+/// Typecheck with rustc (`cargo check`) then lower sources without writing output.
+///
+/// # Errors
+/// Propagates typecheck, parse, lint, and unsupported-syntax failures.
+pub fn check(project_root: &Path, options: &BuildOptions) -> CliResult<()> {
+    if !options.skip_typecheck {
+        typecheck::cargo_check(project_root)?;
+    }
+    let _ = lower_project(project_root)?;
+    Ok(())
 }
 
 /// Transpile Rust sources to a loadable Factorio mod directory.
 pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathBuf>> {
+    if !options.skip_typecheck {
+        typecheck::cargo_check(project_root)?;
+    }
+
     let config = Config::load(project_root)?;
     let mut profile = config.resolve_profile(&options.profile);
     if let Some(level) = options.debug_level {
@@ -58,18 +84,11 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
         .values()
         .flat_map(|binding| binding.dependencies.iter().cloned())
         .collect();
-    let source_dir = project_root.join(&config.source);
     let output_dir = project_root.join(&config.output_dir);
     let lua_dir = output_dir.join("lua");
     let mut outputs = Vec::new();
-    if !source_dir.is_dir() {
-        return Err(CliError::NotFound { path: source_dir });
-    }
 
-    let sources = collect_rust_sources(&source_dir)?;
-    if sources.is_empty() {
-        return Err(CliError::NoSourceFiles { path: source_dir });
-    }
+    let mut discovered_modules = lower_project(project_root)?;
 
     purge_output_dir(&output_dir)?;
     std::fs::create_dir_all(&lua_dir).map_err(|source| CliError::CreateDir {
@@ -77,64 +96,11 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
         source,
     })?;
 
-    let lint_config = config.lints.resolve()?;
-
     let mut event_registrations = Vec::new();
     let mut remote_exports = Vec::new();
     let mut shared_exports = Vec::new();
     let mut shared_consts = Vec::new();
     let mut stage_modules = StageModules::new();
-    let mut discovered_modules = Vec::new();
-    let mut failed = false;
-
-    for source_path in sources {
-        let source = std::fs::read_to_string(&source_path).map_err(|err| CliError::ReadFile {
-            path: source_path.clone(),
-            source: err,
-        })?;
-        let discovered = discover_modules(&source_dir, &source_path, &source)?;
-        let filename = display_filename(&source_path);
-
-        let lua_module_prefix_early = config.emit.lua_module_prefix.as_deref().unwrap_or("");
-        let parse_options = ParseOptions::new(&lint_config)
-            .with_prefix(lua_module_prefix_early)
-            .with_bindings(&bindings);
-        for module_spec in discovered {
-            let mut file_diagnostics = Vec::new();
-            match parse_discovered_module_with_options(
-                &module_spec,
-                &parse_options,
-                &mut file_diagnostics,
-            ) {
-                Ok(module) => {
-                    for diagnostic in &file_diagnostics {
-                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
-                        if diagnostic.is_error() {
-                            failed = true;
-                        }
-                    }
-                    discovered_modules.push((module_spec, module));
-                }
-                Err(err) => {
-                    // Hard error for this module; still report any lints found first,
-                    // then continue so later files can contribute diagnostics too.
-                    for diagnostic in &file_diagnostics {
-                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
-                    }
-                    let _ = eprint_frontend_error(&filename, &source, &err);
-                    failed = true;
-                }
-            }
-        }
-    }
-
-    if discovered_modules.is_empty() && !failed {
-        return Err(CliError::NoSourceFiles { path: source_dir });
-    }
-
-    if failed {
-        return Err(CliError::Reported);
-    }
 
     if profile.prune_dead_code {
         let mut modules = discovered_modules
@@ -201,6 +167,76 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
     }
 
     Ok(outputs)
+}
+
+/// Discover, lower, and lint every source module (no disk writes).
+fn lower_project(
+    project_root: &Path,
+) -> CliResult<Vec<(factorio_frontend::DiscoveredModule, Module)>> {
+    let config = Config::load(project_root)?;
+    let bindings = bindings::discover_bindings(project_root)?;
+    let source_dir = project_root.join(&config.source);
+    if !source_dir.is_dir() {
+        return Err(CliError::NotFound { path: source_dir });
+    }
+
+    let sources = collect_rust_sources(&source_dir)?;
+    if sources.is_empty() {
+        return Err(CliError::NoSourceFiles { path: source_dir });
+    }
+
+    let lint_config = config.lints.resolve()?;
+    let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
+    let parse_options = ParseOptions::new(&lint_config)
+        .with_prefix(lua_module_prefix)
+        .with_bindings(&bindings);
+
+    let mut discovered_modules = Vec::new();
+    let mut failed = false;
+
+    for source_path in sources {
+        let source = std::fs::read_to_string(&source_path).map_err(|err| CliError::ReadFile {
+            path: source_path.clone(),
+            source: err,
+        })?;
+        let discovered = discover_modules(&source_dir, &source_path, &source)?;
+        let filename = display_filename(&source_path);
+
+        for module_spec in discovered {
+            let mut file_diagnostics = Vec::new();
+            match parse_discovered_module_with_options(
+                &module_spec,
+                &parse_options,
+                &mut file_diagnostics,
+            ) {
+                Ok(module) => {
+                    for diagnostic in &file_diagnostics {
+                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                        if diagnostic.is_error() {
+                            failed = true;
+                        }
+                    }
+                    discovered_modules.push((module_spec, module));
+                }
+                Err(err) => {
+                    for diagnostic in &file_diagnostics {
+                        let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                    }
+                    let _ = eprint_frontend_error(&filename, &source, &err);
+                    failed = true;
+                }
+            }
+        }
+    }
+
+    if discovered_modules.is_empty() && !failed {
+        return Err(CliError::NoSourceFiles { path: source_dir });
+    }
+    if failed {
+        return Err(CliError::Reported);
+    }
+
+    Ok(discovered_modules)
 }
 
 fn purge_output_dir(output_dir: &Path) -> CliResult<()> {

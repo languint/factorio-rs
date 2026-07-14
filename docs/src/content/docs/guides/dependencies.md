@@ -101,7 +101,8 @@ Notes:
   the library crate).
 - At transpile time, those calls become `remote.call` / `require` - the library’s
   Rust bodies are not copied into your mod’s Lua.
-- `cargo check` / rust-analyzer use the real library package like any other dep.
+- `factorio-rs check` / `build` run `cargo check` on that real library package
+  (and rust-analyzer does the same in the editor).
 
 ## Other Factorio deps (optional)
 

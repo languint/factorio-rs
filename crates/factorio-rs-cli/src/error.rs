@@ -62,6 +62,9 @@ pub enum CliError {
     #[error("transpile failed due to previous errors")]
     Reported,
 
+    #[error("typecheck failed (`cargo check`)")]
+    TypecheckFailed,
+
     #[error("failed to parse `{path}`")]
     CargoManifestParse {
         path: PathBuf,

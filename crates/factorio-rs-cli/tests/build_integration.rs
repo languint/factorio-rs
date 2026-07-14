@@ -10,7 +10,13 @@ title = "Test Mod"
 prune_dead_code = true
 "#;
 
-const CARGO_TOML: &str = r#"
+fn cargo_toml() -> String {
+    let factorio_rs = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../factorio-rs")
+        .canonicalize()
+        .expect("factorio-rs crate path");
+    format!(
+        r#"
 [package]
 name = "test-mod"
 version = "0.1.0"
@@ -19,7 +25,13 @@ authors = ["test@example.com"]
 
 [lib]
 path = "src/lib.rs"
-"#;
+
+[dependencies]
+factorio-rs = {{ path = "{}" }}
+"#,
+        factorio_rs.display()
+    )
+}
 
 const LIB_RS: &str = r"
 mod control;
@@ -69,7 +81,7 @@ pub fn on_singleplayer_init() {
 
 fn write_nested_module_project(project_root: &Path) {
     std::fs::write(project_root.join("Factorio.toml"), FACTORIO_TOML).unwrap();
-    std::fs::write(project_root.join("Cargo.toml"), CARGO_TOML).unwrap();
+    std::fs::write(project_root.join("Cargo.toml"), cargo_toml()).unwrap();
     std::fs::create_dir_all(project_root.join("src/control")).unwrap();
     std::fs::create_dir_all(project_root.join("src/shared/player")).unwrap();
     std::fs::write(project_root.join("src/lib.rs"), LIB_RS).unwrap();

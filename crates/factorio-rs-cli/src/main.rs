@@ -16,9 +16,10 @@ mod manifest;
 mod open;
 mod package;
 mod paths;
+mod typecheck;
 
 use build::BuildOptions;
-use cli::{AddArgs, BuildArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs};
+use cli::{AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs};
 use error::project_root;
 
 fn main() -> anyhow::Result<()> {
@@ -26,6 +27,7 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Init(args) => run_init(&args),
+        Command::Check(args) => run_check(&args),
         Command::Build(args) => run_build(&args),
         Command::Package(args) => run_package(&args),
         Command::Install(args) => run_install(&args),
@@ -44,9 +46,19 @@ fn run_init(args: &InitArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn run_check(args: &CheckArgs) -> anyhow::Result<()> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let options = BuildOptions::new(&args.profile).with_skip_typecheck(args.skip_typecheck);
+    build::check(&project_root, &options)?;
+    println!("Check passed");
+    Ok(())
+}
+
 fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let options = BuildOptions::new(&args.profile)
+        .with_debug_level(args.debug_level)
+        .with_skip_typecheck(args.skip_typecheck);
     let outputs = build::build(&project_root, &options)?;
 
     for output in outputs {
@@ -63,7 +75,9 @@ fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
 
 fn run_package(args: &PackageArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let options = BuildOptions::new(&args.profile)
+        .with_debug_level(args.debug_level)
+        .with_skip_typecheck(args.skip_typecheck);
     let zip_path = package::package(&project_root, &options)?;
     println!("Packaged mod archive `{}`", zip_path.display());
     Ok(())
@@ -71,7 +85,9 @@ fn run_package(args: &PackageArgs) -> anyhow::Result<()> {
 
 fn run_install(args: &InstallArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    let options = BuildOptions::new(&args.profile).with_debug_level(args.debug_level);
+    let options = BuildOptions::new(&args.profile)
+        .with_debug_level(args.debug_level)
+        .with_skip_typecheck(args.skip_typecheck);
     let dest = install::install(&project_root, &options)?;
     println!("Installed mod to `{}`", dest.display());
 

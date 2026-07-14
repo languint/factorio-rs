@@ -1,7 +1,7 @@
-mod shared;
+pub mod shared;
 
 #[factorio_rs::control]
-mod control {
+pub mod control {
     #[factorio_rs::export]
     pub fn greet(name: &str) {
         println!("hello from provider remote, {name}!");
@@ -14,3 +14,6 @@ mod control {
         println!("provider API version: {}", crate::shared::api::VERSION);
     }
 }
+
+mod factorio_exports;
+pub use factorio_exports::*;

@@ -3,9 +3,9 @@ title: Lints
 description: Transpile-time safety diagnostics, EXXX codes, and Factorio.toml configuration.
 ---
 
-`cargo check` only validates against API stubs that never run in Factorio.
-Patterns that type-check in Rust can still miscompile or nil-crash in Lua.
-factorio-rs catches a set of those traps at transpile time and reports them as
+`factorio-rs check` / `build` run `cargo check` against API stubs that never run
+in Factorio. Patterns that type-check in Rust can still miscompile or nil-crash
+in Lua. Transpile-time diagnostics catch a set of those traps and report them as
 **lints**.
 
 Lints are separate from hard frontend errors (unsupported syntax, bad locale

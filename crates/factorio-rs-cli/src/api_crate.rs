@@ -61,6 +61,54 @@ pub struct ManifestParam {
     pub ty: Option<String>,
 }
 
+/// Ensure `src/factorio_exports.rs` is present/fresh before `cargo check`.
+///
+/// Regenerates from `[package.metadata.factorio]` when present. If the crate roots
+/// `mod factorio_exports` but the file is missing (first export build), writes an
+/// empty stub so rustc can run.
+///
+/// # Errors
+/// Returns I/O or TOML parse errors.
+pub fn ensure_factorio_exports(project_root: &Path) -> CliResult<()> {
+    if let Some(manifest) = load_exports_from_cargo_toml(project_root)? {
+        let remotes: Vec<RemoteExport> = manifest
+            .remotes
+            .iter()
+            .map(|remote| RemoteExport {
+                module: remote.module.clone(),
+                function: remote.function.clone(),
+                interface: remote.interface.clone(),
+                params: remote
+                    .params
+                    .iter()
+                    .map(|param| (param.name.clone(), param.ty.clone()))
+                    .collect(),
+            })
+            .collect();
+        write_api_reexports(project_root, &remotes)?;
+        return Ok(());
+    }
+
+    let path = project_root.join(API_REEXPORTS_REL);
+    if path.exists() || !lib_rs_references_factorio_exports(project_root)? {
+        return Ok(());
+    }
+    write_api_reexports(project_root, &[])?;
+    Ok(())
+}
+
+fn lib_rs_references_factorio_exports(project_root: &Path) -> CliResult<bool> {
+    let lib = project_root.join("src/lib.rs");
+    if !lib.exists() {
+        return Ok(false);
+    }
+    let contents = std::fs::read_to_string(&lib).map_err(|source| CliError::ReadFile {
+        path: lib,
+        source,
+    })?;
+    Ok(contents.contains("factorio_exports"))
+}
+
 /// Write exports into Cargo metadata + `src/factorio_exports.rs` (+ optional JSON).
 ///
 /// # Errors
@@ -398,6 +446,41 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+
+    #[test]
+    fn ensure_regenerates_reexports_from_cargo_metadata() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let provider = temp.path().join("provider");
+        std::fs::create_dir_all(provider.join("src")).unwrap();
+        std::fs::write(
+            provider.join("Cargo.toml"),
+            r#"[package]
+name = "provider"
+version = "0.1.3"
+edition = "2024"
+
+[package.metadata.factorio]
+mod_name = "provider"
+dependencies = ["provider >= 0.1.3"]
+module_root = "lua"
+interface = "provider"
+remote_fns = ["greet"]
+
+[lib]
+path = "src/lib.rs"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            provider.join("src/lib.rs"),
+            "pub mod control {}\nmod factorio_exports;\npub use factorio_exports::*;\n",
+        )
+        .unwrap();
+
+        ensure_factorio_exports(&provider).unwrap();
+        let reexports = std::fs::read_to_string(provider.join("src/factorio_exports.rs")).unwrap();
+        assert!(reexports.contains("pub use crate::control::greet;"));
+    }
 
     #[test]
     fn publish_writes_cargo_metadata_and_reexports() {

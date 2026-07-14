@@ -16,14 +16,15 @@ Factorio’s modding API.
 | Piece | Crate / binary                                  | Role                                               |
 | ----- | ----------------------------------------------- | -------------------------------------------------- |
 | SDK   | `factorio-rs`                                   | Dependency for your mod crate (API stubs + macros) |
-| CLI   | package `factorio-rs-cli`, binary `factorio-rs` | `init`, `build`, `package`, `install`, `open`      |
+| CLI   | package `factorio-rs-cli`, binary `factorio-rs` | `init`, `check`, `build`, `package`, `install`, `add`, `open` |
 
 ## Pipeline
 
-1. Discover stage modules (`control`, `settings`, `data`, `shared`, ...).
-2. Lower Rust (`syn`) into IR.
-3. Optionally prune unreachable code (release-style profiles).
-4. Generate Lua under `output_dir` (default `dist/`), including stage entry
+1. Typecheck with `cargo check` (Factorio API stubs + Cargo deps).
+2. Discover stage modules (`control`, `settings`, `data`, `shared`, ...).
+3. Lower Rust (`syn`) into IR (and apply transpile lints).
+4. Optionally prune unreachable code (release-style profiles).
+5. Generate Lua under `output_dir` (default `dist/`), including stage entry
    files and locale `.cfg` files declared with `locale!`.
 
 Generated Lua headers look like:
@@ -34,12 +35,14 @@ Generated Lua headers look like:
 -- Module: `control`
 ```
 
-## What still uses Cargo
+## Typechecking
 
-- `cargo check` / `cargo build` validate your Rust (macros, types).
-- `factorio-rs build` **does not** invoke Cargo; it transpiles sources directly.
+`factorio-rs check` and `factorio-rs build` run **`cargo check`** first against the
+Factorio API stubs (methods, arity, ordinary Rust types), then validate that
+sources can be lowered (and apply transpile lints). Use `--skip-typecheck` only
+as an escape hatch.
 
-You typically iterate with both: check with Cargo, emit the mod with the CLI.
+`cargo check` / rust-analyzer alone are still useful for editor feedback.
 
 Notable releases are listed in the
 [changelog](https://github.com/languint/factorio-rs/blob/main/CHANGELOG.md).

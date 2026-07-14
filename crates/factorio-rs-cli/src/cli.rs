@@ -6,6 +6,8 @@ use clap::{Parser, Subcommand};
 pub enum Command {
     /// Create a new factorio-rs project in the current directory.
     Init(InitArgs),
+    /// Typecheck (`cargo check`) and validate transpile without writing output.
+    Check(CheckArgs),
     /// Transpile Rust sources to a loadable Factorio mod directory.
     Build(BuildArgs),
     /// Build and package the mod into a Factorio-ready zip archive.
@@ -41,6 +43,21 @@ pub struct InitArgs {
 }
 
 #[derive(Debug, Parser)]
+pub struct CheckArgs {
+    /// Path to the project directory or `Factorio.toml` file.
+    #[arg(long, value_name = "PATH")]
+    pub manifest_path: Option<PathBuf>,
+
+    /// Transpile profile from `Factorio.toml` (affects lint resolution path only).
+    #[arg(long, value_name = "NAME", default_value = "debug")]
+    pub profile: String,
+
+    /// Skip `cargo check` and only validate lowering / lints.
+    #[arg(long)]
+    pub skip_typecheck: bool,
+}
+
+#[derive(Debug, Parser)]
 pub struct BuildArgs {
     /// Path to the project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
@@ -59,6 +76,10 @@ pub struct BuildArgs {
     /// Also create a `{name}_{version}.zip` archive after building.
     #[arg(long)]
     pub package: bool,
+
+    /// Skip `cargo check` before transpile (not recommended).
+    #[arg(long)]
+    pub skip_typecheck: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -76,6 +97,10 @@ pub struct PackageArgs {
     /// Override the profile's debug comment level in generated Lua.
     #[arg(long, value_name = "LEVEL")]
     pub debug_level: Option<u8>,
+
+    /// Skip `cargo check` before transpile (not recommended).
+    #[arg(long)]
+    pub skip_typecheck: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -97,6 +122,10 @@ pub struct InstallArgs {
     /// Open Factorio after installing the mod.
     #[arg(long)]
     pub open: bool,
+
+    /// Skip `cargo check` before transpile (not recommended).
+    #[arg(long)]
+    pub skip_typecheck: bool,
 }
 
 #[derive(Debug, Parser)]

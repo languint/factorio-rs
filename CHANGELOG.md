@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`[package.metadata.factorio]` + `src/factorio_exports.rs`). Consumers depend
   with Cargo (`cargo add --path` / `factorio-rs add`); call `provider::fn` with
   normal path/crates.io deps (no separate stub crate).
+- Real typechecking: `factorio-rs check` and `build`/`package`/`install` run
+  `cargo check` against Factorio API stubs (methods, arity, types) before
+  lowering. `--skip-typecheck` escapes that step.
 
 ## [0.1.3] - 2026-07-13
 

@@ -3,8 +3,7 @@ title: Language support
 description: What Rust syntax and patterns factorio-rs can transpile to Lua.
 ---
 
-factorio-rs does **not** implement a full Rust dialect. It lowers a Factorio-oriented subset of Rust into Lua. `cargo check` still type-checks against the SDK stubs;
-`factorio-rs build` only accepts constructs the frontend knows how to lower.
+factorio-rs does **not** implement a full Rust dialect. It lowers a Factorio-oriented subset of Rust into Lua. `factorio-rs check` / `build` run `cargo check` against the SDK stubs, then only accept constructs the frontend knows how to lower.
 
 This page is the inventory of that surface. For **`Option` / `Result` / `?`**
 in depth, see [Option and Result](option-and-result/).
@@ -277,9 +276,11 @@ Other macros in expression position fail with `UnsupportedMacro`.
 
 ## Safety
 
-`cargo check` only validates against stubs that never run. Patterns that type-check
-can still miscompile or nil-crash in Factorio. factorio-rs either emits correct Lua
-or fails the build with a lint code. Full reference: [Lints](lints/).
+`factorio-rs check` / `build` run **`cargo check`** against Factorio API stubs
+(real method names, arity, and Rust types) before lowering. Stubs never execute
+in Factorio - patterns that type-check can still miscompile or nil-crash at
+runtime. Transpile [lints](lints/) catch several of those traps; missing coverage
+still fails the build as unsupported syntax when known unsafe.
 
 | Trap | What happens | Fix |
 | --- | --- | --- |

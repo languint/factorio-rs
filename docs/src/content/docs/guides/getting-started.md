@@ -62,8 +62,8 @@ The Factorio mod **id** comes from **`[package].name` in
 ## Build
 
 ```bash
-cargo check          # type-check Rust + macros
-factorio-rs build    # transpile into dist/
+factorio-rs check    # cargo check + transpile lints (no output)
+factorio-rs build    # typecheck, then transpile into dist/
 ```
 
 Typical output:
