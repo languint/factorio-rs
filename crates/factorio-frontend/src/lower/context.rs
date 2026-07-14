@@ -24,7 +24,7 @@ pub struct LowerContext<'a> {
     pub bare_import_renames: HashMap<String, String>,
     /// Local name for a remote stub module (`remote`) -> Factorio interface name.
     pub remote_locals: HashMap<String, String>,
-    /// Bare-imported remote function locals (`use binding::greet`) → `(interface, fn)`.
+    /// Bare-imported remote function locals (`use binding::greet`) -> `(interface, fn)`.
     pub remote_fn_locals: HashMap<String, (String, String)>,
     /// Binding name -> Rust type key (last path segment, `Option`/`&` peeled) for
     /// compile-time `{:?}` Debug format selection.

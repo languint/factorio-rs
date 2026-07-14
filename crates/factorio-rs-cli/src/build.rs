@@ -53,8 +53,6 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
     }
 
     let package = CargoPackage::load(project_root)?;
-    // Refresh ephemeral binding stubs from registered libraries before metadata.
-    let refreshed = api_crate::refresh_registered_bindings(project_root)?;
     let bindings = bindings::discover_bindings(project_root)?;
     let binding_dependencies: Vec<String> = bindings
         .values()
@@ -63,7 +61,7 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
     let source_dir = project_root.join(&config.source);
     let output_dir = project_root.join(&config.output_dir);
     let lua_dir = output_dir.join("lua");
-    let mut outputs = refreshed;
+    let mut outputs = Vec::new();
     if !source_dir.is_dir() {
         return Err(CliError::NotFound { path: source_dir });
     }
@@ -185,15 +183,13 @@ pub fn build(project_root: &Path, options: &BuildOptions) -> CliResult<Vec<PathB
     outputs.push(output_dir.join("control.lua"));
     outputs.push(output_dir.join("info.json"));
 
-    if let Some(manifest_path) = api_crate::write_exports_manifest(
+    outputs.extend(api_crate::publish_exports(
         project_root,
         &package,
         &remote_exports,
         &shared_exports,
         &shared_consts,
-    )? {
-        outputs.push(manifest_path);
-    }
+    )?);
     let locale_files: Vec<_> = discovered_modules
         .iter()
         .flat_map(|(_, module)| module.locales.iter().cloned())
@@ -269,10 +265,16 @@ fn collect_rust_sources_recursive(current_dir: &Path, sources: &mut Vec<PathBuf>
 }
 
 fn is_rust_source(path: &Path) -> bool {
-    path.is_file()
-        && path
+    if !path.is_file()
+        || !path
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("rs"))
+    {
+        return false;
+    }
+    // Cargo-only re-exports written by `publish_exports` - not a Factorio module.
+    path.file_name()
+        .is_some_and(|name| name != "factorio_exports.rs")
 }
 
 fn transpile_module(

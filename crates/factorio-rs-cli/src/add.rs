@@ -1,13 +1,12 @@
-//! `factorio-rs add <path>` - materialize ephemeral stubs and wire Cargo/Factorio.toml.
+//! `factorio-rs add <path>` - add a factorio-rs library via Cargo and Factorio.toml.
 
 use std::path::{Component, Path, PathBuf};
 
 use toml_edit::{Array, DocumentMut, Formatted, InlineTable, Item, Value};
 
 use crate::{
-    api_crate::{
-        binding_crate_rel_path, load_exports_manifest, materialize_binding_crate, register_library,
-    },
+    api_crate::load_library_exports,
+    cargo_manifest::CargoPackage,
     error::{CliError, CliResult, project_root},
 };
 
@@ -16,29 +15,26 @@ use crate::{
 pub struct AddResult {
     pub crate_name: String,
     pub rust_crate: String,
-    pub stub_path: PathBuf,
+    pub dep_path: PathBuf,
     pub cargo_dep_added: bool,
     pub factorio_deps_added: Vec<String>,
     pub remote_fns: Vec<String>,
 }
 
-/// Add `lib_path` (a factorio-rs library project) as a dependency of `consumer_root`.
+/// Add `lib_path` (a factorio-rs library project) as a normal Cargo dependency.
+///
+/// Expects the library to have been built once so `[package.metadata.factorio]`
+/// (and crate-root re-exports) exist. Prefer `cargo add --path` equivalently for
+/// the Cargo.toml half.
 ///
 /// # Errors
-/// Returns when the library project, its exports manifest, or TOML edits fail.
+/// Returns when the library project, its export metadata, or TOML edits fail.
 pub fn add(consumer_root: &Path, lib_path: &Path) -> CliResult<AddResult> {
     let lib_root = resolve_lib_root(lib_path)?;
-    let manifest = load_exports_manifest(&lib_root)?;
+    let _package = CargoPackage::load(&lib_root)?;
+    let manifest = load_library_exports(&lib_root)?;
 
-    let stub_root = materialize_binding_crate(consumer_root, &manifest)?;
-    let stub_rel = binding_crate_rel_path(&manifest.mod_name);
     let lib_rel = relative_path(consumer_root, &lib_root)?;
-    register_library(
-        consumer_root,
-        &manifest.mod_name,
-        &path_to_toml_string(&lib_rel),
-    )?;
-
     let package_name = manifest.mod_name.replace('_', "-");
     let rust_crate = package_name.replace('-', "_");
     let remote_fns: Vec<String> = manifest
@@ -47,15 +43,14 @@ pub fn add(consumer_root: &Path, lib_path: &Path) -> CliResult<AddResult> {
         .map(|remote| remote.function.clone())
         .collect();
 
-    let cargo_dep_added = ensure_cargo_dependency(consumer_root, &package_name, &stub_rel)?;
+    let cargo_dep_added = ensure_cargo_dependency(consumer_root, &package_name, &lib_rel)?;
     let factorio_deps_added =
         ensure_factorio_dependencies(consumer_root, &[manifest.dependency.clone()])?;
 
-    let _ = stub_root;
     Ok(AddResult {
         crate_name: package_name,
         rust_crate,
-        stub_path: stub_rel,
+        dep_path: lib_rel,
         cargo_dep_added,
         factorio_deps_added,
         remote_fns,
@@ -74,7 +69,7 @@ fn resolve_lib_root(lib_path: &Path) -> CliResult<PathBuf> {
 fn ensure_cargo_dependency(
     consumer_root: &Path,
     package_name: &str,
-    stub_rel: &Path,
+    lib_rel: &Path,
 ) -> CliResult<bool> {
     let manifest_path = consumer_root.join("Cargo.toml");
     let contents =
@@ -98,11 +93,17 @@ fn ensure_cargo_dependency(
             message: "`[dependencies]` must be a table".to_string(),
         })?;
 
-    // Drop legacy `{name}-api` path deps from earlier factorio-rs versions.
-    let legacy = format!("{package_name}-api");
-    deps.remove(&legacy);
+    // Drop legacy stub / api path deps from earlier factorio-rs versions.
+    deps.remove(format!("{package_name}-api").as_str());
+    if let Some(existing) = deps.get(package_name)
+        && let Some(table) = existing.as_inline_table()
+        && let Some(path) = table.get("path").and_then(Value::as_str)
+        && (path.contains("target/factorio-rs/bindings") || path.contains(".factorio-rs/bindings"))
+    {
+        deps.remove(package_name);
+    }
 
-    let desired = path_to_toml_string(stub_rel);
+    let desired = path_to_toml_string(lib_rel);
     if let Some(existing) = deps.get(package_name)
         && let Some(table) = existing.as_inline_table()
         && table
@@ -233,17 +234,15 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::{
-        api_crate::write_exports_manifest, cargo_manifest::CargoPackage, manifest::RemoteExport,
-    };
+    use crate::{api_crate::publish_exports, manifest::RemoteExport};
 
     #[test]
-    fn add_wires_cargo_and_factorio_toml() {
+    fn add_wires_cargo_path_to_library() {
         let temp = tempfile::TempDir::new().unwrap();
         let consumer = temp.path().join("consumer");
         let provider = temp.path().join("provider");
         std::fs::create_dir_all(consumer.join("src")).unwrap();
-        std::fs::create_dir_all(&provider).unwrap();
+        std::fs::create_dir_all(provider.join("src")).unwrap();
 
         std::fs::write(
             consumer.join("Cargo.toml"),
@@ -280,13 +279,26 @@ factorio_version = "2.0"
 "#,
         )
         .unwrap();
+        std::fs::write(
+            provider.join("Cargo.toml"),
+            r#"[package]
+name = "provider"
+version = "0.1.3"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+"#,
+        )
+        .unwrap();
+        std::fs::write(provider.join("src/lib.rs"), "pub mod control {}\n").unwrap();
 
         let package = CargoPackage {
             name: "provider".to_string(),
             version: "0.1.3".to_string(),
             authors: None,
         };
-        write_exports_manifest(
+        publish_exports(
             &provider,
             &package,
             &[RemoteExport {
@@ -304,28 +316,15 @@ factorio_version = "2.0"
         assert!(result.cargo_dep_added);
         assert_eq!(result.factorio_deps_added, vec!["provider >= 0.1.3"]);
         assert_eq!(result.rust_crate, "provider");
-        assert_eq!(result.remote_fns, vec!["greet"]);
-        assert_eq!(
-            result.stub_path,
-            PathBuf::from("target/factorio-rs/bindings/provider")
-        );
+        assert_eq!(result.dep_path, PathBuf::from("../provider"));
 
         let cargo = std::fs::read_to_string(consumer.join("Cargo.toml")).unwrap();
         assert!(cargo.contains("provider ="));
-        assert!(cargo.contains("target/factorio-rs/bindings/provider"));
+        assert!(cargo.contains("path = \"../provider\""));
+        assert!(!cargo.contains("bindings"));
         assert!(!cargo.contains("provider-api"));
-
-        let factorio = std::fs::read_to_string(consumer.join("Factorio.toml")).unwrap();
-        assert!(factorio.contains("provider >= 0.1.3"));
-
-        let stub = std::fs::read_to_string(
-            consumer.join("target/factorio-rs/bindings/provider/src/lib.rs"),
-        )
-        .unwrap();
-        assert!(stub.contains("pub fn greet"));
 
         let again = add(&consumer, &provider).unwrap();
         assert!(!again.cargo_dep_added);
-        assert!(again.factorio_deps_added.is_empty());
     }
 }

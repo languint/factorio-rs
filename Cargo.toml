@@ -13,8 +13,6 @@ members = [
     "examples/locale_test",
     "examples/mandatory_spaghetti",
     "examples/tracing_test",
-]
-exclude = [
     "examples/provider",
     "examples/consumer",
 ]

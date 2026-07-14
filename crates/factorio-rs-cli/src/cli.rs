@@ -12,7 +12,7 @@ pub enum Command {
     Package(PackageArgs),
     /// Build and copy the mod into the Factorio mods directory.
     Install(InstallArgs),
-    /// Add another factorio-rs library (materializes stubs under `target/factorio-rs/bindings/`).
+    /// Add another factorio-rs library as a Cargo path dependency (+ Factorio.toml).
     Add(AddArgs),
     /// Open Factorio if it is installed on this system.
     Open,
@@ -101,7 +101,7 @@ pub struct InstallArgs {
 
 #[derive(Debug, Parser)]
 pub struct AddArgs {
-    /// Path to another factorio-rs project (must have `Factorio.toml` and `.factorio-rs/exports.json`).
+    /// Path to another factorio-rs project (build it first so Cargo metadata exports exist).
     pub path: PathBuf,
 
     /// Path to the consuming project directory or `Factorio.toml` file.

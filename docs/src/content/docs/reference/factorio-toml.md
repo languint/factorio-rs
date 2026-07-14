@@ -24,7 +24,7 @@ Written into `info.json` (and related packaging):
 | `thumbnail` | Optional path to an image copied to `thumbnail.png` in the mod output |
 | `dependencies` | Extra Factorio dependency strings (`"? space-age"`, `"! conflict"`, ...). Merged with deps from binding crates; this list wins on duplicate mod names. See [Sharing code between mods](../guides/dependencies/). |
 | `emit_api` | **Deprecated / ignored.** Exports are written to `.factorio-rs/exports.json`. |
-| `api_dir` | **Deprecated / ignored.** Consumers materialize stubs under `target/factorio-rs/bindings/`. |
+| `api_dir` | **Deprecated / ignored.** Exports are published onto the library’s own Cargo package. |
 
 Mod **name** / zip id still come from Cargo `[package].name` and version.
 

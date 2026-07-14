@@ -3,8 +3,10 @@ name = "provider"
 version = "0.1.3"
 edition = "2024"
 publish = false
+description = "Auto-generated factorio-rs API stubs for `provider`"
 
-[package.metadata]
+[lib]
+path = "src/lib.rs"
 
 [package.metadata.factorio]
 mod_name = "provider"
@@ -12,9 +14,3 @@ dependencies = ["provider >= 0.1.3"]
 module_root = "lua"
 interface = "provider"
 remote_fns = ["greet"]
-
-[lib]
-path = "src/lib.rs"
-
-[dependencies]
-factorio-rs = { path = "../../crates/factorio-rs" }

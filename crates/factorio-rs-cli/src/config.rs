@@ -42,7 +42,7 @@ pub struct ModConfig {
     /// Deprecated: ignored. Exports are written to `.factorio-rs/exports.json`.
     #[serde(default = "default_emit_api")]
     pub emit_api: bool,
-    /// Deprecated: ignored. Consumers materialize stubs under `target/factorio-rs/bindings/`.
+    /// Deprecated: ignored. Exports publish onto the library Cargo package.
     #[serde(default = "default_api_dir")]
     pub api_dir: String,
 }

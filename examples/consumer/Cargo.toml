@@ -9,4 +9,4 @@ path = "src/lib.rs"
 
 [dependencies]
 factorio-rs = { path = "../../crates/factorio-rs" }
-provider = { path = "target/factorio-rs/bindings/provider" }
+provider = { path = "../provider" }

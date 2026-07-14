@@ -19,7 +19,7 @@ factorio-rs init --name my-mod
 | `Cargo.toml`    | Library crate depending on `factorio-rs` |
 | `Factorio.toml` | Transpile + mod metadata                 |
 | `src/lib.rs`    | Sample `control_mod!` with one event     |
-| `.gitignore`    | Ignores `/target`, `/dist`, `/*.zip`     |
+| `.gitignore`    | Ignores `/target`, `/dist`, `/.factorio-rs/exports.json`, `/*.zip` |
 
 Default `src/lib.rs`:
 

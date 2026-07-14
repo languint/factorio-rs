@@ -39,7 +39,8 @@ pub enum CliError {
     NotFound { path: PathBuf },
 
     #[error(
-        "exports manifest missing at `{path}`; run `factorio-rs build` in the library project first"
+        "library exports missing at `{path}`; run `factorio-rs build` in the library project first \
+         (writes `[package.metadata.factorio]` and `src/factorio_exports.rs`)"
     )]
     ExportsManifestMissing { path: PathBuf },
 

@@ -1,18 +1,22 @@
 ---
 title: Sharing code between mods
-description: Export functions from one factorio-rs mod and call them from another with normal Rust.
+description: Export functions from one factorio-rs mod and depend on it from another with Cargo.
 ---
 
 Want mod B to call a function from mod A? Mark it with `#[factorio_rs::export]`,
-build A, then run `factorio-rs add` from B. From there you call it like any Rust
+build A, then add A as a normal **Cargo** dependency. Call it like any Rust
 crate: `provider::greet("hi")`.
 
 ```bash
 # In the library mod
 factorio-rs build
+# writes [package.metadata.factorio] + src/factorio_exports.rs
 
-# In the dependent mod
+# In the dependent mod - either:
 factorio-rs add ../provider
+# or:
+cargo add --path ../provider
+
 factorio-rs build
 ```
 
@@ -21,16 +25,24 @@ Working tree: [provider / consumer example](../examples/dependencies/).
 ## Export a function (library mod)
 
 Only items marked with `#[factorio_rs::export]` are visible to other mods. Plain
-`pub` stays private to your mod.
+`pub` stays private to your transpile (not a Cargo API by itself).
+
+Use **`pub mod`** for stage modules you want dependents to see, and keep control
+exports re-exported at the crate root (done automatically on build):
 
 ```rust
+pub mod shared;
+
 #[factorio_rs::control]
-mod control {
+pub mod control {
     #[factorio_rs::export]
     pub fn greet(name: &str) {
         println!("hello, {name}");
     }
 }
+
+mod factorio_exports; // generated
+pub use factorio_exports::*;
 ```
 
 You can also put `#[factorio_rs::export]` on a whole `mod` to export every `pub fn`
@@ -40,9 +52,9 @@ After `factorio-rs build`, factorio-rs:
 
 - Registers control exports with Factorio (`remote.add_interface`)
 - Keeps shared exports loadable via Lua `require`
-- Writes a small catalog at `.factorio-rs/exports.json` (gitignored)
-
-You do **not** maintain a separate stub crate by hand.
+- Writes `[package.metadata.factorio]` on **your** `Cargo.toml` (so Cargo dependents
+  are discovered)
+- Regenerates `src/factorio_exports.rs` (`pub use` of control remotes at crate root)
 
 ### Control vs shared
 
@@ -51,28 +63,22 @@ You do **not** maintain a separate stub crate by hand.
 | Control stage (`#[factorio_rs::control]`) | Live call into your mod: `remote.call` |
 | Shared stage (`shared/...`) | Load your Lua module: `require` |
 
-Same attribute either way - the stage picks the mechanism.
+Optional: rename the Factorio remote interface with
+`#[factorio_rs::export(interface = "math")]` or bare `#[factorio_rs::export(interface)]`.
 
-Optional: rename the Factorio remote interface:
+## Depend through Cargo
 
-```rust
-#[factorio_rs::export(interface = "math")]
-pub fn add(a: i32, b: i32) -> i32 { a + b }
+```toml
+# consumer/Cargo.toml
+[dependencies]
+provider = { path = "../provider" }
+# or a crates.io / git dependency once you publish the package
 ```
 
-`#[factorio_rs::export(interface)]` means “remote, use my mod name” (same default
-as plain `#[export]` on control).
+`factorio-rs add ../provider` is a thin helper that adds that path dep and merges
+Factorio.toml dependency strings from the library’s metadata.
 
-## Call it from another mod
-
-From the dependent project:
-
-```bash
-factorio-rs add ../provider
-```
-
-That wires Cargo and Factorio.toml for you and generates empty type stubs under
-`target/factorio-rs/bindings/provider/`. Then:
+Then call:
 
 ```rust
 #[factorio_rs::control]
@@ -81,54 +87,45 @@ mod control {
 
     #[factorio_rs::event(OnSingleplayerInit)]
     pub fn on_init() {
-        // Control export → remote.call("provider", "greet", ...)
-        provider::greet("world");
-
-        // Shared export → require("__provider__/lua/shared/api")
-        api::greet("world");
+        provider::greet("world"); // -> remote.call("provider", "greet", ...)
+        api::greet("world");      // -> require("__provider__/lua/shared/api")
     }
 }
 ```
 
-Tips:
+Notes:
 
-- Root names like `provider::greet` are control/remote exports.
-- Paths like `provider::shared::...` are shared/`require` exports.
-- Stubs are empty - your dependent mod never compiles the library’s real
-  control/shared code. At runtime Factorio still does one `remote.call` or
-  `require`.
-- Building the dependent mod refreshes stubs if the library’s
-  `.factorio-rs/exports.json` changed.
+- Root names like `provider::greet` are control/remote exports (via
+  `factorio_exports.rs`).
+- Paths like `provider::shared::...` are shared/`require` exports (real modules in
+  the library crate).
+- At transpile time, those calls become `remote.call` / `require` - the library’s
+  Rust bodies are not copied into your mod’s Lua.
+- `cargo check` / rust-analyzer use the real library package like any other dep.
 
-## Other Factorio deps (optional, not Rust)
+## Other Factorio deps (optional)
 
-If you need a non-Rust Factorio dep (DLC, optional mods, conflicts), list it in
-`Factorio.toml`:
+Non-Rust Factorio deps (DLC, conflicts) still go in `Factorio.toml`:
 
 ```toml
 [mod]
 factorio_version = "2.0"
-dependencies = [
-  "? space-age",
-  "! some-conflict",
-]
+dependencies = ["? space-age"]
 ```
 
-`factorio-rs add` also appends entries like `provider >= 0.1.3` from the library’s
-export catalog. A `base >= ...` line is added automatically when missing.
-`Factorio.toml` wins if the same mod is listed twice.
+`factorio-rs add` appends entries like `provider >= 0.1.3` from Cargo metadata.
+A `base >= ...` line is added automatically when missing.
 
 ## Lua-only mods (flib, etc.)
 
-Third-party mods that are not factorio-rs projects have no
-`.factorio-rs/exports.json`. Hand-write a small stub crate with empty function
-bodies and `[package.metadata.factorio]` (same fields the generated stubs use),
-then depend on it like any Cargo path/crates.io crate.
+Publish or path-depend a small crate with empty `pub fn` stubs and
+`[package.metadata.factorio]` - same shape the toolchain writes for factorio-rs
+libraries.
 
 ## Troubleshooting
 
 | Problem | Fix |
 | --- | --- |
-| `exports manifest missing` | Run `factorio-rs build` in the library first |
-| Cargo error about two packages named `provider` | The real library and the generated stub must not both be in the same Cargo workspace. Keep library and dependent as separate projects (the examples in this repo do that) |
-| Call doesn’t typecheck after changing exports | Rebuild the library, then rebuild the dependent (or re-run `factorio-rs add`) |
+| `library exports missing` / no metadata | Run `factorio-rs build` in the library first |
+| `provider::greet` not found | Ensure `pub mod control`, rebuild library (regenerates `factorio_exports.rs`), and `mod factorio_exports; pub use factorio_exports::*;` in `lib.rs` |
+| Call doesn’t update after changing exports | Rebuild the library, then rebuild the dependent |

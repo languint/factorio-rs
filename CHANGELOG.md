@@ -17,9 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `remote.add_interface`; shared exports stay requireable and prune-rooted.
   Applied to a `mod`, exports every `pub fn` inside. Supports bare
   `interface` and `interface = "name"`.
-- Provider builds write `.factorio-rs/exports.json`; consumers use
-  `factorio-rs add` to materialize ephemeral stubs named after the mod
-  (`use provider::fn`) under `target/factorio-rs/bindings/` (no committed `api/`).
+- Provider builds publish exports onto the library crate itself
+  (`[package.metadata.factorio]` + `src/factorio_exports.rs`). Consumers depend
+  with Cargo (`cargo add --path` / `factorio-rs add`); call `provider::fn` with
+  normal path/crates.io deps (no separate stub crate).
 
 ## [0.1.3] - 2026-07-13
 

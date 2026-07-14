@@ -48,7 +48,7 @@ Prefer **`if let`** / **`match`** over `.unwrap()`:
 
 ```rust
 if let Some(player) = game.get_player(index.into()) {
-    // enters when the value is not nil — including Some(false) / Some(0)
+    // enters when the value is not nil - including Some(false) / Some(0)
     player.print("hi");
 }
 
@@ -205,7 +205,7 @@ fn f(r: Result<i32, String>) { ... }     // parameter type
 ```
 
 Without that, overlapping names like `.map(...)` still use **Option**
-semantics — annotate when in doubt.
+semantics - annotate when in doubt.
 
 On a Result binding, `.unwrap()` / `.expect(...)` become `.ok` and still lint.
 

@@ -97,7 +97,7 @@ fn run_add(args: &AddArgs) -> anyhow::Result<()> {
         println!(
             "Added `{}` = {{ path = \"{}\" }} to Cargo.toml",
             result.crate_name,
-            result.stub_path.display()
+            result.dep_path.display()
         );
     } else {
         println!("`{}` already listed in Cargo.toml", result.crate_name);
@@ -116,7 +116,7 @@ fn run_add(args: &AddArgs) -> anyhow::Result<()> {
     );
     if !result.remote_fns.is_empty() {
         println!(
-            "Remote stubs: {}",
+            "Exports: {}",
             result
                 .remote_fns
                 .iter()
