@@ -37,7 +37,8 @@ factorio-rs = { version = "0.1.5", features = ["tracing", "serde"] }
 
 See [Tracing](guides/tracing/) and [Serde / JSON](guides/serde/) for details.
 
-`factorio-rs init` scaffolds a project with this pin and `edition = "2024"`.
+`factorio-rs init` scaffolds a project with this pin, `edition = "2024"`, and
+`rust-version = "1.85"` (the MSRV for edition 2024).
 
 ## Factorio (optional)
 

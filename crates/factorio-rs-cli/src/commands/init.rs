@@ -92,6 +92,7 @@ fn cargo_toml_template(package_name: &str) -> String {
 name = "{package_name}"
 version = "0.1.5"
 edition = "2024"
+rust-version = "1.85"
 publish = false
 
 [lib]

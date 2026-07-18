@@ -19,6 +19,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/languint/factorio-rs"
 homepage = "https://languint.github.io/factorio-rs/"
