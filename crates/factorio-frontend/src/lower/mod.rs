@@ -17,6 +17,7 @@ pub mod event_handler;
 pub mod expressions;
 pub mod functions;
 pub mod imports;
+pub mod iterators;
 mod locale;
 pub mod metadata;
 mod mod_settings;

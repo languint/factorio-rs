@@ -298,10 +298,91 @@ fn lower_for_loop(
             location: location(&for_loop.pat),
         }
     })?;
+    if let Some(range) = for_range_expr(&for_loop.expr) {
+        let start = range
+            .start
+            .as_deref()
+            .ok_or_else(|| FrontendError::UnsupportedExpression {
+                location: location(range).with_note("range start is required"),
+            })?;
+        let end = range
+            .end
+            .as_deref()
+            .ok_or_else(|| FrontendError::UnsupportedExpression {
+                location: location(range).with_note("range end is required"),
+            })?;
+        let (mut stmts, start) = lower_expr(start, ctx, self_type)?;
+        let (end_hoists, end) = lower_expr(end, ctx, self_type)?;
+        stmts.extend(end_hoists);
+        let body = lower_block_statements(&for_loop.body.stmts, ctx, self_type)?;
+        let limit = match range.limits {
+            syn::RangeLimits::Closed(_) => end,
+            syn::RangeLimits::HalfOpen(_) => factorio_ir::expression::Expression::BinaryOp {
+                lhs: Box::new(end),
+                op: factorio_ir::operator::Operator::Sub,
+                rhs: Box::new(factorio_ir::expression::Expression::Literal(
+                    factorio_ir::literal::Literal::Int(1),
+                )),
+            },
+        };
+        stmts.push(factorio_ir::statement::Statement::ForNumeric {
+            var,
+            start,
+            limit,
+            body,
+        });
+        return Ok(stmts);
+    }
+
+    if let Expr::MethodCall(call) = strip_for_parens(&for_loop.expr)
+        && matches!(call.method.to_string().as_str(), "iter" | "into_iter")
+        && call.args.is_empty()
+    {
+        let (mut stmts, iter) = lower_expr(&call.receiver, ctx, self_type)?;
+        let body = lower_block_statements(&for_loop.body.stmts, ctx, self_type)?;
+        stmts.push(factorio_ir::statement::Statement::ForIn {
+            var,
+            iter,
+            body,
+            ipairs: true,
+        });
+        return Ok(stmts);
+    }
+
     let (mut stmts, iter) = lower_expr(&for_loop.expr, ctx, self_type)?;
     let body = lower_block_statements(&for_loop.body.stmts, ctx, self_type)?;
-    stmts.push(factorio_ir::statement::Statement::ForIn { var, iter, body });
+    stmts.push(factorio_ir::statement::Statement::ForIn {
+        ipairs: for_path_is_vec(&for_loop.expr, ctx),
+        var,
+        iter,
+        body,
+    });
     Ok(stmts)
+}
+
+fn strip_for_parens(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Paren(paren) => strip_for_parens(&paren.expr),
+        other => other,
+    }
+}
+
+fn for_range_expr(expr: &Expr) -> Option<&syn::ExprRange> {
+    match strip_for_parens(expr) {
+        Expr::Range(range) => Some(range),
+        _ => None,
+    }
+}
+
+fn for_path_is_vec(expr: &Expr, ctx: &LowerContext<'_>) -> bool {
+    match strip_for_parens(expr) {
+        Expr::Path(path) => path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| ctx.binding_type(&segment.ident.to_string()) == Some("Vec")),
+        _ => false,
+    }
 }
 
 fn lower_while_loop(

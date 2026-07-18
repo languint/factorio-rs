@@ -352,6 +352,7 @@ pub fn sample(n: i64) -> i64 {
     assert_eq!(args.len(), 1);
 }
 
+#[cfg(feature = "serde")]
 fn return_expr(module: &factorio_ir::module::Module) -> &Expression {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function declaration");

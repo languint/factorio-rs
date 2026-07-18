@@ -156,6 +156,13 @@ fn collect_references_from_statement(
             collect_references_from_expression(graph, module, iter, locals, reachability, pending);
             collect_references_from_stmts(graph, module, body, locals, reachability, pending);
         }
+        Statement::ForNumeric {
+            start, limit, body, ..
+        } => {
+            collect_references_from_expression(graph, module, start, locals, reachability, pending);
+            collect_references_from_expression(graph, module, limit, locals, reachability, pending);
+            collect_references_from_stmts(graph, module, body, locals, reachability, pending);
+        }
         Statement::While { condition, body } => {
             collect_references_from_expression(
                 graph,

@@ -291,6 +291,7 @@ pub fn is_statement_reachable(statement: &Statement, reach: &ModuleReachability)
         | Statement::Return(_)
         | Statement::Expr(_)
         | Statement::ForIn { .. }
+        | Statement::ForNumeric { .. }
         | Statement::While { .. }
         | Statement::Continue
         | Statement::Break => true,

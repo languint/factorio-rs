@@ -60,7 +60,7 @@ pass to Factorio APIs; use `pub fn` when other modules need to call the function
 | `if` / `else` / `else if`                            |                                         |
 | `if let Some(x) = e` / `if let x = e`                | Binds `e`, then tests `x ~= nil`        |
 | Let chains (`a && let Some(x) = e && ...`)           | Nested locals + `if x ~= nil`           |
-| `for x in iter`                                      | -> `for _, x in pairs(iter)`            |
+| `for x in iter`                                      | `ipairs` for `Vec` / `.iter()`; else `pairs`; ranges → numeric `for` |
 | `while cond { ... }`                                 | -> `while cond do ... end`              |
 | `loop { ... }`                                       | -> `while true do ... end`              |
 | `continue`                                           | -> labeled `goto` inside `for` / `while` / `loop` |
@@ -221,9 +221,16 @@ for item in list {
 | --- | --- |
 | `Vec::new()` | `{}` |
 | `push` / `len` / `is_empty` | `table.insert` / `#` / `# == 0` |
-| `for x in v` | `pairs(v)` - unordered; key discarded |
+| `for x in v` | `ipairs(v)` for bindings typed `Vec<_>`; otherwise unordered `pairs(v)` |
+| `for x in v.iter()` / `v.into_iter()` | ordered `ipairs(v)` |
+| `for i in start..end` | Lua numeric `for i = start, end - 1 do` |
+| `for i in start..=end` | Lua numeric `for i = start, end do` |
 
-Not supported: iterator adapters, ranges (`0..n`), `collect`, etc.
+The supported collecting iterator subset is range or `Vec` iteration followed by
+`.map(|x| ...)` and/or `.filter(|x| ...)`, ending in `.collect()` (including
+`.collect::<Vec<_>>()`). It lowers to an immediately invoked Lua function that
+builds and returns a table. Other adapters such as `enumerate`, `flat_map`, and
+`zip` are not supported.
 
 ## Types
 

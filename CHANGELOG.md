@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Numeric range `for` loops, ordered `Vec`/`.iter()` loops, and collecting
+  range/Vec `.map(...).filter(...).collect()` iterator chains.
 - User-defined `enum` support: unit, tuple, and named variants lower to tagged
   Lua tables (`{ tag = "..." , ... }`), with `match` patterns and inherent
   `impl` methods.

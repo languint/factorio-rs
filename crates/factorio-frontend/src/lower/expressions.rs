@@ -123,6 +123,10 @@ pub fn lower_expression(
         Expr::Unary(unary) => lower_unary_expression(unary, expression, ctx, self_type),
         Expr::Closure(closure) => lower_closure(closure, ctx, self_type),
         Expr::Try(try_expr) => lower_try_expression(try_expr, ctx, self_type),
+        Expr::Range(range) => Err(FrontendError::UnsupportedExpression {
+            location: location(range)
+                .with_note("use `for i in start..end` or `(start..end).map(...).collect()`"),
+        }),
         other => Err(FrontendError::UnsupportedExpression {
             location: location(expression).with_note(expr_kind_name(other)),
         }),
@@ -570,6 +574,17 @@ fn lower_method_call(
         "to_owned",
     ];
     let method = call.method.to_string();
+
+    if let Some(expression) = super::iterators::try_lower_iterator_chain(call, ctx, self_type)? {
+        return Ok(expression);
+    }
+    if matches!(method.as_str(), "iter" | "into_iter") && call.args.is_empty() {
+        return Err(FrontendError::UnsupportedExpression {
+            location: location(call).with_note(
+                "`.iter()` is only supported in `for x in v.iter()` or `v.iter().map(...).collect()`",
+            ),
+        });
+    }
 
     // Result-typed receivers: prefer Result helpers (including unwrap -> `.ok`).
     if receiver_is_result(&call.receiver, ctx) {

@@ -24,10 +24,19 @@ pub enum Statement {
     },
     Return(Option<Expression>),
     Expr(Expression),
-    /// `for _, VAR in pairs(ITER) do BODY end` in Lua.
+    /// `for _, VAR in pairs/ipairs(ITER) do BODY end` in Lua.
     ForIn {
         var: String,
         iter: Expression,
+        body: Vec<Self>,
+        /// When true, emit `ipairs` (ordered); otherwise `pairs`.
+        ipairs: bool,
+    },
+    /// `for VAR = START, LIMIT do BODY end` in Lua (inclusive limit, step 1).
+    ForNumeric {
+        var: String,
+        start: Expression,
+        limit: Expression,
         body: Vec<Self>,
     },
     /// `while CONDITION do BODY end` in Lua. Rust `loop { }` lowers with
@@ -37,7 +46,7 @@ pub enum Statement {
         body: Vec<Self>,
     },
     /// `goto __continue_N` in Lua (the label `::__continue_N::` is emitted by
-    /// the enclosing `ForIn` / `While`).
+    /// the enclosing `ForIn` / `ForNumeric` / `While`).
     Continue,
     /// Lua `break` (exits the innermost loop).
     Break,
