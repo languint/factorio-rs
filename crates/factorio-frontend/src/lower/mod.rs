@@ -9,6 +9,7 @@ use crate::{
     paths::require_local_name,
 };
 
+pub mod assert_macros;
 pub mod attrs;
 pub mod context;
 pub mod event_filter;
@@ -23,6 +24,7 @@ pub mod print;
 mod serde_json;
 pub mod statements;
 pub mod structs;
+pub mod tests;
 pub mod types;
 pub mod util;
 
@@ -360,11 +362,19 @@ fn lower_top_level_item(
             module_state.use_imports.extend(fragments);
         }
         Item::Mod(item_mod) if item_mod.content.is_none() => {
+            // File modules gated on `#[cfg(test)]` are only loaded by the test runner.
+            if attrs::is_cfg_test(&item_mod.attrs) {
+                return Ok(());
+            }
             module_state
                 .submodules
                 .push(submodule_path(module_name, &item_mod.ident.to_string()));
         }
         Item::Mod(item_mod) => {
+            // `#[cfg(test)]` modules are only lowered by the test runner.
+            if attrs::is_cfg_test(&item_mod.attrs) {
+                return Ok(());
+            }
             let Some(export) = item_mod
                 .attrs
                 .iter()

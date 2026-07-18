@@ -10,6 +10,7 @@ use factorio_ir::{module::Module, prune::prune_modules};
 use crate::{
     api_crate, assets, bindings,
     cargo_manifest::CargoPackage,
+    commands::typecheck,
     config::Config,
     error::{CliError, CliResult},
     locale,
@@ -17,7 +18,6 @@ use crate::{
         StageModules, collect_event_registrations, collect_remote_exports, collect_shared_consts,
         collect_shared_exports, collect_stage_module, write_mod_manifests,
     },
-    typecheck,
 };
 
 /// Options that select how a project is transpiled.

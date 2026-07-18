@@ -66,6 +66,7 @@ export default defineConfig({
             { label: "Locale", slug: "guides/locale" },
             { label: "Lints", slug: "guides/lints" },
             { label: "Profiles", slug: "guides/profiles" },
+            { label: "Testing", slug: "guides/testing" },
           ],
         },
         {

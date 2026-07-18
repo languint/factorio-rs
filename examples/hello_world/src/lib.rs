@@ -38,4 +38,18 @@ mod control {
 
         println!("inserter built at: ({x},{y})");
     }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn arithmetic_smoke() {
+            assert_eq!(1 + 1, 2);
+        }
+
+        #[test]
+        #[allow(clippy::assertions_on_constants)]
+        fn truth_holds() {
+            assert!(true);
+        }
+    }
 }

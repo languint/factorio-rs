@@ -250,13 +250,16 @@ only**.
 
 ## Expression macros
 
-Only **`println!`**, **`format!`**, and (CLI default) **`tracing::*!`** level
-macros are lowered:
+Only **`println!`**, **`format!`**, assertion macros, **`panic!`**, and (CLI
+default) **`tracing::*!`** level macros are lowered:
 
 | Macro | Lua |
 | --- | --- |
 | `println!(...)` | `game.print(...)` with `..` concatenation |
 | `format!(...)` | string built with `..` (no `game.print`) |
+| `assert!(cond)` / `assert!(cond, "...")` | `if not (cond) then error(...) end` |
+| `assert_eq!` / `assert_ne!` | compare temps, `error` with left/right |
+| `panic!("...")` | `error(...)` |
 | `tracing::info!` / `warn!` / `error!` / `debug!` / `trace!` | `game.print` with `[LEVEL]` prefix + color |
 
 `{:?}` / `{:#?}` (and `{name:?}`) dump values for Factorio using the static Rust
@@ -305,7 +308,7 @@ still fails the build as unsupported syntax when known unsafe.
 | `let binding requires an initializer` | `let x;` without value |
 | `event handlers are only allowed in control-stage modules` | Move handler to control |
 | `could not resolve locale key` | `Settings::FOO` not in this module |
-| `unsupported macro` | Only `println!` / `format!` / `tracing::*!` in expressions |
+| `unsupported macro` | Only `println!` / `format!` / asserts / `panic!` / `tracing::*!` in expressions |
 
 ## See also
 

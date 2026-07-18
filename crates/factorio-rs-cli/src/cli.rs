@@ -18,6 +18,8 @@ pub enum Command {
     Add(AddArgs),
     /// Open Factorio if it is installed on this system.
     Open,
+    /// Build the mod, launch Factorio, and run `#[test]` simulations.
+    Test(TestArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -132,4 +134,39 @@ pub struct AddArgs {
     /// Path to the consuming project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+pub struct TestArgs {
+    /// Path to the project directory or `Factorio.toml` file.
+    #[arg(long, value_name = "PATH")]
+    pub manifest_path: Option<PathBuf>,
+
+    /// Transpile profile from `Factorio.toml`.
+    ///
+    /// Defaults to `debug`.
+    #[arg(long, value_name = "NAME", default_value = "debug")]
+    pub profile: String,
+
+    /// Override the profile's debug comment level in generated Lua.
+    #[arg(long, value_name = "LEVEL")]
+    pub debug_level: Option<u8>,
+
+    /// Only run tests whose name contains this filter (like `cargo test FILTER`).
+    #[arg(value_name = "FILTER")]
+    pub filter: Option<String>,
+
+    /// Skip `cargo check --tests` before transpile (not recommended).
+    #[arg(long)]
+    pub skip_typecheck: bool,
+
+    /// Open a Factorio window instead of running headless, so you can watch the suite.
+    ///
+    /// After the suite finishes, Factorio stays open until you close it.
+    #[arg(long)]
+    pub gui: bool,
+
+    /// Kill Factorio if the suite does not finish within this many seconds.
+    #[arg(long, value_name = "SECS", default_value_t = 120)]
+    pub timeout: u64,
 }

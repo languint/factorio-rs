@@ -164,9 +164,7 @@ pub fn f(items: LuaAny) -> LuaAny {
     )
     .expect("string keys should lower");
     assert!(
-        diagnostics
-            .iter()
-            .all(|d| d.id != LintId::VariableIndex),
+        diagnostics.iter().all(|d| d.id != LintId::VariableIndex),
         "string literal indexes should not emit variable_index, got {diagnostics:?}"
     );
 }

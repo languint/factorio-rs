@@ -123,9 +123,11 @@ fn copy_directory(
             continue;
         }
 
-        let rel = path.strip_prefix(source_dir).map_err(|_| CliError::InvalidAsset {
-            message: format!("asset path `{}` escapes source directory", path.display()),
-        })?;
+        let rel = path
+            .strip_prefix(source_dir)
+            .map_err(|_| CliError::InvalidAsset {
+                message: format!("asset path `{}` escapes source directory", path.display()),
+            })?;
         let file_dest_rel = dest_rel.join(rel);
         validate_dest(&file_dest_rel)?;
         let dest = output_dir.join(&file_dest_rel);
@@ -237,10 +239,7 @@ mod tests {
     use crate::config::ModConfig;
     use std::collections::BTreeMap;
 
-    fn config_with(
-        thumbnail: Option<&str>,
-        assets: Vec<AssetEntry>,
-    ) -> Config {
+    fn config_with(thumbnail: Option<&str>, assets: Vec<AssetEntry>) -> Config {
         Config {
             source: "src".to_string(),
             output_dir: "dist".to_string(),

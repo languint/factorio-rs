@@ -1,25 +1,23 @@
 use clap::Parser;
 
-mod add;
 mod api_crate;
 mod assets;
 mod bindings;
-mod build;
 mod cargo_manifest;
 mod cli;
+mod commands;
 mod config;
 mod error;
-mod init;
-mod install;
 mod locale;
 mod manifest;
 mod open;
-mod package;
 mod paths;
-mod typecheck;
 
-use build::BuildOptions;
-use cli::{AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs};
+use cli::{
+    AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs, TestArgs,
+};
+use commands::build::BuildOptions;
+use commands::test::TestOptions;
 use error::project_root;
 
 fn main() -> anyhow::Result<()> {
@@ -33,12 +31,13 @@ fn main() -> anyhow::Result<()> {
         Command::Install(args) => run_install(&args),
         Command::Add(args) => run_add(&args),
         Command::Open => run_open(),
+        Command::Test(args) => run_test(&args),
     }
 }
 
 fn run_init(args: &InitArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    init::init(&project_root, args.name.as_deref())?;
+    commands::init::init(&project_root, args.name.as_deref())?;
     println!(
         "Initialized factorio-rs project at `{}`",
         project_root.display()
@@ -50,7 +49,7 @@ fn run_check(args: &CheckArgs) -> anyhow::Result<()> {
     let project_root = project_root(args.manifest_path.as_deref())?;
     // Profile does not affect check (no emit/prune); keep default for BuildOptions shape.
     let options = BuildOptions::new("debug").with_skip_typecheck(args.skip_typecheck);
-    build::check(&project_root, &options)?;
+    commands::build::check(&project_root, &options)?;
     println!("Check passed");
     Ok(())
 }
@@ -60,14 +59,14 @@ fn run_build(args: &BuildArgs) -> anyhow::Result<()> {
     let options = BuildOptions::new(&args.profile)
         .with_debug_level(args.debug_level)
         .with_skip_typecheck(args.skip_typecheck);
-    let outputs = build::build(&project_root, &options)?;
+    let outputs = commands::build::build(&project_root, &options)?;
 
     for output in outputs {
         println!("Generated `{}`", output.display());
     }
 
     if args.package {
-        let zip_path = package::create_archive(&project_root)?;
+        let zip_path = commands::package::create_archive(&project_root)?;
         println!("Packaged mod archive `{}`", zip_path.display());
     }
 
@@ -79,7 +78,7 @@ fn run_package(args: &PackageArgs) -> anyhow::Result<()> {
     let options = BuildOptions::new(&args.profile)
         .with_debug_level(args.debug_level)
         .with_skip_typecheck(args.skip_typecheck);
-    let zip_path = package::package(&project_root, &options)?;
+    let zip_path = commands::package::package(&project_root, &options)?;
     println!("Packaged mod archive `{}`", zip_path.display());
     Ok(())
 }
@@ -89,7 +88,7 @@ fn run_install(args: &InstallArgs) -> anyhow::Result<()> {
     let options = BuildOptions::new(&args.profile)
         .with_debug_level(args.debug_level)
         .with_skip_typecheck(args.skip_typecheck);
-    let dest = install::install(&project_root, &options)?;
+    let dest = commands::install::install(&project_root, &options)?;
     println!("Installed mod to `{}`", dest.display());
 
     if args.open {
@@ -106,9 +105,23 @@ fn run_open() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn run_test(args: &TestArgs) -> anyhow::Result<()> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let options = TestOptions {
+        build: BuildOptions::new(&args.profile)
+            .with_debug_level(args.debug_level)
+            .with_skip_typecheck(args.skip_typecheck),
+        filter: args.filter.clone(),
+        timeout_secs: args.timeout,
+        gui: args.gui,
+    };
+    commands::test::run_tests(&project_root, &options)?;
+    Ok(())
+}
+
 fn run_add(args: &AddArgs) -> anyhow::Result<()> {
     let consumer_root = project_root(args.manifest_path.as_deref())?;
-    let result = add::add(&consumer_root, &args.path)?;
+    let result = commands::add::add(&consumer_root, &args.path)?;
 
     if result.cargo_dep_added {
         println!(

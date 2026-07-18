@@ -1,3 +1,4 @@
 /target
 /dist
 /*.zip
+.factorio-rs/

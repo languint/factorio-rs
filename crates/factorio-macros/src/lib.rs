@@ -244,7 +244,7 @@ pub fn export(args: TokenStream, input: TokenStream) -> TokenStream {
 /// Parsed `#[export(...)]` interface argument (validation-only today).
 #[allow(dead_code)]
 enum ExportInterfaceArg {
-    /// `#[export(interface)]` — remote using the mod-name default.
+    /// `#[export(interface)]` - remote using the mod-name default.
     Default,
     /// `#[export(interface = "name")]`.
     Named(LitStr),

@@ -45,3 +45,14 @@ Useful as a tour of [language support](../guides/language/): `Vec` / `for` /
 `continue`, let-chains, `..Default::default()` on API param structs, settings
 reads via `.get`, and [typed API concepts](../guides/api-types/) instead of
 `LuaAny` for filters and render targets.
+
+## Tests
+
+`src/control.rs` includes `#[cfg(test)]` simulations for the adjacency rule
+(buildings die when placed next to two or more neighbors) plus blacklist
+helpers. Run with:
+
+```bash
+cd examples/mandatory_spaghetti
+factorio-rs test   # requires a Factorio binary; see Testing guide
+```

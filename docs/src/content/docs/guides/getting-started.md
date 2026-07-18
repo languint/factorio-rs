@@ -19,7 +19,8 @@ factorio-rs init --name my-mod
 | `Cargo.toml`    | Library crate depending on `factorio-rs` |
 | `Factorio.toml` | Transpile + mod metadata                 |
 | `src/lib.rs`    | Sample `control_mod!` with one event     |
-| `.gitignore`    | Ignores `/target`, `/dist`, `/.factorio-rs/exports.json`, `/*.zip` |
+| `.gitignore`    | Ignores `/target`, `/dist`, `/.factorio-rs/…`, `/*.zip` |
+
 
 Default `src/lib.rs`:
 
@@ -97,6 +98,7 @@ into the mod output (see [Factorio.toml](../../reference/factorio-toml/#assets))
 
 - [Language support](language/) - what Rust syntax you can use
 - [Option and Result](option-and-result/) - nil / errors / `?`
+- [Testing](testing/) - `#[test]` simulations with `factorio-rs test`
 - [Lints](lints/) - transpile safety diagnostics (`E0001` ...)
 - [Stages](stages/) - control / settings / data / shared
 - [Events and filters](events/)

@@ -10,6 +10,7 @@ mod report;
 pub use bindings::{BindingRegistry, FactorioBinding};
 pub use discovery::{DiscoveredModule, discover_modules};
 pub use error::{FrontendError, FrontendResult};
+pub use lower::tests::{FactorioTest, TestSuite, discover_tests};
 pub use lower::{
     ParseOptions, parse_discovered_module, parse_discovered_module_with_options,
     parse_discovered_module_with_prefix, parse_module, parse_module_with_options,

@@ -52,8 +52,10 @@ pub fn factorio_mods_dir() -> CliResult<PathBuf> {
 ///
 /// Binary launches prefer `steam-run` when available so Steam runtime libraries
 /// are present (required for the Steam build of Factorio on many Linux setups).
+/// Set `FACTORIO_RS_NO_STEAM_RUN=1` to force a direct binary launch (useful for
+/// tests and non-Steam installs).
 pub fn find_factorio() -> CliResult<FactorioLaunchTarget> {
-    let steam_run = find_on_path("steam-run").is_some();
+    let steam_run = find_on_path("steam-run").is_some() && !no_steam_run();
 
     if let Ok(path) = std::env::var("FACTORIO_PATH") {
         let path = resolve_factorio_path(PathBuf::from(path))?;
@@ -174,6 +176,13 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
         let candidate = dir.join(name);
         is_executable(&candidate).then_some(candidate)
     })
+}
+
+fn no_steam_run() -> bool {
+    matches!(
+        std::env::var("FACTORIO_RS_NO_STEAM_RUN").as_deref(),
+        Ok("1" | "true" | "TRUE" | "yes" | "YES")
+    )
 }
 
 fn is_executable(path: &Path) -> bool {

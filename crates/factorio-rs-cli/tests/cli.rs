@@ -160,3 +160,88 @@ fn package_creates_factorio_zip() {
     assert!(status.success());
     assert!(project_root.join("test-mod_0.1.4.zip").is_file());
 }
+
+#[test]
+fn test_command_runs_with_fake_factorio() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_root = temp_dir.path();
+    write_cargo_patch(project_root);
+
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
+        .args(["init", "--name", "test-mod"])
+        .current_dir(project_root)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    std::fs::write(
+        project_root.join("src/lib.rs"),
+        r#"factorio_rs::control_mod! {
+    #[factorio_rs::event(OnSingleplayerInit)]
+    pub fn on_singleplayer_init() {
+        println!("hi");
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn smoke() {
+            assert_eq!(1 + 1, 2);
+        }
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    let fake_bin = temp_dir.path().join("fake-factorio");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        std::fs::write(
+            &fake_bin,
+            r#"#!/bin/sh
+echo "FACTORIO_RS_TEST start tests::smoke"
+echo "FACTORIO_RS_TEST ok tests::smoke"
+echo "FACTORIO_RS_TEST suite_end 1 0"
+# Stay alive until the runner kills us after suite_end.
+sleep 30
+"#,
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&fake_bin).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_bin, perms).unwrap();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = fake_bin;
+        return;
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
+        .arg("test")
+        .current_dir(project_root)
+        .env("FACTORIO_PATH", &fake_bin)
+        .env("FACTORIO_RS_NO_STEAM_RUN", "1")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "factorio-rs test failed\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("[OK] tests::smoke"),
+        "missing pass line in:\n{stdout}"
+    );
+    assert!(
+        project_root
+            .join("dist/lua/factorio_rs_tests.lua")
+            .is_file(),
+        "expected generated test suite lua"
+    );
+}

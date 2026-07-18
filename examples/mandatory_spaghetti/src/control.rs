@@ -117,9 +117,9 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
         || bb.left_top.x != (0.0 - bb.right_bottom.x);
 
     let direction = if is_rectangular {
-        source.direction()
+        Some(source.direction())
     } else {
-        ""
+        None
     };
 
     let entities = source
@@ -131,7 +131,7 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
                 ..Default::default()
             }),
             name: Some(source.name().into()),
-            direction: Some(direction),
+            direction,
             force: Some(source.force().into()),
             ..Default::default()
         });
@@ -260,12 +260,97 @@ fn build_handler_impl(source: classes::LuaEntity, player_index: u32) {
     pattern(source);
 }
 
+/// Entry point used by event handlers and in-game tests.
+pub fn check_build_rules(source: classes::LuaEntity, player_index: u32) {
+    build_handler_impl(source, player_index);
+}
+
 #[factorio_rs::event]
 pub fn on_built_entity(event: OnBuiltEntityEvent) {
-    build_handler_impl(event.entity, event.player_index);
+    check_build_rules(event.entity, event.player_index);
 }
 
 #[factorio_rs::event]
 pub fn on_robot_built_entity(event: OnRobotBuiltEntityEvent) {
-    build_handler_impl(event.entity, 0);
+    check_build_rules(event.entity, 0);
+}
+
+#[cfg(test)]
+mod tests {
+    use factorio_rs::{factorio_api::classes::LuaSurfaceCreateEntityParams, prelude::*};
+
+    use crate::adjacent_blacklist;
+    use crate::control;
+    use crate::pattern_blacklist;
+
+    fn nauvis() -> factorio_rs::factorio_api::classes::LuaSurface {
+        if let Some(surface) = game.get_surface(1.into()) {
+            return surface;
+        }
+        panic!("expected nauvis surface at index 1");
+    }
+
+    fn place_chest(x: f64, y: f64) -> factorio_rs::factorio_api::classes::LuaEntity {
+        let surface = nauvis();
+        if let Some(entity) = surface.create_entity(LuaSurfaceCreateEntityParams {
+            name: "iron-chest".into(),
+            position: MapPosition { x, y },
+            force: Some("player".into()),
+            raise_built: Some(false),
+            create_build_effect_smoke: Some(false),
+            ..Default::default()
+        }) {
+            return entity;
+        }
+        panic!("failed to place iron-chest");
+    }
+
+    #[test]
+    fn rails_are_on_adjacency_blacklist() {
+        assert!(adjacent_blacklist::check("straight-rail"));
+        assert!(adjacent_blacklist::check("train-stop"));
+        assert!(!adjacent_blacklist::check("assembling-machine-1"));
+    }
+
+    #[test]
+    fn poles_and_pipes_are_on_pattern_blacklist() {
+        assert!(pattern_blacklist::check("electric-pole"));
+        assert!(pattern_blacklist::check("pipe"));
+        assert!(!pattern_blacklist::check("assembling-machine-1"));
+    }
+
+    #[test]
+    fn isolated_building_survives_adjacency_check() {
+        let building = place_chest(10.0, 10.0);
+        control::check_build_rules(building, 0);
+        assert!(building.valid());
+    }
+
+    #[test]
+    fn building_survives_with_one_neighbor() {
+        let _neighbor = place_chest(20.0, 20.0);
+        let building = place_chest(21.0, 20.0);
+        control::check_build_rules(building, 0);
+        assert!(building.valid());
+    }
+
+    #[test]
+    fn building_explodes_with_two_neighbors() {
+        // Adjacency rule: more than one neighboring building -> die.
+        let _a = place_chest(30.0, 30.0);
+        let _b = place_chest(32.0, 30.0);
+        let building = place_chest(31.0, 30.0);
+        control::check_build_rules(building, 0);
+        assert!(!building.valid());
+    }
+
+    #[test]
+    fn building_explodes_next_to_three_adjacent_buildings() {
+        let _a = place_chest(40.0, 40.0);
+        let _b = place_chest(42.0, 40.0);
+        let _c = place_chest(41.0, 41.5);
+        let building = place_chest(41.0, 40.0);
+        control::check_build_rules(building, 0);
+        assert!(building.valid());
+    }
 }

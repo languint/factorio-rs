@@ -74,3 +74,23 @@ deps. See [Sharing code between mods](../guides/dependencies/).
 
 Launch Factorio if detected (`FACTORIO_PATH`, Steam installs, PATH, or Steam
 protocol). Prefers `steam-run` when available.
+
+### `factorio-rs test`
+
+Build the mod, discover `#[test]` functions under `#[cfg(test)]`, launch Factorio
+(headless by default), run the suite in-game, and print a colored report.
+
+See [Testing](../guides/testing/).
+
+| Flag | Description |
+| --- | --- |
+| `--manifest-path <PATH>` | Project directory or `Factorio.toml` |
+| `--profile <NAME>` | Default: `debug` |
+| `--debug-level <N>` | Override profile debug comments |
+| `[FILTER]` | Only run tests whose name contains this substring |
+| `--skip-typecheck` | Skip `cargo check --tests` |
+| `--gui` | Open a Factorio window; stays open after the suite |
+| `--timeout <SECS>` | Kill Factorio if the suite does not finish (default: 120) |
+
+Requires a Factorio binary (`FACTORIO_PATH` recommended). Steam protocol-only
+installs are not supported for testing.

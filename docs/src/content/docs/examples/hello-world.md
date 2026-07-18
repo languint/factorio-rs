@@ -31,6 +31,7 @@ mod control {
 cd examples/hello_world
 factorio-rs build
 factorio-rs install --open   # optional
+factorio-rs test             # requires Factorio binary; see Testing guide
 ```
 
 Mod id: Cargo package name `hello_world`.

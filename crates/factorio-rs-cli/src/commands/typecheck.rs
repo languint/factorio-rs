@@ -18,17 +18,31 @@ use crate::{
 /// Returns [`CliError::TypecheckFailed`] when `cargo check` exits non-zero, or
 /// [`CliError::CargoMetadata`] if cargo cannot be spawned.
 pub fn cargo_check(project_root: &Path) -> CliResult<()> {
+    cargo_check_with_args(project_root, &[])
+}
+
+/// Like [`cargo_check`] but also typechecks `#[cfg(test)]` modules (`--tests`).
+pub fn cargo_check_tests(project_root: &Path) -> CliResult<()> {
+    cargo_check_with_args(project_root, &["--tests"])
+}
+
+fn cargo_check_with_args(project_root: &Path, extra_args: &[&str]) -> CliResult<()> {
     // Dependents (and the library itself) need `factorio_exports.rs` for root remotes.
     api_crate::ensure_factorio_exports(project_root)?;
     // Path deps: refresh their re-exports from Cargo metadata before rustc runs.
     refresh_path_dep_exports(project_root)?;
 
     let manifest = project_root.join("Cargo.toml");
-    let status = Command::new("cargo")
+    let mut command = Command::new("cargo");
+    command
         .arg("check")
         .arg("--manifest-path")
         .arg(&manifest)
-        .arg("--message-format=human")
+        .arg("--message-format=human");
+    for arg in extra_args {
+        command.arg(arg);
+    }
+    let status = command
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())

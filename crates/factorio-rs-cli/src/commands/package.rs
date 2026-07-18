@@ -6,8 +6,8 @@ use walkdir::WalkDir;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 use crate::{
-    build::{BuildOptions, build},
     cargo_manifest::CargoPackage,
+    commands::build::{BuildOptions, build},
     config::Config,
     error::{CliError, CliResult},
 };

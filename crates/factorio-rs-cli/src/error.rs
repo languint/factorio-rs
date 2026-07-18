@@ -89,6 +89,21 @@ pub enum CliError {
     #[error("Factorio was not found on this system ({hint})")]
     FactorioNotFound { hint: String },
 
+    #[error(
+        "Factorio binary required for `factorio-rs test` (Steam protocol launch cannot pass server args). \
+         Set FACTORIO_PATH to the Factorio executable."
+    )]
+    FactorioBinaryRequired,
+
+    #[error("no `#[test]` functions found under `#[cfg(test)]` modules")]
+    NoTests,
+
+    #[error("Factorio test suite timed out after {timeout_secs}s")]
+    TestTimeout { timeout_secs: u64 },
+
+    #[error("Factorio test suite failed")]
+    TestsFailed,
+
     #[error("failed to launch Factorio (`{target}`)")]
     LaunchFactorio {
         target: String,

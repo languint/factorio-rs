@@ -3,6 +3,7 @@ use syn::{Arm, BinOp, Block, Expr, ExprBinary, ExprMatch, Lit, Pat, Stmt};
 use crate::error::{FrontendError, FrontendResult};
 
 use super::{
+    assert_macros::{is_assert_macro, lower_assert_macro_statements},
     context::LowerContext,
     expressions::{lower_assignment_target, lower_expression},
     functions::lower_function,
@@ -132,6 +133,13 @@ fn lower_statement(
             lower_expression_statement(expression, semi.is_some(), is_tail, ctx, self_type)
         }
         Stmt::Macro(mac) => {
+            if is_assert_macro(&mac.mac) {
+                let expression = syn::ExprMacro {
+                    mac: mac.mac.clone(),
+                    attrs: mac.attrs.clone(),
+                };
+                return lower_assert_macro_statements(&expression, ctx, self_type);
+            }
             let expression = Expr::Macro(syn::ExprMacro {
                 mac: mac.mac.clone(),
                 attrs: mac.attrs.clone(),
@@ -255,7 +263,15 @@ fn lower_semicolon_statements(
             Ok(stmts)
         }
         Expr::If(if_expression) => lower_if_expression(if_expression, ctx, self_type),
-        Expr::Call(_) | Expr::MethodCall(_) | Expr::Macro(_) | Expr::Try(_) => {
+        Expr::Call(_) | Expr::MethodCall(_) | Expr::Try(_) => {
+            let (mut stmts, value) = lower_expr(expression, ctx, self_type)?;
+            stmts.push(factorio_ir::statement::Statement::Expr(value));
+            Ok(stmts)
+        }
+        Expr::Macro(mac) => {
+            if is_assert_macro(&mac.mac) {
+                return lower_assert_macro_statements(mac, ctx, self_type);
+            }
             let (mut stmts, value) = lower_expr(expression, ctx, self_type)?;
             stmts.push(factorio_ir::statement::Statement::Expr(value));
             Ok(stmts)

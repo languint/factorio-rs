@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `factorio-rs test`: discover ordinary `#[test]` functions under `#[cfg(test)]`,
+  transpile them into a Factorio harness, launch Factorio (headless by default),
+  and print a colored `[OK]` / `[FAIL]` report. Use `--gui` to open a window
+  and inspect the map after the suite. Assertion macros (`assert!`,
+  `assert_eq!`, `assert_ne!`, `panic!`) lower to Lua `error(...)`.
+
 ## [0.1.4] - 2026-07-14
 
 ### Added

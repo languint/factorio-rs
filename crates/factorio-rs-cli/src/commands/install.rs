@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    build::{BuildOptions, build},
     cargo_manifest::CargoPackage,
+    commands::build::{BuildOptions, build},
     config::Config,
     error::{CliError, CliResult},
     paths::factorio_mods_dir,

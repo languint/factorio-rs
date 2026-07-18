@@ -45,6 +45,13 @@ pub fn lower_macro_expression(
     match name.as_str() {
         "println" => lower_println_macro(mac, ctx, self_type),
         "format" => lower_format_macro(mac, ctx, self_type),
+        "assert" | "assert_eq" | "assert_ne" | "panic" => {
+            let stmts = super::assert_macros::lower_assert_macro_statements(mac, ctx, self_type)?;
+            ctx.try_hoists.extend(stmts);
+            Ok(factorio_ir::expression::Expression::Literal(
+                factorio_ir::literal::Literal::Nil,
+            ))
+        }
         _ => Err(FrontendError::UnsupportedMacro {
             name,
             location: location(mac),
@@ -252,7 +259,7 @@ fn lower_format_macro_message(
     lower_format_template(&template, &lowered_args, location(mac), &input.format, ctx)
 }
 
-fn lower_format_template(
+pub fn lower_format_template(
     template: &str,
     args: &[factorio_ir::expression::Expression],
     location: factorio_ir::span::SourceLoc,

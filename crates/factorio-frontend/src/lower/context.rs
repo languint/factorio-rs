@@ -108,6 +108,12 @@ impl LowerContext<'_> {
         format!("__try_{}", self.try_tmp_counter)
     }
 
+    /// Allocate a temporary name for assertion left/right bindings.
+    pub fn alloc_assert_tmp(&mut self, kind: &str) -> String {
+        self.try_tmp_counter += 1;
+        format!("__assert_{kind}_{}", self.try_tmp_counter)
+    }
+
     /// Compute the Lua local name for a module path, with the configured prefix.
     pub fn prefixed_local(&self, module_path: &str) -> String {
         let base = require_local_name(module_path);

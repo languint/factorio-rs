@@ -209,6 +209,38 @@ fn stage_ident_to_stage(ident: &str) -> Option<Stage> {
     }
 }
 
+/// Returns true when `attrs` include `#[cfg(test)]` (possibly among other cfgs).
+#[must_use]
+pub fn is_cfg_test(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(attr_is_cfg_test)
+}
+
+/// Returns true when `attrs` include a bare `#[test]` attribute.
+#[must_use]
+pub fn is_test_fn(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        let path = attr.path();
+        path.is_ident("test")
+            || (path.segments.len() == 2
+                && path.segments[0].ident == "rust"
+                && path.segments[1].ident == "test")
+    })
+}
+
+fn attr_is_cfg_test(attr: &Attribute) -> bool {
+    if !attr.path().is_ident("cfg") {
+        return false;
+    }
+    let Meta::List(meta_list) = &attr.meta else {
+        return false;
+    };
+    // `#[cfg(test)]` or `#[cfg(all(test, ...))]` / `#[cfg(any(test, ...))]`
+    let tokens = meta_list.tokens.to_string();
+    tokens
+        .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+        .any(|part| part == "test")
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::panic)]
