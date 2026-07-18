@@ -136,7 +136,7 @@ fn build_with_package_flag_creates_factorio_zip() {
         .status()
         .unwrap();
     assert!(status.success());
-    assert!(project_root.join("test-mod_0.1.5.zip").is_file());
+    assert!(project_root.join("test-mod_0.1.6.zip").is_file());
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn package_creates_factorio_zip() {
         .status()
         .unwrap();
     assert!(status.success());
-    assert!(project_root.join("test-mod_0.1.5.zip").is_file());
+    assert!(project_root.join("test-mod_0.1.6.zip").is_file());
 }
 
 #[test]

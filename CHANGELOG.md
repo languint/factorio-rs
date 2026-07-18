@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-18
+
 ### Added
 
 - `storage.get::<T>(key) -> Option<T>`: typed optional reads lowering to
@@ -39,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quieter build summary (`Finished transpile [profile] -> dist/ (N files) in ...`
   instead of dumping every generated path), cargo-test-shaped reports, and no
   duplicate `error:` after diagnostics already printed.
+
 ## [0.1.5] - 2026-07-18
 
 ### Added
@@ -139,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mod_settings!`, `locale!`, events and filters, build profiles, dead-code prune.
 - `format!` / `println!`, thumbnails, documentation site.
 
-[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/languint/factorio-rs/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/languint/factorio-rs/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/languint/factorio-rs/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/languint/factorio-rs/compare/v0.1.2...v0.1.3
