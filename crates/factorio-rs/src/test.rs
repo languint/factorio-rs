@@ -11,13 +11,13 @@ impl TestCtx {
 
     /// Load a previously stored value.
     #[must_use]
-    pub fn fetch(&self, _key: &str) -> LuaAny {
+    pub const fn fetch(&self, _key: &str) -> LuaAny {
         LuaAny
     }
 
     /// Load a stored numeric value (e.g. a tick captured with [`Self::set`]).
     #[must_use]
-    pub fn fetch_u32(&self, _key: &str) -> u32 {
+    pub const fn fetch_u32(&self, _key: &str) -> u32 {
         0
     }
 }
@@ -30,12 +30,14 @@ pub struct Steps {
 
 impl Steps {
     /// Run `f` on the current tick (or immediately after a preceding wait).
+    #[must_use]
     pub fn step(self, _f: impl FnOnce(&TestCtx)) -> Self {
         self
     }
 
     /// Advance the game by `ticks` before the next step.
-    pub fn wait(self, _ticks: u32) -> Self {
+    #[must_use]
+    pub const fn wait(self, _ticks: u32) -> Self {
         self
     }
 }
@@ -44,6 +46,7 @@ impl Steps {
 ///
 /// Calling this registers a pending step queue that the harness drains across
 /// ticks after the test function returns. Sync tests simply omit this call.
-pub fn steps() -> Steps {
+#[must_use]
+pub const fn steps() -> Steps {
     Steps { _private: () }
 }

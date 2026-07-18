@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared `TestCtx` for state between steps.
 - `factorio-rs build` shows an indicatif spinner and a per-phase time breakdown.
 
+### Fixed
+
+- Example Factorio simulation tests are marked `#[ignore]` so `cargo test` /
+  CI skip them; run those suites with `factorio-rs test`.
+
 ## [0.1.4] - 2026-07-14
 
 ### Added

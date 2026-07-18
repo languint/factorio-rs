@@ -320,6 +320,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn isolated_building_survives_adjacency_check() {
         let building = place_chest(10.0, 10.0);
         control::check_build_rules(building, 0);
@@ -327,6 +328,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn building_survives_with_one_neighbor() {
         let _neighbor = place_chest(20.0, 20.0);
         let building = place_chest(21.0, 20.0);
@@ -335,6 +337,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn building_explodes_with_two_neighbors() {
         // Adjacency rule: more than one neighboring building -> die.
         let _a = place_chest(30.0, 30.0);
@@ -345,6 +348,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn building_explodes_next_to_three_adjacent_buildings() {
         let _a = place_chest(40.0, 40.0);
         let _b = place_chest(42.0, 40.0);

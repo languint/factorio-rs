@@ -222,6 +222,7 @@ fn collect_rust_paths(dir: &Path, out: &mut Vec<PathBuf>) -> CliResult<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn generate_harness_lua(mod_name: &str, tests: &[factorio_frontend::FactorioTest]) -> String {
     let mut out = String::new();
     out.push_str("-- factorio-rs test harness\n");

@@ -186,6 +186,7 @@ fn spinner_style() -> ProgressStyle {
         .unwrap_or_else(|_| ProgressStyle::default_spinner())
 }
 
+#[allow(clippy::literal_string_with_formatting_args)]
 fn file_bar_style() -> ProgressStyle {
     ProgressStyle::with_template("{spinner:.cyan} {msg:<28} [{bar:24.cyan/blue}] {pos}/{len}")
         .unwrap_or_else(|_| ProgressStyle::default_bar())

@@ -55,8 +55,9 @@ mod control {
         }
 
         #[test]
+        #[ignore = "requires Factorio (run with factorio-rs test)"]
         fn tick_advances_across_waits() {
-            factorio_rs::test::steps()
+            let _ = factorio_rs::test::steps()
                 .step(|ctx| {
                     ctx.set("t0", game.tick());
                 })

@@ -14,7 +14,10 @@ APIs. Those tests are **transpiled to Lua** and executed inside Factorio by
 
 Plain `cargo test` cannot run real simulations - the stubs are compile-only.
 Use `factorio-rs test` whenever a test touches `game`, surfaces, entities, or
-other runtime APIs.
+other runtime APIs. Mark those tests with
+`#[ignore = "requires Factorio (run with factorio-rs test)"]` so `cargo test`
+(and CI) skip them; `factorio-rs test` still discovers and runs `#[ignore]`
+tests.
 
 ## Authoring
 
@@ -65,12 +68,14 @@ mod tests {
     use factorio_rs::prelude::*;
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn nauvis_exists() {
         let surface = game.get_surface(1.into());
         assert!(surface.is_some());
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn player_force_exists() {
         let force = game.forces.get("player".into());
         assert!(force.is_some());
@@ -113,6 +118,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn isolated_building_survives() {
         let building = place_chest(10.0, 10.0);
         control::check_build_rules(building, 0);
@@ -120,6 +126,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn two_neighbors_destroy_the_building() {
         let _a = place_chest(30.0, 30.0);
         let _b = place_chest(32.0, 30.0);
@@ -156,6 +163,7 @@ mod tests {
     use factorio_rs::prelude::*;
 
     #[test]
+    #[ignore = "requires Factorio (run with factorio-rs test)"]
     fn tick_advances_across_waits() {
         factorio_rs::test::steps()
             .step(|ctx| {
