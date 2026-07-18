@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="docs/src/assets/logo.svg" alt="factorio-rs" width="160" height="160">
+    <img src="https://raw.githubusercontent.com/languint/factorio-rs/HEAD/docs/src/assets/logo.svg" alt="factorio-rs" width="160" height="160">
     <h1>factorio-rs</h1>
     <p>Write Factorio mods in Rust. Transpile to loadable Lua mods.</p>
     <p>
