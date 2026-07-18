@@ -13,7 +13,22 @@ export default defineConfig({
     starlight({
       title: "factorio-rs",
       description:
-        "Rust SDK for Factorio modding - transpile Rust to Lua mods.",
+        "Write Factorio mods in Rust. factorio-rs transpiles Rust to loadable Lua mods with typed API bindings, events, settings, and locale.",
+      logo: {
+        src: "./src/assets/logo.svg",
+      },
+      customCss: ["./src/styles/custom.css"],
+      head: [
+        {
+          tag: "meta",
+          attrs: {
+            name: "keywords",
+            content:
+              "factorio, factorio mods, rust, lua, transpile, modding, gamedev, factorio-rs",
+          },
+        },
+      ],
+      routeMiddleware: "./src/routeData.ts",
       social: [
         {
           icon: "github",

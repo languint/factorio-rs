@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "CLI for transpiling Rust into Lua Factorio mods"
+keywords.workspace = true
+categories = ["command-line-utilities", "game-development", "development-tools"]
+description = "CLI to init, build, and open Factorio mods written in Rust (Rust-to-Lua transpile)"
 
 [[bin]]
 name = "factorio-rs"

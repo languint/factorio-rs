@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Lua code generator for factorio-rs"
+keywords.workspace = true
+categories = ["game-development", "compilers", "development-tools"]
+description = "Lua code generator for the factorio-rs Rust-to-Lua Factorio mod toolchain"
 
 [dependencies]
 factorio-ir.workspace = true

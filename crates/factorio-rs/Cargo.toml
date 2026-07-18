@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Rust SDK for Factorio modding"
+keywords.workspace = true
+categories.workspace = true
+description = "Rust SDK for Factorio modding: write mods in Rust and transpile them to Lua"
 
 [features]
 default = []

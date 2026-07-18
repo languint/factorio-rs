@@ -21,8 +21,11 @@ members = [
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/languint/factorio-rs"
-homepage = "https://github.com/languint/factorio-rs"
+homepage = "https://languint.github.io/factorio-rs/"
+documentation = "https://languint.github.io/factorio-rs/"
 readme = "README.md"
+keywords = ["factorio", "lua", "modding", "gamedev", "transpile"]
+categories = ["game-development"]
 
 [workspace.dependencies]
 factorio-rs = { version = "0.1.4", path = "./crates/factorio-rs" }

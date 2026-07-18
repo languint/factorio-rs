@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Create a factorio-rs project and produce a loadable Factorio mod.
+description: Create a Factorio mod in Rust with factorio-rs init and build, then load the generated Lua mod in Factorio.
 ---
 
 ## Create a project

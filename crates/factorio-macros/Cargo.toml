@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Proc macros for factorio-rs mods"
+keywords.workspace = true
+categories = ["game-development", "development-tools"]
+description = "Proc macros for Factorio mod events, settings, and locale in factorio-rs"
 
 [lib]
 proc-macro = true

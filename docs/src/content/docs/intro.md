@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What factorio-rs is and how it fits into Factorio modding.
+description: "What factorio-rs is: a Rust SDK that transpiles Factorio mods to Lua, and how it fits into Factorio modding."
 ---
 
 **factorio-rs** lets you write Factorio mods in Rust. A CLI tool reads your `.rs`

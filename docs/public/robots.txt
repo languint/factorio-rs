@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://languint.github.io/factorio-rs/sitemap-index.xml

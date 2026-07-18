@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Rust frontend that lowers Factorio mod sources into factorio-ir"
+keywords.workspace = true
+categories = ["game-development", "compilers", "parser-implementations"]
+description = "Rust frontend that parses Factorio mod sources and lowers them to factorio-ir"
 
 [features]
 default = []

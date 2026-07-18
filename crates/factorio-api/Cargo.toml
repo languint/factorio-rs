@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Generated Factorio runtime API bindings for factorio-rs"
+keywords.workspace = true
+categories = ["game-development", "api-bindings"]
+description = "Generated Factorio runtime API type stubs for factorio-rs mods"
 
 [dependencies]
 

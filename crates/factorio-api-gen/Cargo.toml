@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Generates Rust bindings from Factorio runtime-api.json"
+keywords.workspace = true
+categories = ["game-development", "development-tools", "api-bindings"]
+description = "Generates Rust Factorio API bindings from runtime-api.json for factorio-rs"
 include = [
     "src/**/*",
     "tests/**/*",

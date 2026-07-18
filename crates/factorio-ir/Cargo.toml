@@ -5,8 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation.workspace = true
 readme.workspace = true
-description = "Intermediate representation for factorio-rs Rust-to-Lua transpilation"
+keywords.workspace = true
+categories = ["game-development", "compilers", "data-structures"]
+description = "Intermediate representation for factorio-rs Rust-to-Lua Factorio mod transpilation"
 
 [dependencies]
 serde.workspace = true

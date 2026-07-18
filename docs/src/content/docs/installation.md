@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install the factorio-rs CLI and add the SDK to a Cargo project.
+description: Install factorio-rs-cli from crates.io and add the factorio-rs SDK to a Cargo project for Factorio modding.
 ---
 
 ## CLI
