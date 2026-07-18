@@ -3,7 +3,7 @@ use syn::{Fields, Type, Visibility};
 use crate::error::{FrontendError, FrontendResult};
 
 use super::{
-    types::{lower_type, type_source_string},
+    types::{TypeAlias, lower_type, type_source_string},
     util::location,
 };
 
@@ -49,6 +49,7 @@ impl PendingStruct {
 
 pub fn lower_struct_fields(
     fields: &Fields,
+    aliases: &std::collections::HashMap<String, TypeAlias>,
 ) -> FrontendResult<Vec<factorio_ir::structure::StructField>> {
     match fields {
         Fields::Named(fields) => fields
@@ -62,8 +63,8 @@ pub fn lower_struct_fields(
                 })?;
                 Ok(factorio_ir::structure::StructField {
                     name: name.to_string(),
-                    ty: lower_type(&field.ty)?,
-                    source_type: Some(type_source_string(&field.ty)),
+                    ty: lower_type(&field.ty, aliases)?,
+                    source_type: Some(type_source_string(&field.ty, aliases)),
                 })
             })
             .collect(),

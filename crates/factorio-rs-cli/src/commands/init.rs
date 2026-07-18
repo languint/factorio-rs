@@ -5,7 +5,7 @@ use crate::{
     error::{CliError, CliResult},
 };
 
-const FACTORIO_SDK_VERSION: &str = "0.1.5";
+const FACTORIO_SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const LIB_RS: &str = r#"factorio_rs::control_mod! {
     #[factorio_rs::event(OnSingleplayerInit)]
@@ -92,7 +92,7 @@ fn cargo_toml_template(package_name: &str) -> String {
     format!(
         r#"[package]
 name = "{package_name}"
-version = "0.1.5"
+version = "{FACTORIO_SDK_VERSION}"
 edition = "2024"
 rust-version = "1.85"
 publish = false
@@ -157,7 +157,7 @@ fn write_file(path: &Path, contents: &str) -> CliResult<()> {
 mod tests {
     use std::path::Path;
 
-    use super::{cargo_toml_template, default_package_name};
+    use super::{FACTORIO_SDK_VERSION, cargo_toml_template, default_package_name};
 
     #[test]
     fn default_package_name_sanitizes_temp_directories() {
@@ -169,6 +169,9 @@ mod tests {
     fn cargo_toml_includes_factorio_dependency() {
         let manifest = cargo_toml_template("my-mod");
         assert!(manifest.contains("name = \"my-mod\""));
-        assert!(manifest.contains("factorio-rs = \"0.1.5\""));
+        assert!(manifest.contains(&format!(
+            "factorio-rs = \"{FACTORIO_SDK_VERSION}\""
+        )));
+        assert!(manifest.contains(&format!("version = \"{FACTORIO_SDK_VERSION}\"")));
     }
 }

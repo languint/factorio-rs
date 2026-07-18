@@ -10,7 +10,7 @@ use super::{
     print::infer_debug_type_key,
     types::{
         infer_type_from_expression, inferred_source_type, is_option_type, lower_binding,
-        rust_type_key,
+        register_type_alias, rust_type_key,
     },
     util::{item_name, location},
 };
@@ -91,7 +91,7 @@ fn lower_statement(
                 return Ok(stmts);
             }
 
-            let (name, annotated_type) = lower_binding(&local.pat)?;
+            let (name, annotated_type) = lower_binding(&local.pat, &ctx.type_aliases)?;
             let (mut hoists, value) = lower_expr(&init.expr, ctx, self_type)?;
             let (ty, source_type) = if let Some((ty, source_type)) = annotated_type {
                 (ty, Some(source_type))
@@ -102,10 +102,10 @@ fn lower_statement(
                 (ty, source_type)
             };
             if let syn::Pat::Type(pat_type) = &local.pat {
-                if let Some(key) = rust_type_key(&pat_type.ty) {
+                if let Some(key) = rust_type_key(&pat_type.ty, &ctx.type_aliases) {
                     ctx.bind_type(name.clone(), key);
                 }
-                if is_option_type(&pat_type.ty) {
+                if is_option_type(&pat_type.ty, &ctx.type_aliases) {
                     ctx.bind_option(name.clone());
                 }
             } else if let Some(key) = infer_debug_type_key(&value, ctx) {
@@ -124,6 +124,10 @@ fn lower_statement(
             Ok(vec![factorio_ir::statement::Statement::FunctionDecl(
                 lower_function(function, ctx)?,
             )])
+        }
+        Stmt::Item(syn::Item::Type(item_type)) => {
+            register_type_alias(item_type, &mut ctx.type_aliases)?;
+            Ok(vec![])
         }
         Stmt::Item(item) => Err(FrontendError::UnsupportedItem {
             item: item_name(item),

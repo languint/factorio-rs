@@ -235,12 +235,14 @@ fn lower_items(
         remote_fn_locals: std::collections::HashMap::new(),
         binding_types: std::collections::HashMap::new(),
         enums: std::collections::HashMap::new(),
+        type_aliases: std::collections::HashMap::new(),
         option_bindings: std::collections::HashSet::new(),
         lints,
         diagnostics,
         try_hoists: Vec::new(),
         try_tmp_counter: 0,
     };
+    types::collect_type_aliases(items, &mut ctx.type_aliases)?;
     let mut module_state = ModuleLowerState {
         module_name,
         stage,
@@ -341,7 +343,7 @@ fn lower_top_level_item(
             );
         }
         Item::Struct(item_struct) => {
-            lower_struct_item(item_struct, module_state.structs, module_state.enums)?;
+            lower_struct_item(item_struct, module_state.structs, module_state.enums, ctx)?;
         }
         Item::Enum(item_enum) => {
             lower_enum_item(item_enum, module_state.structs, module_state.enums, ctx)?;
@@ -423,6 +425,9 @@ fn lower_top_level_item(
         Item::Macro(mac) if is_known_macro(&mac.mac, "locale") => {
             module_state.pending_locales.push(mac.mac.tokens.clone());
         }
+        Item::Type(_) => {
+            // Collected in `collect_type_aliases` before lowering; no IR.
+        }
         item => {
             return Err(FrontendError::UnsupportedItem {
                 item: item_name(item),
@@ -438,6 +443,7 @@ fn lower_struct_item(
     item_struct: &syn::ItemStruct,
     structs: &mut BTreeMap<String, PendingStruct>,
     enums: &BTreeMap<String, PendingEnum>,
+    ctx: &LowerContext<'_>,
 ) -> FrontendResult<()> {
     let name = item_struct.ident.to_string();
     if enums.contains_key(&name) {
@@ -450,7 +456,7 @@ fn lower_struct_item(
         .entry(name)
         .or_insert_with(|| PendingStruct::new(item_struct.vis.clone()));
     entry.visibility = item_struct.vis.clone();
-    entry.fields = lower_struct_fields(&item_struct.fields)?;
+    entry.fields = lower_struct_fields(&item_struct.fields, &ctx.type_aliases)?;
     entry.doc = extract_doc_comments(&item_struct.attrs);
     Ok(())
 }
@@ -549,11 +555,11 @@ fn lower_enum_item(
                 types: fields
                     .unnamed
                     .iter()
-                    .map(|field| types::lower_type(&field.ty))
+                    .map(|field| types::lower_type(&field.ty, &ctx.type_aliases))
                     .collect::<FrontendResult<Vec<_>>>()?,
             },
             syn::Fields::Named(fields) => factorio_ir::enumeration::EnumVariantFields::Named(
-                lower_struct_fields(&syn::Fields::Named(fields.clone()))?,
+                lower_struct_fields(&syn::Fields::Named(fields.clone()), &ctx.type_aliases)?,
             ),
         };
         let info_fields = match &fields {

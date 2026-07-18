@@ -1,6 +1,6 @@
 [package]
 name = "mandatory_spaghetti"
-version = "0.1.5"
+version.workspace = true
 edition = "2024"
 publish = false
 

@@ -59,10 +59,10 @@ pub fn lower_closure(
     for pat in &closure.inputs {
         if let Pat::Type(PatType { pat, ty, .. }) = pat {
             let name = closure_param_name(pat, closure)?;
-            if let Some(key) = rust_type_key(ty) {
+            if let Some(key) = rust_type_key(ty, &ctx.type_aliases) {
                 ctx.bind_type(name.clone(), key);
             }
-            if is_option_type(ty) {
+            if is_option_type(ty, &ctx.type_aliases) {
                 ctx.bind_option(name);
             }
         }
@@ -116,8 +116,8 @@ fn lower_function_parts(
         body,
         doc: extract_doc_comments(&function.attrs),
         debug: Some(factorio_ir::debug::FunctionDebug {
-            header_comment: function_header_comment(&function.vis, &function.sig),
-            return_type: return_type_string(&function.sig),
+            header_comment: function_header_comment(&function.vis, &function.sig, &ctx.type_aliases),
+            return_type: return_type_string(&function.sig, &ctx.type_aliases),
         }),
         event: event_attr.as_ref().map(|event| event.event_name.clone()),
         event_filter: event_attr.and_then(|event| event.filter),
@@ -148,18 +148,18 @@ fn lower_parameter(
         }),
         syn::FnArg::Typed(PatType { pat, ty, .. }) => {
             let name = lower_binding_pattern(pat)?;
-            let r#type = lower_type(ty)?;
-            if let Some(key) = rust_type_key(ty) {
+            let r#type = lower_type(ty, &ctx.type_aliases)?;
+            if let Some(key) = rust_type_key(ty, &ctx.type_aliases) {
                 ctx.bind_type(name.clone(), key);
             }
-            if is_option_type(ty) {
+            if is_option_type(ty, &ctx.type_aliases) {
                 ctx.bind_option(name.clone());
             }
 
             Ok(factorio_ir::function::Parameter {
                 name,
                 r#type,
-                source_type: Some(type_source_string(ty)),
+                source_type: Some(type_source_string(ty, &ctx.type_aliases)),
             })
         }
     }

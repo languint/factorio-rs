@@ -1,7 +1,7 @@
 use syn::{Attribute, Expr, ExprLit, FnArg, Lit, Meta, Signature, Visibility};
 
 use super::types::{
-    lower_binding_pattern, receiver_source_string, return_type_string, type_source_string,
+    TypeAlias, lower_binding_pattern, receiver_source_string, return_type_string, type_source_string,
 };
 
 const fn visibility_prefix(visibility: &Visibility) -> &'static str {
@@ -43,24 +43,31 @@ pub fn extract_doc_comments(attrs: &[Attribute]) -> Option<String> {
     }
 }
 
-fn format_fn_arg_for_comment(arg: &FnArg) -> String {
+fn format_fn_arg_for_comment(
+    arg: &FnArg,
+    aliases: &std::collections::HashMap<String, TypeAlias>,
+) -> String {
     match arg {
         FnArg::Receiver(receiver) => receiver_source_string(receiver),
         FnArg::Typed(pat_type) => {
             let name = lower_binding_pattern(&pat_type.pat).unwrap_or_else(|_| "_".to_string());
-            format!("{}: {}", name, type_source_string(&pat_type.ty))
+            format!("{}: {}", name, type_source_string(&pat_type.ty, aliases))
         }
     }
 }
 
-pub fn function_header_comment(visibility: &Visibility, signature: &Signature) -> String {
+pub fn function_header_comment(
+    visibility: &Visibility,
+    signature: &Signature,
+    aliases: &std::collections::HashMap<String, TypeAlias>,
+) -> String {
     let params = signature
         .inputs
         .iter()
-        .map(format_fn_arg_for_comment)
+        .map(|arg| format_fn_arg_for_comment(arg, aliases))
         .collect::<Vec<_>>()
         .join(", ");
-    let return_suffix = return_type_string(signature)
+    let return_suffix = return_type_string(signature, aliases)
         .map_or_else(String::new, |return_type| format!(" -> {return_type}"));
 
     format!(

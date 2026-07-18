@@ -31,6 +31,8 @@ pub struct LowerContext<'a> {
     pub binding_types: HashMap<String, String>,
     /// Locally declared enum variants, used to recognize constructors and patterns.
     pub enums: HashMap<String, Vec<EnumVariantInfo>>,
+    /// `type` aliases in this module
+    pub type_aliases: HashMap<String, super::types::TypeAlias>,
     /// Locals annotated as `Option<_>` (kept even though [`Self::binding_types`] peels Option).
     pub option_bindings: HashSet<String>,
     /// Lint levels from `Factorio.toml` `[lints]` (defaults deny).

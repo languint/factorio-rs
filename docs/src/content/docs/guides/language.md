@@ -20,13 +20,22 @@ stand in for structs, arrays, and maps.
 | `struct` + inherent `impl`  | Fields, methods, associated `const`s                             |
 | `enum` + inherent `impl`    | Unit, tuple, and named variants as tagged tables                 |
 | `const`                     | Becomes a local (or exported) binding                            |
+| `type Name = ...`           | Transparent; resolved then forgotten (no Lua emission)           |
 | `use crate::...`            | Binding crates with `[package.metadata.factorio]` also lower; see [Sharing code between mods](dependencies/). `crate::` paths become `require`s |
 | `#[factorio_rs::export]`      | Publishes a fn via remote (control) or require (shared); see [Sharing code between mods](dependencies/) |
 | `mod name;`                 | Declares a submodule file                                        |
 | `mod_settings!` / `locale!` | Expanded / collected at transpile time                           |
 | Doc comments                | Emitted as Lua comments when debug comments are on               |
 
-**Not supported (yet):** `trait`, trait `impl`, `type` aliases, `static`, tuple structs, unknown macros at item position.
+**Not supported (yet):** `trait`, trait `impl`, `static`, tuple structs, unknown macros at item position.
+
+### Type aliases
+
+`type` aliases are transparent: the frontend substitutes the aliased type
+(including nested and generic aliases such as `type Opt<T> = Option<T>`) before
+binding-type / Option / `Vec` detection, then emits no Lua for the alias itself.
+Supported forms are plain and generic aliases without lifetimes, const params,
+bounds, or `where` clauses. Block-local `type` items work the same way.
 
 ### Enums
 

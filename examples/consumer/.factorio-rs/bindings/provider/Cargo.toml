@@ -1,6 +1,6 @@
 [package]
 name = "provider"
-version = "0.1.5"
+version.workspace = true
 edition = "2024"
 publish = false
 description = "Auto-generated factorio-rs API stubs for `provider`"

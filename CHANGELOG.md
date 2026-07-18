@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Transparent `type` aliases (`type Name = ...`, `type Name<T> = ...`), including
+  nested and block-local aliases. Resolved before Option/`Vec`/binding detection;
+  no Lua is emitted for the alias itself.
 - Numeric range `for` loops, ordered `Vec`/`.iter()` loops, and collecting
   range/Vec `.map(...).filter(...).collect()` iterator chains.
 - User-defined `enum` support: unit, tuple, and named variants lower to tagged

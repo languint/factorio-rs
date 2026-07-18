@@ -2,7 +2,7 @@ import { defineRouteMiddleware } from "@astrojs/starlight/route-data";
 
 const DOCS_ORIGIN = "https://languint.github.io";
 const DOCS_BASE = "/factorio-rs";
-const OG_IMAGE = `${DOCS_ORIGIN}${DOCS_BASE}/og/social.png`;
+const OG_IMAGE = `${DOCS_ORIGIN}${DOCS_BASE}/og/social-v2.png`;
 const GITHUB_URL = "https://github.com/languint/factorio-rs";
 
 export const onRequest = defineRouteMiddleware((context) => {
@@ -56,9 +56,7 @@ export const onRequest = defineRouteMiddleware((context) => {
     tag: "meta",
     attrs: {
       name: "twitter:title",
-      content: isHome
-        ? `${siteTitle} | Write Factorio mods in Rust`
-        : title,
+      content: isHome ? `${siteTitle} | Write Factorio mods in Rust` : title,
     },
   });
   head.push({

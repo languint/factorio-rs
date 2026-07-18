@@ -244,12 +244,14 @@ fn lower_test_module_items(
         remote_fn_locals,
         binding_types: HashMap::new(),
         enums: HashMap::new(),
+        type_aliases: HashMap::new(),
         option_bindings: std::collections::HashSet::new(),
         lints: options.lints,
         diagnostics,
         try_hoists: Vec::new(),
         try_tmp_counter: 0,
     };
+    super::types::collect_type_aliases(items, &mut ctx.type_aliases)?;
 
     let mut nested_mods: Vec<(String, &[Item])> = Vec::new();
 
