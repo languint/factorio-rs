@@ -102,6 +102,49 @@ fn map_location_self_cycle_stays_lua_any() {
 }
 
 #[test]
+fn emits_attribute_setters_without_write_only_getters() {
+    let generated = generate_from_bundled_api().expect("generate");
+    let classes = &generated.classes;
+    let style_start = classes
+        .find("impl LuaStyle")
+        .expect("LuaStyle impl missing");
+    let style_chunk = &classes[style_start..style_start.saturating_add(50_000)];
+    let style = style_chunk.replace(' ', "");
+
+    assert!(
+        classes
+            .replace(' ', "")
+            .contains("pubfnset_caption(&self,value:implInto<crate::LocalisedString>)"),
+        "LuaGuiElement.set_caption missing"
+    );
+    assert!(
+        classes
+            .replace(' ', "")
+            .contains("pubfncaption(&self)->crate::LocalisedString"),
+        "LuaGuiElement.caption getter missing"
+    );
+    assert!(
+        style.contains("pubfnset_width(&self,value:i32)"),
+        "LuaStyle.set_width missing"
+    );
+    assert!(
+        !style.contains("pubfnwidth(&self)"),
+        "write-only LuaStyle.width must not have a getter"
+    );
+    assert!(
+        classes
+            .replace(' ', "")
+            .contains("pubfnwrite_driving(&self"),
+        "LuaControl.driving setter should be write_driving (set_driving is a real method)"
+    );
+    let lookup = generated.attribute_setters.replace(' ', "");
+    assert!(
+        lookup.contains("\"set_caption\"=>Some(\"caption\")"),
+        "attribute setter lookup should map set_caption"
+    );
+}
+
+#[test]
 fn emits_numeric_concept_aliases() {
     let generated = generate_from_bundled_api().expect("generate");
     assert!(

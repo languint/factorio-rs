@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use factorio_ir::expression::Expression;
 
-use crate::LuaGenerator;
+use crate::{LuaGenerator, attribute_property_for_setter};
 
 /// Map a Rust prototype struct name to its fixed Factorio `type` discriminant string.
 /// Returns `None` for non-prototype structs.
@@ -224,6 +224,16 @@ impl LuaGenerator {
                 return format!("{receiver}.{method}");
             }
             return format!("{receiver}.{method}()");
+        }
+
+        // Attribute writers (`set_caption` / `write_driving`) -> property assign.
+        // Real Factorio `set_*` methods and user methods are absent from the lookup.
+        if trimmed.len() == 1
+            && let Some(property) = attribute_property_for_setter(method)
+        {
+            let receiver = self.generate_expression(receiver);
+            let value = self.generate_expression(&trimmed[0]);
+            return format!("{receiver}.{property} = {value}");
         }
 
         let receiver = self.generate_expression(receiver);

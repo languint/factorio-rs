@@ -200,7 +200,7 @@ For Result-returning helpers, bind with an explicit `Result` type before `?`.
 ### `integer_div` (`E0013`)
 
 Rust integer `/` truncates; Lua `/` always does float division. This lint warns
-on `/` and `/=` when neither operand looks like a float (`2.0`, `f64`, …).
+on `/` and `/=` when neither operand looks like a float (`2.0`, `f64`, ...).
 
 ```rust
 // Warns

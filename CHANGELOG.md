@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Attribute writers: writable Factorio properties emit `set_<name>` (or
+  `write_<name>` on rare method collisions) and lower to Lua property
+  assignment. Write-only attrs (e.g. `LuaStyle` width/height) no longer invent
+  `LuaAny` getters.
 - `item!` data-stage macro: declares item prototypes with relative icon paths
   rewritten to `__{package.name}__/...`, emits `Items::*` name constants for
   `locale!` (`item_name` / `item_description`), and `pub fn register()` via

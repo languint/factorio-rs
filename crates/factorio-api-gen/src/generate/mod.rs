@@ -9,7 +9,9 @@ mod identifications;
 mod types;
 mod unions;
 
-pub use classes::{class_names, generate_classes, generate_globals};
+pub use classes::{
+    class_names, generate_attribute_setter_lookup, generate_classes, generate_globals,
+};
 pub use concepts::{event_filter_concept_names, generatable_concept_names, generate_concepts};
 pub use debug_types::generate_debug_types;
 pub use defines::generate_defines;

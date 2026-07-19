@@ -257,6 +257,7 @@ dependencies = [
 name = "factorio-codegen"
 version = "0.1.7"
 dependencies = [
+ "factorio-api-gen",
  "factorio-ir",
  "heck",
  "thiserror",

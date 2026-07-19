@@ -87,6 +87,45 @@ fn storage_set_lowers_to_index_assignment() {
 }
 
 #[test]
+fn attribute_setter_lowers_to_property_assignment() {
+    let expr = Expression::MethodCall {
+        receiver: Box::new(Expression::Identifier("elem".to_string())),
+        method: "set_caption".to_string(),
+        args: vec![Expression::Literal(Literal::String("Hello".to_string()))],
+    };
+    let lua = LuaGenerator::new().generate_expression(&expr);
+    assert_eq!(lua, "elem.caption = \"Hello\"");
+
+    let style = Expression::MethodCall {
+        receiver: Box::new(Expression::MethodCall {
+            receiver: Box::new(Expression::Identifier("elem".to_string())),
+            method: "style".to_string(),
+            args: vec![],
+        }),
+        method: "set_width".to_string(),
+        args: vec![Expression::Literal(Literal::Int(32))],
+    };
+    assert_eq!(
+        LuaGenerator::new().generate_expression(&style),
+        "elem.style.width = 32"
+    );
+}
+
+#[test]
+fn real_factorio_set_method_stays_method_call() {
+    let expr = Expression::MethodCall {
+        receiver: Box::new(Expression::Identifier("entity".to_string())),
+        method: "set_filter".to_string(),
+        args: vec![
+            Expression::Literal(Literal::Int(1)),
+            Expression::Literal(Literal::String("iron-ore".to_string())),
+        ],
+    };
+    let lua = LuaGenerator::new().generate_expression(&expr);
+    assert_eq!(lua, "entity.set_filter(1, \"iron-ore\")");
+}
+
+#[test]
 fn storage_get_lowers_to_index_without_settings_value() {
     let expr = Expression::MethodCall {
         receiver: Box::new(Expression::Identifier("storage".to_string())),

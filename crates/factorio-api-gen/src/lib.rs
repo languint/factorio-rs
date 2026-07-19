@@ -61,6 +61,7 @@ pub struct GeneratedApi {
     pub concepts: String,
     pub unions: String,
     pub debug_types: String,
+    pub attribute_setters: String,
 }
 
 pub fn parse_runtime_api(json: &str) -> Result<RuntimeApi, serde_json::Error> {
@@ -108,6 +109,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
         concepts,
         unions: generate::generate_unions(&union_registry),
         debug_types: generate::generate_debug_types(api, &known),
+        attribute_setters: generate::generate_attribute_setter_lookup(api),
     }
 }
 

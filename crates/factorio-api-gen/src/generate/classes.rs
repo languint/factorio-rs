@@ -162,60 +162,168 @@ fn generate_method(
     }
 }
 
-/// Generates a zero-argument `&self` method for a Factorio API attribute (property).
+/// Generates getter and/or setter methods for a Factorio API attribute.
+///
+/// - Readable attrs -> zero-arg getter (`caption()` -> property read in Lua).
+/// - Writable attrs -> `set_<name>` (or `write_<name>` if `set_*` collides with a
+///   real Factorio method). Codegen rewrites one-arg setters to property assign.
+/// - Write-only attrs get **no** getter (avoids fake `LuaAny` getters).
 fn generate_attribute(
     attribute: &crate::schema::Attribute,
     known: &KnownTypes<'_>,
-    reserved_names: &HashSet<String>,
+    reserved_names: &mut HashSet<String>,
     defining_class: &str,
     inline_types: &HashMap<String, proc_macro2::Ident>,
-) -> Option<TokenStream> {
-    let method_name = make_ident(&attribute.name);
-    // Skip if there is already a real method with the same Rust name.
-    if reserved_names.contains(&method_name.to_string()) {
-        return None;
+) -> Vec<TokenStream> {
+    let mut methods = Vec::new();
+
+    let has_read = attribute.read_type.is_some() || inline_types.contains_key(&attribute.name);
+    let has_write = attribute.write_type.is_some();
+
+    if has_read {
+        let method_name = make_ident(&attribute.name);
+        let method_key = method_name.to_string();
+        if reserved_names.insert(method_key) {
+            let getter = if let Some(type_ident) = inline_types.get(&attribute.name) {
+                Some((quote!(#type_ident), quote!({ Default::default() })))
+            } else if attribute
+                .read_type
+                .as_ref()
+                .is_some_and(|t| t.complex_type() == Some("table"))
+            {
+                let pascal = to_pascal_case(&attribute.name);
+                let type_ident = make_ident(&format!("{defining_class}{pascal}"));
+                Some((quote!(#type_ident), quote!({ Default::default() })))
+            } else {
+                attribute.read_type.as_ref().map(|read_ty| {
+                    (
+                        map_api_type(read_ty, known),
+                        stub_expr(&return_stub_for_type(read_ty, known)),
+                    )
+                })
+            };
+
+            if let Some((return_type, body)) = getter {
+                let doc: Option<String> = if attribute.description.is_empty() {
+                    None
+                } else {
+                    Some(sanitize_doc(&attribute.description))
+                };
+                methods.push(if let Some(description) = doc {
+                    quote! {
+                        #[doc = #description]
+                        pub fn #method_name(&self) -> #return_type #body
+                    }
+                } else {
+                    quote! {
+                        pub fn #method_name(&self) -> #return_type #body
+                    }
+                });
+            } else {
+                // Roll back reservation if we did not emit a getter.
+                reserved_names.remove(&method_name.to_string());
+            }
+        }
     }
 
-    // Determine the return type and a matching stub body.
-    let (return_type, body) = if let Some(type_ident) = inline_types.get(&attribute.name) {
-        // Pre-generated inline-table struct - return it by value.
-        (quote!(#type_ident), quote!({ Default::default() }))
-    } else if attribute
-        .read_type
-        .as_ref()
-        .is_some_and(|t| t.complex_type() == Some("table"))
-    {
-        // Inline table defined on an ancestor class - reference its named struct.
-        let pascal = to_pascal_case(&attribute.name);
-        let type_ident = make_ident(&format!("{defining_class}{pascal}"));
-        (quote!(#type_ident), quote!({ Default::default() }))
-    } else {
-        let api_type_opt = attribute.read_type.as_ref();
-        let ret = api_type_opt
-            .map(|t| map_api_type(t, known))
-            .unwrap_or_else(lua_any_type);
-        let body = api_type_opt
-            .map(|t| stub_expr(&return_stub_for_type(t, known)))
-            .unwrap_or_else(|| quote!({ crate::LuaAny }));
-        (ret, body)
-    };
+    if has_write {
+        let Some(write_ty) = attribute.write_type.as_ref() else {
+            return methods;
+        };
+        let set_name = format!("set_{}", attribute.name);
+        let write_name = format!("write_{}", attribute.name);
+        let setter_name_str = if reserved_names.contains(&set_name) {
+            write_name
+        } else {
+            set_name
+        };
+        if !reserved_names.insert(setter_name_str.clone()) {
+            return methods;
+        }
 
-    let doc: Option<String> = if attribute.description.is_empty() {
-        None
-    } else {
-        Some(sanitize_doc(&attribute.description))
-    };
+        let setter_ident = make_ident(&setter_name_str);
+        let value_ty = map_setter_value_type(write_ty, known);
+        let prop = attribute.name.as_str();
+        let doc = if attribute.description.is_empty() {
+            format!("Set the `{prop}` attribute (Lua: `self.{prop} = value`).")
+        } else {
+            format!(
+                "Set the `{prop}` attribute (Lua: `self.{prop} = value`).\n\n{}",
+                sanitize_doc(&attribute.description)
+            )
+        };
 
-    if let Some(description) = doc {
-        Some(quote! {
-            #[doc = #description]
-            pub fn #method_name(&self) -> #return_type #body
-        })
-    } else {
-        Some(quote! {
-            pub fn #method_name(&self) -> #return_type #body
-        })
+        methods.push(quote! {
+            #[doc = #doc]
+            #[allow(unused_variables)]
+            pub fn #setter_ident(&self, value: #value_ty) {}
+        });
     }
+
+    methods
+}
+
+/// Rust parameter type for attribute writers (`impl Into<LocalisedString>`, etc.).
+fn map_setter_value_type(api_type: &crate::schema::ApiType, known: &KnownTypes<'_>) -> TokenStream {
+    let is_localised = matches!(
+        api_type.as_simple_name(),
+        Some("LocalisedString" | "LuaLazyLoadedValueLocalisedString")
+    );
+    if is_localised {
+        return quote!(impl Into<crate::LocalisedString>);
+    }
+    map_api_type(api_type, known)
+}
+
+/// Lookup used by factorio-codegen: attribute setter method -> Lua property name.
+pub fn generate_attribute_setter_lookup(api: &RuntimeApi) -> String {
+    use std::collections::BTreeMap;
+
+    let by_name: HashMap<&str, &Class> = api.classes.iter().map(|c| (c.name.as_str(), c)).collect();
+    let mut method_names: HashSet<String> = HashSet::new();
+    for class in &api.classes {
+        for method in &class.methods {
+            method_names.insert(method.name.clone());
+        }
+    }
+
+    // setter_method -> property (stable order)
+    let mut map: BTreeMap<String, String> = BTreeMap::new();
+    for class in &api.classes {
+        let (attrs, _) = inherited_members(class, &by_name);
+        for (attribute, _) in attrs {
+            let Some(_) = attribute.write_type.as_ref() else {
+                continue;
+            };
+            let set_name = format!("set_{}", attribute.name);
+            let setter = if method_names.contains(&set_name) {
+                format!("write_{}", attribute.name)
+            } else {
+                set_name
+            };
+            map.insert(setter, attribute.name.clone());
+        }
+    }
+
+    let arms = map.iter().map(|(setter, prop)| {
+        let setter_lit = setter.as_str();
+        let prop_lit = prop.as_str();
+        quote! { #setter_lit => Some(#prop_lit), }
+    });
+
+    let tokens = quote! {
+        /// Map Factorio attribute setter stubs (`set_caption`, `write_driving`, ...)
+        /// to the Lua property name. Real Factorio `set_*` **methods** are absent
+        /// from this table so codegen keeps them as method calls.
+        #[must_use]
+        pub fn attribute_property_for_setter(method: &str) -> Option<&'static str> {
+            match method {
+                #( #arms )*
+                _ => None,
+            }
+        }
+    };
+    tokens.to_string()
 }
 
 type TakesTableMap = HashMap<(String, String), proc_macro2::Ident>;
@@ -304,15 +412,17 @@ fn generate_class(
             .filter(|_| method.format.takes_table);
         generate_method(method, known, params_struct)
     });
-    let attributes = all_attrs.iter().filter_map(|(attribute, defining_class)| {
-        generate_attribute(
+    let mut attribute_methods = Vec::new();
+    for (attribute, defining_class) in &all_attrs {
+        attribute_methods.extend(generate_attribute(
             attribute,
             known,
-            &reserved_names,
+            &mut reserved_names,
             defining_class,
             &inline_type_map,
-        )
-    });
+        ));
+    }
+    let attributes = attribute_methods;
 
     let doc: Option<String> = if class.description.is_empty() {
         None

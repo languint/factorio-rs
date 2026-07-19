@@ -180,7 +180,8 @@ lints `unwrap` / `expect` (default **deny**; see [Lints](lints/)).
 | `.random_int(n)` / `.random_range(m, n)` | `recv.random(...)` (math) |
 | `.format_1`...`.format_4` | `recv.format(...)` (string) |
 | `.insert_at(list, pos, value)` | `table.insert(...)` |
-| zero-arg API method | `recv.method` (property)          |
+| zero-arg API method | `recv.method` (property read)     |
+| `set_<attr>(v)` / `write_<attr>(v)` | `recv.attr = v` (attribute write) |
 | method with args    | `recv.method(args)` (`.` not `:`) |
 
 ### `serde_json`
