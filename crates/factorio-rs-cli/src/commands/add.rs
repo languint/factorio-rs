@@ -283,7 +283,7 @@ factorio_version = "2.0"
             provider.join("Cargo.toml"),
             r#"[package]
 name = "provider"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2024"
 
 [lib]
@@ -295,7 +295,7 @@ path = "src/lib.rs"
 
         let package = CargoPackage {
             name: "provider".to_string(),
-            version: "0.1.7".to_string(),
+            version: "0.1.8".to_string(),
             authors: None,
         };
         publish_exports(
@@ -314,7 +314,7 @@ path = "src/lib.rs"
 
         let result = add(&consumer, &provider).unwrap();
         assert!(result.cargo_dep_added);
-        assert_eq!(result.factorio_deps_added, vec!["provider >= 0.1.7"]);
+        assert_eq!(result.factorio_deps_added, vec!["provider >= 0.1.8"]);
         assert_eq!(result.rust_crate, "provider");
         assert_eq!(result.dep_path, PathBuf::from("../provider"));
 

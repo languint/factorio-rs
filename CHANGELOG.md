@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-19
+
 ### Added
 
 - Cross-module `locale!` keys: `Items::*` / `Settings::*` / `Recipes::*`
@@ -179,7 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mod_settings!`, `locale!`, events and filters, build profiles, dead-code prune.
 - `format!` / `println!`, thumbnails, documentation site.
 
-[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/languint/factorio-rs/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/languint/factorio-rs/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/languint/factorio-rs/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/languint/factorio-rs/compare/v0.1.4...v0.1.5
