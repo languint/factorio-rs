@@ -42,7 +42,7 @@ absence. That matches [Option and Result](../guides/option-and-result/).
 | --- | --- |
 | Flags, caches, tables that must survive saves | Values that should reset every event |
 | Sharing data between your own handlers | Emulating Rust `static mut` |
-| Typed counters via `get` / `set` | Cross-mod data — use [export](share-api/) |
+| Typed counters via `get` / `set` | Cross-mod data - use [export](share-api/) |
 
 ## Verify with a test
 

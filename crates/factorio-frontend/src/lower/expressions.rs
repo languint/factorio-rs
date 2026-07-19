@@ -137,7 +137,8 @@ pub fn lower_expression(
 ///
 /// Typed `Option` bindings use nil early-return. Everything else (including
 /// call results) uses Result semantics. Untyped local bindings get
-/// [`LintId::AmbiguousTry`].
+/// [`LintId::AmbiguousTry`]. Call/method `?` gets [`LintId::OptionTry`] because
+/// Factorio APIs often return `Option` while lowering still assumes `Result`.
 fn lower_try_expression(
     try_expr: &syn::ExprTry,
     ctx: &mut LowerContext<'_>,
@@ -148,6 +149,12 @@ fn lower_try_expression(
         ctx.emit_lint(
             factorio_ir::lint::LintId::AmbiguousTry,
             "`?` on an untyped local assumes `Result` (`.err` / `.ok`); annotate as `Result`/`Option` or use `.ok_or(...)?`",
+            location(try_expr),
+        )?;
+    } else if is_call_like_try_expr(&try_expr.expr) && !option_try {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::OptionTry,
+            "`?` on a call/method assumes `Result` (`.err` / `.ok`); Option APIs need a typed binding or `.ok_or(...)?`",
             location(try_expr),
         )?;
     }
@@ -214,6 +221,17 @@ fn is_untyped_local_path(expr: &Expr, ctx: &LowerContext<'_>) -> bool {
         }
         Expr::Paren(paren) => is_untyped_local_path(&paren.expr, ctx),
         Expr::Reference(reference) => is_untyped_local_path(&reference.expr, ctx),
+        _ => false,
+    }
+}
+
+/// `foo()` / `recv.method(...)` (parens/refs peeled) - call-result `?` site.
+fn is_call_like_try_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Call(_) | Expr::MethodCall(_) => true,
+        Expr::Paren(paren) => is_call_like_try_expr(&paren.expr),
+        Expr::Reference(reference) => is_call_like_try_expr(&reference.expr),
+        Expr::Group(group) => is_call_like_try_expr(&group.expr),
         _ => false,
     }
 }
@@ -1167,6 +1185,16 @@ fn lower_struct_expression(
         .map(|segment| resolve_path_segment(&segment.ident, self_type))
         .collect::<FrontendResult<Vec<_>>>()?;
 
+    if let Some(rest) = &item.rest
+        && !is_default_default_expr(rest)
+    {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::StructRest,
+            "struct update `..rest` other than `Default::default()` is ignored; only explicit fields are emitted",
+            location(rest.as_ref()),
+        )?;
+    }
+
     let fields = item
         .fields
         .iter()
@@ -1198,6 +1226,31 @@ fn lower_struct_expression(
     })
 }
 
+/// `Default::default()` / `default()` - the intentional sparse-table rest form.
+fn is_default_default_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Path(path) if call.args.is_empty() => {
+                let segments: Vec<_> = path
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect();
+                let names: Vec<&str> = segments.iter().map(String::as_str).collect();
+                matches!(
+                    names.as_slice(),
+                    ["Default", "default"] | ["default"] | [.., "Default", "default"]
+                )
+            }
+            _ => false,
+        },
+        Expr::Paren(paren) => is_default_default_expr(&paren.expr),
+        Expr::Group(group) => is_default_default_expr(&group.expr),
+        _ => false,
+    }
+}
+
 fn lower_field_expression(
     field: &syn::ExprField,
     ctx: &mut LowerContext<'_>,
@@ -1224,6 +1277,17 @@ fn lower_binary_expression(
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
+    if matches!(binary.op, BinOp::Div(_))
+        && !div_operand_looks_float(&binary.left, ctx)
+        && !div_operand_looks_float(&binary.right, ctx)
+    {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::IntegerDiv,
+            "division lowers to Lua `/` (always float); Rust integer `/` truncates",
+            location(binary),
+        )?;
+    }
+
     let lhs = lower_expression(&binary.left, ctx, self_type)?;
     let op = lower_binary_operator(&binary.op)?;
     let rhs = lower_expression(&binary.right, ctx, self_type)?;
@@ -1233,6 +1297,39 @@ fn lower_binary_expression(
         op,
         rhs: Box::new(rhs),
     })
+}
+
+pub(super) fn div_operand_looks_float(expr: &Expr, ctx: &LowerContext<'_>) -> bool {
+    match expr {
+        Expr::Lit(ExprLit {
+            lit: Lit::Float(_), ..
+        }) => true,
+        Expr::Path(path) if path.path.segments.len() == 1 => {
+            matches!(
+                ctx.binding_type(&path.path.segments[0].ident.to_string()),
+                Some("f32" | "f64")
+            )
+        }
+        Expr::Paren(paren) => div_operand_looks_float(&paren.expr, ctx),
+        Expr::Group(group) => div_operand_looks_float(&group.expr, ctx),
+        Expr::Unary(unary) => div_operand_looks_float(&unary.expr, ctx),
+        Expr::Reference(reference) => div_operand_looks_float(&reference.expr, ctx),
+        Expr::Cast(cast) => type_looks_float(&cast.ty),
+        _ => false,
+    }
+}
+
+fn type_looks_float(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Path(path) => path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "f32" | "f64")),
+        syn::Type::Reference(reference) => type_looks_float(&reference.elem),
+        syn::Type::Paren(paren) => type_looks_float(&paren.elem),
+        _ => false,
+    }
 }
 
 fn lower_binary_operator(operator: &BinOp) -> FrontendResult<factorio_ir::operator::Operator> {

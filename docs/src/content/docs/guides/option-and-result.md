@@ -137,9 +137,11 @@ Prefer **non-nil** error payloads (`String`, tables, numbers). `Err(nil)` /
 ### `?` (try operator)
 
 On a typed **`Option`** binding, `opt?` early-returns `nil` and yields the value.
-On **`Result`** (typed bindings or call results), `expr?` early-returns the Err
-table and yields `.ok`. Untyped locals assume Result and fire lint
-`ambiguous_try` (`E0007`). Prefer `.ok_or(...)?` when bridging Option -> Result.
+On **`Result`** (typed bindings), `expr?` early-returns the Err table and yields
+`.ok`. **Call/method** `?` still assumes Result and triggers lint `option_try`
+(`E0012`) - bind with an explicit `Option`/`Result` type first, or use
+`.ok_or(...)?` for Option APIs. Untyped locals assume Result and fire
+`ambiguous_try` (`E0007`).
 
 ```rust
 fn take(opt: Option<i32>) -> Option<i32> {

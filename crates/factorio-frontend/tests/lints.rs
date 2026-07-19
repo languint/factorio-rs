@@ -354,6 +354,128 @@ pub fn f(x: Option<i32>) -> Option<i32> {
 }
 
 #[test]
+fn deny_option_try_on_call() {
+    let source = r#"
+fn fetch() -> Option<i32> { None }
+pub fn f() -> Option<i32> {
+    let _n = fetch()?;
+    Some(1)
+}
+"#;
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(diagnostics.iter().any(|d| d.id == LintId::OptionTry));
+}
+
+#[test]
+fn option_try_skipped_for_typed_option_binding() {
+    let source = r"
+pub fn f(x: Option<i32>) -> Option<i32> {
+    let y = x?;
+    Some(y)
+}
+";
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(
+        !diagnostics.iter().any(|d| d.id == LintId::OptionTry),
+        "typed Option binding must not fire option_try"
+    );
+}
+
+#[test]
+fn warn_integer_div_without_float_operand() {
+    let source = r"
+pub fn f(n: i64) -> i64 {
+    n / 2
+}
+";
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(diagnostics.iter().any(|d| d.id == LintId::IntegerDiv));
+}
+
+#[test]
+fn integer_div_skipped_for_float_literal() {
+    let source = r"
+pub fn f(n: i64) -> f64 {
+    n as f64 / 2.0
+}
+";
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(
+        !diagnostics.iter().any(|d| d.id == LintId::IntegerDiv),
+        "float operands should not fire integer_div"
+    );
+}
+
+#[test]
+fn deny_struct_rest_non_default() {
+    let source = r"
+struct Point { x: i64, y: i64 }
+pub fn f(base: Point) -> Point {
+    Point { x: 1, ..base }
+}
+";
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(diagnostics.iter().any(|d| d.id == LintId::StructRest));
+}
+
+#[test]
+fn struct_rest_allows_default_default() {
+    let source = r"
+struct Point { x: i64, y: i64 }
+pub fn f() -> Point {
+    Point { x: 1, ..Default::default() }
+}
+";
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&LintConfig::default()),
+        &mut diagnostics,
+    )
+    .expect("should lower");
+    assert!(
+        !diagnostics.iter().any(|d| d.id == LintId::StructRest),
+        "..Default::default() must be allowed"
+    );
+}
+
+#[test]
 fn deny_ambiguous_method_on_untyped_local() {
     let source = r"
 pub fn f() -> Option<i32> {

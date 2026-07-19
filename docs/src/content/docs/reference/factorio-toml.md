@@ -92,7 +92,7 @@ See [Profiles](../guides/profiles/).
 Transpile-time safety checks. See [Lints](../guides/lints/).
 
 Each key is a lint **identifier**; the value is `allow`, `warn`, or `deny`.
-Unspecified lints use their defaults (`deny`, except `format_spec` -> `warn`).
+Unspecified lints use their defaults (`deny`, except `format_spec` / `integer_div` -> `warn`).
 
 | Identifier | Code | Default | Meaning |
 | --- | --- | --- | --- |
@@ -107,6 +107,9 @@ Unspecified lints use their defaults (`deny`, except `format_spec` -> `warn`).
 | `skipped_mod` | `E0009` | deny | Inline `mod` without `#[factorio_rs::export]` is skipped |
 | `result_if` | `E0010` | deny | Plain `if` / `while` on a Result is always truthy |
 | `err_nil` | `E0011` | deny | `Err(nil)` / `Err(None)` collapses with Ok |
+| `option_try` | `E0012` | deny | `?` on a call/method assumes Result; Option APIs need a typed binding |
+| `integer_div` | `E0013` | warn | `/` or `/=` without a float operand (Lua `/` is always float) |
+| `struct_rest` | `E0014` | deny | Struct update `..rest` other than `Default::default()` |
 
 ```toml
 [lints]

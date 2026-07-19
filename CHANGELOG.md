@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Lints: `option_try` (`E0012`) for `?` on call/method results (assumes Result);
+  `integer_div` (`E0013`, warn) for `/` / `/=` without a float operand;
+  `struct_rest` (`E0014`) for struct updates other than `..Default::default()`.
+
 ## [0.1.7] - 2026-07-18
 
 ### Fixed

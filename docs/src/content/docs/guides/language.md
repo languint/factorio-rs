@@ -289,6 +289,9 @@ still fails the build as unsupported syntax when known unsafe.
 | `.unwrap()` / `.expect(...)` | Stripped; lint E0001/E0002 | `if let` / `?` / `ok_or` - [Option and Result](option-and-result/) |
 | `if opt { ... }` on an Option | `Some(false)` skipped; lint E0006 | `if let Some(...)` or `is_some()` |
 | Untyped local `?` / `.map` | Assumes Result / Option; lint E0007/E0008 | Annotate `Option`/`Result` or `.ok_or` |
+| Call/method `?` | Assumes Result; lint E0012 | Typed `Option`/`Result` binding or `.ok_or` |
+| `/` / `/=` without float operand | Lua float div; lint E0013 (warn) | Use `n as f64 / 2.0` or allow the lint |
+| `Struct { ..other }` (not Default) | Rest fields dropped; lint E0014 | Explicit fields or `..Default::default()` |
 | Inline `mod` without `#[export]` | Contents skipped; lint E0009 | Export the mod or use a file module |
 | `arr[i]` with variable `i` | Not +1 for Lua | Use a 1-based index, or literal indices |
 | `{:.2}` / other format specs | Ignored output | Use `{}` / `{:?}` only |

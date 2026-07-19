@@ -31,6 +31,12 @@ pub enum LintId {
     ResultIf,
     /// `Err(nil)` / `Err(None)` collapses with Ok under the `.err == nil` discriminant.
     ErrNil,
+    /// `?` on a call/method uses Result semantics; Option APIs need a typed binding or `.ok_or`.
+    OptionTry,
+    /// Rust integer `/` truncates; Lua `/` is always float division.
+    IntegerDiv,
+    /// Struct update `..rest` other than `Default::default()` drops fields silently.
+    StructRest,
 }
 
 impl LintId {
@@ -49,6 +55,9 @@ impl LintId {
             Self::SkippedMod => "skipped_mod",
             Self::ResultIf => "result_if",
             Self::ErrNil => "err_nil",
+            Self::OptionTry => "option_try",
+            Self::IntegerDiv => "integer_div",
+            Self::StructRest => "struct_rest",
         }
     }
 
@@ -67,6 +76,9 @@ impl LintId {
             Self::SkippedMod => "E0009",
             Self::ResultIf => "E0010",
             Self::ErrNil => "E0011",
+            Self::OptionTry => "E0012",
+            Self::IntegerDiv => "E0013",
+            Self::StructRest => "E0014",
         }
     }
 
@@ -74,11 +86,12 @@ impl LintId {
     ///
     /// Most lints default to deny (they can miscompile). `format_spec` only
     /// drops unsupported precision/width and still emits working Lua, so it
-    /// defaults to warn.
+    /// defaults to warn. `integer_div` defaults to warn because Factorio math is
+    /// often float and operand types are not fully tracked.
     #[must_use]
     pub const fn default_level(self) -> LintLevel {
         match self {
-            Self::FormatSpec => LintLevel::Warn,
+            Self::FormatSpec | Self::IntegerDiv => LintLevel::Warn,
             Self::Unwrap
             | Self::Expect
             | Self::VariableIndex
@@ -88,7 +101,9 @@ impl LintId {
             | Self::AmbiguousMethod
             | Self::SkippedMod
             | Self::ResultIf
-            | Self::ErrNil => LintLevel::Deny,
+            | Self::ErrNil
+            | Self::OptionTry
+            | Self::StructRest => LintLevel::Deny,
         }
     }
 
@@ -124,6 +139,15 @@ impl LintId {
             Self::ErrNil => {
                 "use a non-nil error payload (`String`, number, table); `Err(nil)` looks like Ok"
             }
+            Self::OptionTry => {
+                "bind `let x: Option<_> = api(...); x?` or use `.ok_or(...)?`; for Result calls bind `let r: Result<...> = ...; r?`"
+            }
+            Self::IntegerDiv => {
+                "Lua `/` is float division; use a float operand (`n / 2.0`) or set `[lints] integer_div = \"allow\"`"
+            }
+            Self::StructRest => {
+                "only `..Default::default()` is ignored on purpose; copy fields explicitly or use that form"
+            }
         }
     }
 
@@ -142,6 +166,9 @@ impl LintId {
             Self::SkippedMod,
             Self::ResultIf,
             Self::ErrNil,
+            Self::OptionTry,
+            Self::IntegerDiv,
+            Self::StructRest,
         ]
     }
 
@@ -328,6 +355,9 @@ mod tests {
         assert_eq!(config.level(LintId::FormatSpec), LintLevel::Warn);
         assert_eq!(config.level(LintId::ResultIf), LintLevel::Deny);
         assert_eq!(config.level(LintId::ErrNil), LintLevel::Deny);
+        assert_eq!(config.level(LintId::OptionTry), LintLevel::Deny);
+        assert_eq!(config.level(LintId::IntegerDiv), LintLevel::Warn);
+        assert_eq!(config.level(LintId::StructRest), LintLevel::Deny);
     }
 
     #[test]
@@ -360,5 +390,8 @@ mod tests {
         assert_eq!(LintId::SkippedMod.code(), "E0009");
         assert_eq!(LintId::ResultIf.code(), "E0010");
         assert_eq!(LintId::ErrNil.code(), "E0011");
+        assert_eq!(LintId::OptionTry.code(), "E0012");
+        assert_eq!(LintId::IntegerDiv.code(), "E0013");
+        assert_eq!(LintId::StructRest.code(), "E0014");
     }
 }

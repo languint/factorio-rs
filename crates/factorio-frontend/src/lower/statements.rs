@@ -448,6 +448,16 @@ fn lower_compound_assign_statement(
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::statement::Statement> {
+    if matches!(binary.op, BinOp::DivAssign(_))
+        && !super::expressions::div_operand_looks_float(&binary.right, ctx)
+    {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::IntegerDiv,
+            "`/=` lowers to Lua `/` (always float); Rust integer `/=` truncates",
+            location(binary),
+        )?;
+    }
+
     let operator = compound_assign_operator(&binary.op)?;
     let target = lower_assignment_target(&binary.left, ctx, self_type)?;
     let rhs = lower_expression(&binary.right, ctx, self_type)?;

@@ -30,9 +30,9 @@ variable_index = "deny"  # print, build fails
 | `deny` | Print an error; build fails after all diagnostics are shown |
 
 Unset lints use their **defaults** (see the table below). Most default to
-`deny` because they can produce wrong or unsafe Lua. `format_spec` defaults to
-`warn` because unsupported specs are simply ignored and the rest of the
-template still lowers.
+`deny` because they can produce wrong or unsafe Lua. `format_spec` and
+`integer_div` default to `warn` (formatting is dropped; Factorio math is often
+float and operand types are not fully tracked).
 
 ## Diagnostics
 
@@ -75,6 +75,9 @@ No Lua is written in that case.
 | `skipped_mod` | `E0009` | deny | Inline `mod` without `#[factorio_rs::export]` |
 | `result_if` | `E0010` | deny | Plain `if` / `while` on a Result binding (always truthy) |
 | `err_nil` | `E0011` | deny | `Err(nil)` / `Err(None)` collapses with Ok |
+| `option_try` | `E0012` | deny | `?` on a call/method (assumes Result; Option APIs need a typed binding) |
+| `integer_div` | `E0013` | warn | `/` or `/=` without a float operand (Lua `/` is always float) |
+| `struct_rest` | `E0014` | deny | Struct update `..rest` other than `Default::default()` |
 
 ### `unwrap` (`E0001`) / `expect` (`E0002`)
 
@@ -173,6 +176,56 @@ is always truthy in Lua (Results are tables). Prefer `if let Ok(...)` or
 
 `Err(nil)` / `Err(None)` uses the same discriminant as Ok (`r.err == nil`).
 Prefer a non-nil error payload (`String`, number, or table).
+
+### `option_try` (`E0012`)
+
+`?` on a **call or method** always lowers with Result semantics (`.err` / `.ok`).
+Factorio APIs that return `Option` (nil) need a typed binding first, or
+`.ok_or(...)?`:
+
+```rust
+// Bad - call `?` assumes Result tables
+let player = game.get_player(index.into())?;
+
+// Good - Option binding uses nil early-return
+let player: Option<_> = game.get_player(index.into());
+let player = player?;
+
+// Good - bridge into Result
+let player = game.get_player(index.into()).ok_or("missing")?;
+```
+
+For Result-returning helpers, bind with an explicit `Result` type before `?`.
+
+### `integer_div` (`E0013`)
+
+Rust integer `/` truncates; Lua `/` always does float division. This lint warns
+on `/` and `/=` when neither operand looks like a float (`2.0`, `f64`, …).
+
+```rust
+// Warns
+let q = n / 2;
+
+// Prefer an explicit float operand when you want Lua-style division
+let q = n as f64 / 2.0;
+```
+
+### `struct_rest` (`E0014`)
+
+Only **explicit** struct fields are emitted. `..Default::default()` is ignored
+on purpose so Factorio parameter tables stay sparse. Any other `..rest` drops
+fields silently and is denied:
+
+```rust
+// Bad - `base.y` is not copied
+Point { x: 1, ..base }
+
+// OK - intentional sparse update
+LuaEntityMineParams {
+    force: true,
+    ..Default::default()
+}
+```
 
 ## Configuring defaults
 
