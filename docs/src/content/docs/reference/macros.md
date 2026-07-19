@@ -59,7 +59,36 @@ Declare data-stage item prototypes. Expands to `Items` name constants (for
 `locale!`) and `pub fn register()` that calls `data.extend`. Relative `icon`
 paths become `__{package.name}__/...`.
 
-See [Package graphics](../recipes/package-graphics/).
+Full field tables and stubs: [Prototypes](../guides/prototypes/).
+Assets walkthrough: [Package graphics](../recipes/package-graphics/).
+
+## `recipe!`
+
+Declare data-stage recipe prototypes. Expands to `Recipes` name constants and
+`pub fn register_recipes()` that calls `data.extend` with typed `Recipe`
+literals (`type = "recipe"`; each ingredient/product injects `type = "item"`).
+
+```rust
+recipe! {
+    craft_widget {
+        name = "my-mod-widget",
+        energy_required = 1.0,
+        ingredients = [
+            { name = "iron-plate", amount = 2 },
+        ],
+        results = [
+            { name = "my-mod-widget", amount = 1 },
+        ],
+        category = "crafting",
+        enabled = true,
+    }
+}
+```
+
+Required fields: `name`, `ingredients`, `results`. Optional: `energy_required`,
+`category`, `enabled`, `subgroup`, `order`.
+
+Full guide: [Prototypes](../guides/prototypes/).
 
 ## `locale!`
 
@@ -77,7 +106,7 @@ In executable code, **`println!`**, **`format!`**, **`matches!`**, (with the
 - `tracing::info!(...)` / `warn!` / ... -> colored `game.print` (see [Tracing](../guides/tracing/))
 - `serde_json::to_string` / ... -> `helpers.table_to_json` / `string.pack` (see [Serde / JSON](../guides/serde/))
 
-Item macros such as `mod_settings!`, `item!`, and `locale!` are handled
+Item macros such as `mod_settings!`, `item!`, `recipe!`, and `locale!` are handled
 separately during module lowering.
 
 Full syntax inventory: [Supported Rust](../guides/language/).

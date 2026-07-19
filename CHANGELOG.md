@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cross-module `locale!` keys: `Items::*` / `Settings::*` / `Recipes::*`
+  resolve via `use` imports or `crate::...` paths (no longer requires
+  co-locating `locale!` with `item!` / `mod_settings!` / `recipe!`).
+- Docs: Prototypes guide for data-stage stubs, `item!`, and `recipe!`.
+- `LuaGuiElement.style()` returns `LuaStyle`; `set_style` takes a style name
+  `&'static str` (asymmetric Class|string attribute mapping).
+- `recipe!` data-stage macro: declares recipes with `Recipes::*` name constants
+  and `pub fn register_recipes()` via `data.extend`. Ingredients/products emit
+  Factorio 2.0 `{type = "item", name, amount}` tables.
+- Data-stage `Recipe` / `RecipeIngredient` / `RecipeProduct` stubs
+  (`type = "recipe"` / `type = "item"`) for `data.extend`.
 - Attribute writers: writable Factorio properties emit `set_<name>` (or
   `write_<name>` on rare method collisions) and lower to Lua property
   assignment. Write-only attrs (e.g. `LuaStyle` width/height) no longer invent

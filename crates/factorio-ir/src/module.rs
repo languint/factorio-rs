@@ -1,4 +1,10 @@
-use crate::{block::Block, locale::LocaleFile, scope::Scope, stage::Stage, statement::Statement};
+use crate::{
+    block::Block,
+    locale::{LocaleFile, PendingLocaleFile},
+    scope::Scope,
+    stage::Stage,
+    statement::Statement,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
@@ -35,6 +41,9 @@ pub struct Module {
     pub submodules: Vec<String>,
     /// Locale `.cfg` data declared via `locale!` in this module.
     pub locales: Vec<LocaleFile>,
+    /// Parsed `locale!` blocks waiting for `Type::CONST` resolution (possibly
+    /// across imports). Cleared once [`locales`](Self::locales) is filled.
+    pub pending_locales: Vec<PendingLocaleFile>,
 }
 
 impl Module {

@@ -784,6 +784,288 @@ impl Parse for ItemProtoEntry {
     }
 }
 
+/// Declare data-stage recipe prototypes.
+///
+/// Expands to a `Recipes` type with name constants (for `locale!`) and
+/// `pub fn register_recipes()` that calls `data.extend` with [`Recipe`]
+/// literals. Prefer `register_recipes` over `register` so `item!` and
+/// `recipe!` can coexist in one module.
+///
+/// # Example
+/// ```ignore
+/// use factorio_rs::prelude::*;
+///
+/// recipe! {
+///     craft_widget {
+///         name = "my-mod-widget",
+///         energy_required = 1.0,
+///         ingredients = [
+///             { name = "iron-plate", amount = 2 },
+///         ],
+///         results = [
+///             { name = "my-mod-widget", amount = 1 },
+///         ],
+///         category = "crafting",
+///         enabled = true,
+///     }
+/// }
+/// ```
+#[proc_macro]
+pub fn recipe(input: TokenStream) -> TokenStream {
+    let RecipesMacroInput { recipes } = parse_macro_input!(input as RecipesMacroInput);
+
+    let mut const_defs = Vec::<TokenStream2>::new();
+    let mut extend_items = Vec::<TokenStream2>::new();
+
+    for entry in &recipes {
+        let const_name = screaming_to_const_ident(&entry.ident);
+        let name_lit = entry.name.as_str();
+        let energy_required = option_f64_tokens(entry.energy_required);
+        let category = option_str_tokens(entry.category.as_deref());
+        let enabled = option_bool_tokens(entry.enabled);
+        let subgroup = option_str_tokens(entry.subgroup.as_deref());
+        let order = option_str_tokens(entry.order.as_deref());
+
+        let ingredients = entry.ingredients.iter().map(|ing| {
+            let n = ing.name.as_str();
+            let amount = ing.amount;
+            quote::quote! {
+                RecipeIngredient {
+                    name: #n,
+                    amount: #amount,
+                    ..Default::default()
+                }
+            }
+        });
+        let results = entry.results.iter().map(|prod| {
+            let n = prod.name.as_str();
+            let amount = prod.amount;
+            quote::quote! {
+                RecipeProduct {
+                    name: #n,
+                    amount: #amount,
+                    ..Default::default()
+                }
+            }
+        });
+
+        const_defs.push(quote::quote! {
+            pub const #const_name: &'static str = #name_lit;
+        });
+
+        extend_items.push(quote::quote! {
+            Recipe {
+                name: #name_lit,
+                ingredients: &[ #( #ingredients ),* ],
+                results: &[ #( #results ),* ],
+                energy_required: #energy_required,
+                category: #category,
+                enabled: #enabled,
+                subgroup: #subgroup,
+                order: #order,
+                ..Default::default()
+            }
+        });
+    }
+
+    TokenStream::from(quote::quote! {
+        pub struct Recipes;
+
+        impl Recipes {
+            #( #const_defs )*
+        }
+
+        pub fn register_recipes() {
+            data.extend([
+                #( #extend_items, )*
+            ]);
+        }
+    })
+}
+
+fn option_f64_tokens(value: Option<f64>) -> TokenStream2 {
+    value.map_or_else(|| quote::quote! { None }, |v| quote::quote! { Some(#v) })
+}
+
+fn option_bool_tokens(value: Option<bool>) -> TokenStream2 {
+    value.map_or_else(|| quote::quote! { None }, |v| quote::quote! { Some(#v) })
+}
+
+struct RecipesMacroInput {
+    recipes: Vec<RecipeProtoEntry>,
+}
+
+struct RecipeProtoEntry {
+    ident: syn::Ident,
+    name: String,
+    ingredients: Vec<RecipeComponent>,
+    results: Vec<RecipeComponent>,
+    energy_required: Option<f64>,
+    category: Option<String>,
+    enabled: Option<bool>,
+    subgroup: Option<String>,
+    order: Option<String>,
+}
+
+struct RecipeComponent {
+    name: String,
+    amount: i64,
+}
+
+impl Parse for RecipesMacroInput {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let mut recipes = Vec::new();
+        while !input.is_empty() {
+            recipes.push(input.parse::<RecipeProtoEntry>()?);
+        }
+        if recipes.is_empty() {
+            return Err(input.error("expected at least one recipe block"));
+        }
+        Ok(Self { recipes })
+    }
+}
+
+impl Parse for RecipeProtoEntry {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let ident: syn::Ident = input.parse()?;
+        let content;
+        syn::braced!(content in input);
+
+        let mut name: Option<String> = None;
+        let mut ingredients: Option<Vec<RecipeComponent>> = None;
+        let mut results: Option<Vec<RecipeComponent>> = None;
+        let mut energy_required: Option<f64> = None;
+        let mut category: Option<String> = None;
+        let mut enabled: Option<bool> = None;
+        let mut subgroup: Option<String> = None;
+        let mut order: Option<String> = None;
+
+        while !content.is_empty() {
+            let field: syn::Ident = content.parse()?;
+            let _: Token![=] = content.parse()?;
+            match field.to_string().as_str() {
+                "name" => {
+                    let lit: LitStr = content.parse()?;
+                    name = Some(lit.value());
+                }
+                "ingredients" => {
+                    ingredients = Some(parse_recipe_components(&content)?);
+                }
+                "results" => {
+                    results = Some(parse_recipe_components(&content)?);
+                }
+                "energy_required" => {
+                    energy_required = Some(parse_f64_lit(&content)?);
+                }
+                "category" => {
+                    let lit: LitStr = content.parse()?;
+                    category = Some(lit.value());
+                }
+                "enabled" => {
+                    let lit: syn::LitBool = content.parse()?;
+                    enabled = Some(lit.value());
+                }
+                "subgroup" => {
+                    let lit: LitStr = content.parse()?;
+                    subgroup = Some(lit.value());
+                }
+                "order" => {
+                    let lit: LitStr = content.parse()?;
+                    order = Some(lit.value());
+                }
+                other => {
+                    return Err(syn::Error::new(
+                        field.span(),
+                        format!(
+                            "unknown recipe field `{other}`; expected `name`, `ingredients`, `results`, `energy_required`, `category`, `enabled`, `subgroup`, or `order`"
+                        ),
+                    ));
+                }
+            }
+            let _: Option<Token![,]> = content.parse()?;
+        }
+
+        let span = ident.span();
+        Ok(Self {
+            ident,
+            name: name.ok_or_else(|| {
+                syn::Error::new(span, "recipe block missing required field `name`")
+            })?,
+            ingredients: ingredients.ok_or_else(|| {
+                syn::Error::new(span, "recipe block missing required field `ingredients`")
+            })?,
+            results: results.ok_or_else(|| {
+                syn::Error::new(span, "recipe block missing required field `results`")
+            })?,
+            energy_required,
+            category,
+            enabled,
+            subgroup,
+            order,
+        })
+    }
+}
+
+fn parse_f64_lit(input: ParseStream<'_>) -> syn::Result<f64> {
+    if input.peek(syn::LitFloat) {
+        let lit: syn::LitFloat = input.parse()?;
+        lit.base10_parse()
+    } else {
+        let lit: syn::LitInt = input.parse()?;
+        lit.base10_parse()
+    }
+}
+
+fn parse_recipe_components(input: ParseStream<'_>) -> syn::Result<Vec<RecipeComponent>> {
+    let content;
+    syn::bracketed!(content in input);
+    let mut components = Vec::new();
+    while !content.is_empty() {
+        components.push(content.parse::<RecipeComponent>()?);
+        let _: Option<Token![,]> = content.parse()?;
+    }
+    Ok(components)
+}
+
+impl Parse for RecipeComponent {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        syn::braced!(content in input);
+
+        let mut name: Option<String> = None;
+        let mut amount: Option<i64> = None;
+
+        while !content.is_empty() {
+            let field: syn::Ident = content.parse()?;
+            let _: Token![=] = content.parse()?;
+            match field.to_string().as_str() {
+                "name" => {
+                    let lit: LitStr = content.parse()?;
+                    name = Some(lit.value());
+                }
+                "amount" => {
+                    let lit: syn::LitInt = content.parse()?;
+                    amount = Some(lit.base10_parse()?);
+                }
+                other => {
+                    return Err(syn::Error::new(
+                        field.span(),
+                        format!(
+                            "unknown recipe component field `{other}`; expected `name` or `amount`"
+                        ),
+                    ));
+                }
+            }
+            let _: Option<Token![,]> = content.parse()?;
+        }
+
+        Ok(Self {
+            name: name.ok_or_else(|| syn::Error::new(content.span(), "missing `name`"))?,
+            amount: amount.ok_or_else(|| syn::Error::new(content.span(), "missing `amount`"))?,
+        })
+    }
+}
+
 /// Declare Factorio locale entries in Rust.
 ///
 /// Keys that reference associated constants (e.g. `Settings::CASUAL_MODE`) are

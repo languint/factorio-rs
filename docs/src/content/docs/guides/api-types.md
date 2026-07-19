@@ -101,14 +101,19 @@ Factorio class attributes lower as:
 | `elem.caption()` | `elem.caption` (property read) |
 | `elem.set_caption("Hi")` | `elem.caption = "Hi"` |
 | `elem.style().set_width(32)` | `elem.style.width = 32` |
-| `entity.set_filter(...)` | `entity.set_filter(...)` (real method — unchanged) |
+| `elem.set_style("frame_style")` | `elem.style = "frame_style"` |
+| `entity.set_filter(...)` | `entity.set_filter(...)` (real method - unchanged) |
 
 Writable attributes get a `set_<name>` stub. When that name collides with a real
 Factorio method (rare: `driving`, `zoom_limits`, ...), the writer is named
 `write_<name>` instead.
 
+`LuaGuiElement.style()` returns `LuaStyle` (class). The writer `set_style` takes a
+style name `&'static str` - Factorio accepts either a `LuaStyle` or a string for
+that attribute; Rust keeps the asymmetric shapes that match typical usage.
+
 Write-only attributes (for example most `LuaStyle` size/margin helpers) have
-**setters only** — there is no fake `LuaAny` getter.
+**setters only** - there is no fake `LuaAny` getter.
 
 Field assignment (`target.field = value`) still works for struct fields and
 lowers to the same Lua property write form.

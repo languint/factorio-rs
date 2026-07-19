@@ -31,7 +31,7 @@ stand in for structs, arrays, and maps.
 | `use crate::...`            | Binding crates with `[package.metadata.factorio]` also lower; see [Sharing code between mods](dependencies/). `crate::` paths become `require`s |
 | `#[factorio_rs::export]`      | Publishes a fn via remote (control) or require (shared); see [Sharing code between mods](dependencies/) |
 | `mod name;`                 | Declares a submodule file                                        |
-| `mod_settings!` / `item!` / `locale!` | Expanded / collected at transpile time                           |
+| `mod_settings!` / `item!` / `recipe!` / `locale!` | Expanded / collected at transpile time                           |
 | Doc comments                | Emitted as Lua comments when debug comments are on               |
 
 **Not supported (yet):** `trait`, trait `impl`, `static`, tuple structs, unknown macros at item position.
@@ -242,7 +242,7 @@ See [Stages](stages/) for how files map to Factorio load phases.
 | Stages / discovery   | [Stages](stages/)             |
 | `#[event]` + filters | [Events](events/)             |
 | `mod_settings!`      | [Mod settings](mod-settings/) |
-| `item!`              | [Package graphics](../recipes/package-graphics/) |
+| `item!` / `recipe!`  | [Prototypes](prototypes/)     |
 | `locale!`            | [Locale](locale/)             |
 | Profiles / prune     | [Profiles](profiles/)         |
 

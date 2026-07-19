@@ -24,6 +24,7 @@ fn generates_numeric_ipairs_and_collect_iife() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

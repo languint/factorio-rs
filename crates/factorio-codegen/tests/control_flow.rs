@@ -24,6 +24,7 @@ fn generates_while_continue_and_break() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

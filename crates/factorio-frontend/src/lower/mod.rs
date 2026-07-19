@@ -20,9 +20,11 @@ pub mod imports;
 mod items;
 pub mod iterators;
 mod locale;
+pub use locale::{parse_pending as parse_locale_pending, resolve_project_locales};
 pub mod metadata;
 mod mod_settings;
 pub mod print;
+mod recipes;
 mod serde_json;
 pub mod statements;
 pub mod structs;
@@ -166,6 +168,10 @@ pub fn parse_module_with_options(
         None,
         options.mod_name,
     )
+    .and_then(|mut module| {
+        locale::resolve_project_locales(std::slice::from_mut(&mut module))?;
+        Ok(module)
+    })
 }
 
 /// Lower a discovered module into IR.
@@ -277,12 +283,6 @@ fn lower_items(
     finalize_pending_structs(structs, &mut body, &mut symbols);
     finalize_pending_enums(enums, &mut body, &mut symbols);
 
-    let const_strings = locale::collect_const_strings(&body, &symbols);
-    let mut locales = Vec::new();
-    for tokens in pending_locales {
-        locales.extend(locale::expand(tokens, &const_strings)?);
-    }
-
     let mut all_imports = use_imports;
     all_imports.extend(inline_imports);
 
@@ -293,7 +293,8 @@ fn lower_items(
         symbols,
         imports: merge_imports(all_imports, module_prefix),
         submodules,
-        locales,
+        locales: Vec::new(),
+        pending_locales,
     })
 }
 
@@ -306,7 +307,7 @@ struct ModuleLowerState<'a> {
     submodules: &'a mut Vec<String>,
     structs: &'a mut BTreeMap<String, PendingStruct>,
     enums: &'a mut BTreeMap<String, PendingEnum>,
-    pending_locales: &'a mut Vec<proc_macro2::TokenStream>,
+    pending_locales: &'a mut Vec<factorio_ir::locale::PendingLocaleFile>,
     default_export: Option<factorio_ir::function::ExportMeta>,
     mod_name: Option<&'a str>,
 }
@@ -443,8 +444,16 @@ fn lower_top_level_item(
                 lower_top_level_item(item, module_name, module_state, ctx)?;
             }
         }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "recipe") => {
+            let expanded = recipes::expand(mac.mac.tokens.clone())?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
         Item::Macro(mac) if is_known_macro(&mac.mac, "locale") => {
-            module_state.pending_locales.push(mac.mac.tokens.clone());
+            module_state
+                .pending_locales
+                .extend(locale::parse_pending(mac.mac.tokens.clone())?);
         }
         Item::Type(_) => {
             // Collected in `collect_type_aliases` before lowering; no IR.

@@ -38,6 +38,7 @@ fn generates_module_with_private_helper_and_exported_handler() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {
@@ -109,6 +110,7 @@ fn omits_unreachable_private_helper_when_pruned() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {
@@ -162,6 +164,7 @@ fn qualifies_exported_function_identifiers_used_as_values() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![
             Symbol {
                 scope: Scope::Public,

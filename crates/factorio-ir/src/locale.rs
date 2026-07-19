@@ -17,6 +17,31 @@ pub struct LocaleFile {
     pub entries: Vec<LocaleEntry>,
 }
 
+/// Unresolved locale key from `locale!` (literal or `Type::CONST` / FQ path).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingLocaleKey {
+    Literal(String),
+    /// Path segments as written (`Items`, `WIDGET`) or
+    /// (`crate`, `data`, `items`, `Items`, `WIDGET`).
+    Path(Vec<String>),
+}
+
+/// One unresolved entry before string-const resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingLocaleEntry {
+    pub category: Option<String>,
+    pub key: PendingLocaleKey,
+    pub value: String,
+}
+
+/// Parsed `locale!` language block awaiting `Type::CONST` resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingLocaleFile {
+    pub lang: String,
+    pub file: String,
+    pub entries: Vec<PendingLocaleEntry>,
+}
+
 impl LocaleFile {
     /// Serialize to Factorio's `.cfg` format.
     #[must_use]

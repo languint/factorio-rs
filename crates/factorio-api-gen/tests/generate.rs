@@ -137,6 +137,15 @@ fn emits_attribute_setters_without_write_only_getters() {
             .contains("pubfnwrite_driving(&self"),
         "LuaControl.driving setter should be write_driving (set_driving is a real method)"
     );
+    let classes_compact = classes.replace(' ', "");
+    assert!(
+        classes_compact.contains("pubfnstyle(&self)->crate::classes::LuaStyle"),
+        "LuaGuiElement.style getter should return LuaStyle"
+    );
+    assert!(
+        classes_compact.contains("pubfnset_style(&self,value:&'staticstr)"),
+        "LuaGuiElement.set_style should take a style name string"
+    );
     let lookup = generated.attribute_setters.replace(' ', "");
     assert!(
         lookup.contains("\"set_caption\"=>Some(\"caption\")"),

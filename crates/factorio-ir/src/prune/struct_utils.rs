@@ -60,6 +60,7 @@ pub fn find_struct_method<'a>(
 }
 
 /// Find an associated constant initializer on a struct declared in `module`.
+#[must_use]
 pub fn find_struct_constant<'a>(
     module: &'a Module,
     struct_name: &str,
@@ -95,6 +96,7 @@ pub fn struct_has_method(module: &Module, struct_name: &str, method_name: &str) 
 /// Return the module that owns a struct type referenced from `module`.
 ///
 /// Checks local declarations first, then walks `use` imports and their submodules.
+#[must_use]
 pub fn struct_owner_module(graph: &ModuleGraph<'_>, module: &Module, struct_name: &str) -> String {
     if struct_exists(module, struct_name) {
         return module.name.clone();
@@ -177,6 +179,7 @@ pub fn find_struct_method_in_module_tree<'a>(
 }
 
 /// Search `module_name` and its submodules for a struct associated constant.
+#[must_use]
 pub fn find_struct_constant_in_module_tree<'a>(
     graph: &ModuleGraph<'a>,
     module_name: &str,

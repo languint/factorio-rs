@@ -28,3 +28,48 @@ pub struct Item {
     /// Sort order within the subgroup.
     pub order: Option<&'static str>,
 }
+
+/// Item ingredient for a [`Recipe`] (`type = "item"` injected).
+///
+/// Factorio 2.0 requires the full `{type, name, amount}` table form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RecipeIngredient {
+    /// Ingredient item prototype name.
+    pub name: &'static str,
+    /// Item count consumed.
+    pub amount: i64,
+}
+
+/// Item product for a [`Recipe`] (`type = "item"` injected).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RecipeProduct {
+    /// Result item prototype name.
+    pub name: &'static str,
+    /// Item count produced.
+    pub amount: i64,
+}
+
+/// Minimal [`RecipePrototype`](https://lua-api.factorio.com/latest/prototypes/RecipePrototype.html)
+/// for `data.extend`.
+///
+/// `type = "recipe"` is injected by the Lua generator. Ingredients and results
+/// use [`RecipeIngredient`] / [`RecipeProduct`] (each injects `type = "item"`).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Recipe {
+    /// Internal prototype name (e.g. `"my-mod-widget"`).
+    pub name: &'static str,
+    /// Crafting ingredients.
+    pub ingredients: &'static [RecipeIngredient],
+    /// Crafting products.
+    pub results: &'static [RecipeProduct],
+    /// Crafting energy in seconds. Factorio defaults to `0.5` when omitted.
+    pub energy_required: Option<f64>,
+    /// Recipe category (e.g. `"crafting"`).
+    pub category: Option<&'static str>,
+    /// Whether the recipe is unlocked at start. Defaults to `true` in Factorio when omitted.
+    pub enabled: Option<bool>,
+    /// Item subgroup id.
+    pub subgroup: Option<&'static str>,
+    /// Sort order within the subgroup.
+    pub order: Option<&'static str>,
+}

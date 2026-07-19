@@ -7,6 +7,9 @@ factorio-rs builds a normal Factorio mod directory. Put graphics under your
 project, list them in `Factorio.toml`, and register items with `item!` so relative
 icon paths become `__mod__/...` and `Items::*` constants wire into `locale!`.
 
+For recipes, hand-written stubs, and the full `item!` / `recipe!` field tables,
+see [Prototypes](../guides/prototypes/).
+
 ## 1. Add files
 
 ```text
@@ -45,8 +48,9 @@ Cargo `[package].name` is the mod id. Relative `icon` paths are rewritten to
 `__my_mod__/graphics/...` (replace `my_mod` with your package name). Paths that
 already start with `__` are left unchanged.
 
-Co-locate `item!` and `locale!` in the same data-stage module so
-`Items::CONST` keys resolve (same pattern as `Settings` + `mod_settings!`).
+Co-locate `item!` and `locale!` in the same data-stage module, or import
+`Items` from a sibling module (see [Locale](../guides/locale/) and
+[Prototypes](../guides/prototypes/)) so `Items::CONST` keys resolve.
 
 ```rust
 // src/data.rs
@@ -132,6 +136,7 @@ thumbnail = "assets/thumbnail.png"  # or rely on ./thumbnail.png
 
 ## See also
 
+- [Prototypes](../guides/prototypes/) - `item!` / `recipe!` / typed stubs
 - [Getting started](../guides/getting-started/) - install / package
 - [First hour](first-hour/) - end-to-end loop
 - [Stages](../guides/stages/) - data vs control modules

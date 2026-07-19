@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use factorio_codegen::LuaGenerator;
 use factorio_frontend::{
     ParseOptions, discover_modules, display_filename, eprint_diagnostic, eprint_frontend_error,
-    lua_output_path, parse_discovered_module_with_options,
+    lua_output_path, parse_discovered_module_with_options, resolve_project_locales,
 };
 use factorio_ir::{module::Module, prune::prune_modules};
 
@@ -288,6 +288,20 @@ fn lower_project(
     }
     if failed {
         return Err(CliError::Reported);
+    }
+
+    let mut modules: Vec<Module> = discovered_modules
+        .iter()
+        .map(|(_, module)| module.clone())
+        .collect();
+    if let Err(err) = resolve_project_locales(&mut modules) {
+        with_progress_suspended(progress.as_deref(), || {
+            let _ = eprint_frontend_error("<project>", "", &err);
+        });
+        return Err(CliError::Frontend(err));
+    }
+    for ((_, module), resolved) in discovered_modules.iter_mut().zip(modules) {
+        *module = resolved;
     }
 
     Ok(discovered_modules)

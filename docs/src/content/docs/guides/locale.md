@@ -35,11 +35,31 @@ factorio_rs::locale! {
 }
 ```
 
-For data-stage items from `item!`, use `item_name` / `item_description` with
-`Items::*` (co-locate in the same module):
+## Across modules
+
+Those constants may be defined in **another module** of the same crate. Import
+the type (or use a fully-qualified `crate::...` path) so both rustc and the
+frontend can resolve the key:
 
 ```rust
-factorio_rs::locale! {
+// src/data/items.rs
+use factorio_rs::prelude::*;
+
+item! {
+    widget {
+        name = "my-mod-widget",
+        icon = "graphics/icon.png",
+        stack_size = 50,
+    }
+}
+```
+
+```rust
+// src/data/items_locale.rs
+use factorio_rs::prelude::*;
+use crate::data::items::Items;
+
+locale! {
     file = "items",
 
     en {
@@ -47,13 +67,20 @@ factorio_rs::locale! {
             Items::WIDGET = "Widget",
         }
         item_description {
-            Items::WIDGET = "A sample packaged item.",
+            Items::WIDGET = "A sample item.",
         }
     }
 }
 ```
 
-See [Package graphics](../recipes/package-graphics/).
+Same-module co-location still works and needs no import. Renames
+(`use ...::Items as I` + `I::WIDGET`) and FQ paths
+(`crate::data::items::Items::WIDGET`) are supported. String literal keys always
+work without imports.
+
+For data-stage items / recipes, use `item_name` / `item_description` /
+`recipe_name` with `Items::*` / `Recipes::*`. See [Prototypes](prototypes/)
+and [Package graphics](../recipes/package-graphics/).
 
 ## Rules
 

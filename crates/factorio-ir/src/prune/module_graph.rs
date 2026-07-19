@@ -24,6 +24,7 @@ pub struct ModuleGraph<'a> {
 
 impl<'a> ModuleGraph<'a> {
     /// Build a lookup graph from all modules in a build.
+    #[must_use]
     pub fn new(modules: &'a [Module]) -> Self {
         let by_name = modules
             .iter()
@@ -48,6 +49,7 @@ impl<'a> ModuleGraph<'a> {
     }
 
     /// Look up a module by its dotted name (`control`, `shared.player`, etc.).
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&'a Module> {
         self.by_name.get(name).copied()
     }

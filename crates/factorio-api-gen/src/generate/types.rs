@@ -142,6 +142,15 @@ pub fn return_stub_for_type(api_type: &ApiType, known: &KnownTypes<'_>) -> Retur
                         } else {
                             inner
                         }
+                    } else if map_class_or_string_union(&non_nil, known, ClassOrStringPrefer::Class)
+                        .is_some()
+                    {
+                        let stub = ReturnStub::Default;
+                        if has_nil {
+                            ReturnStub::Option(Box::new(stub))
+                        } else {
+                            stub
+                        }
                     } else {
                         ReturnStub::LuaAny
                     }
@@ -467,11 +476,58 @@ fn map_union_type(
             if all_same_literal_kind(&non_nil) {
                 let ty = map_inner(non_nil[0], known);
                 if has_nil { quote!(Option<#ty>) } else { ty }
+            } else if let Some(ty) =
+                map_class_or_string_union(&non_nil, known, ClassOrStringPrefer::Class)
+            {
+                if has_nil { quote!(Option<#ty>) } else { ty }
             } else {
                 lua_any_type()
             }
         }
     }
+}
+
+/// `LuaStyle | string` (and similar): prefer the class for reads / the string for writes.
+#[derive(Clone, Copy)]
+pub(crate) enum ClassOrStringPrefer {
+    Class,
+    String,
+}
+
+pub(crate) fn map_class_or_string_union(
+    arms: &[&ApiType],
+    known: &KnownTypes<'_>,
+    prefer: ClassOrStringPrefer,
+) -> Option<TokenStream> {
+    if arms.len() != 2 {
+        return None;
+    }
+    let mut class_name: Option<String> = None;
+    let mut has_string = false;
+    for arm in arms {
+        let arm = unwrap_type_ref(arm);
+        match arm.as_simple_name() {
+            Some("string") => has_string = true,
+            Some(name) if known.classes.contains(name) => {
+                if class_name.is_some() {
+                    return None;
+                }
+                class_name = Some(name.to_string());
+            }
+            _ => return None,
+        }
+    }
+    let class_name = class_name?;
+    if !has_string {
+        return None;
+    }
+    Some(match prefer {
+        ClassOrStringPrefer::Class => {
+            let ident = make_ident(&class_name);
+            quote!(crate::classes::#ident)
+        }
+        ClassOrStringPrefer::String => quote!(&'static str),
+    })
 }
 
 fn map_index_or_name_union(arms: &[&ApiType]) -> Option<TokenStream> {

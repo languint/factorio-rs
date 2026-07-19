@@ -5,8 +5,9 @@ use quote::quote;
 
 use crate::generate::ident::{make_ident, sanitize_doc, to_pascal_case};
 use crate::generate::types::{
-    KnownTypes, lua_any_type, map_api_type, map_copy_field_type, map_field_type_unboxed,
-    map_parameter_type, map_return_stub, map_return_type, return_stub_for_type, stub_expr,
+    ClassOrStringPrefer, KnownTypes, lua_any_type, map_api_type, map_class_or_string_union,
+    map_copy_field_type, map_field_type_unboxed, map_parameter_type, map_return_stub,
+    map_return_type, return_stub_for_type, stub_expr,
 };
 use crate::schema::{Attribute, Class, Method, RuntimeApi};
 
@@ -271,6 +272,16 @@ fn map_setter_value_type(api_type: &crate::schema::ApiType, known: &KnownTypes<'
     );
     if is_localised {
         return quote!(impl Into<crate::LocalisedString>);
+    }
+    if api_type.complex_type() == Some("union") {
+        let options = api_type.options();
+        let non_nil: Vec<_> = options
+            .iter()
+            .filter(|o| o.as_simple_name() != Some("nil"))
+            .collect();
+        if let Some(ty) = map_class_or_string_union(&non_nil, known, ClassOrStringPrefer::String) {
+            return ty;
+        }
     }
     map_api_type(api_type, known)
 }

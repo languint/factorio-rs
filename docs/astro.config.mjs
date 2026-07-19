@@ -108,6 +108,7 @@ export default defineConfig({
           items: [
             { label: "Events and filters", slug: "guides/events" },
             { label: "Mod settings", slug: "guides/mod-settings" },
+            { label: "Prototypes", slug: "guides/prototypes" },
             { label: "Locale", slug: "guides/locale" },
             {
               label: "Sharing code between mods",

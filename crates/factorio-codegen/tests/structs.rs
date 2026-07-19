@@ -23,6 +23,7 @@ fn generates_struct_as_table_with_methods() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::StructDecl(Struct {
@@ -136,6 +137,7 @@ fn generates_private_struct_as_local_table() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![],
     };
 

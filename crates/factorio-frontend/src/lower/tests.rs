@@ -58,6 +58,7 @@ impl TestSuite {
             imports: self.imports.clone(),
             submodules: vec![],
             locales: vec![],
+            pending_locales: vec![],
         }
     }
 }

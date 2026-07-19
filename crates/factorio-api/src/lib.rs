@@ -480,7 +480,7 @@ pub mod prelude {
     pub use crate::lua_fn;
     pub use crate::lua_fn0;
     pub use crate::lua_fn2;
-    pub use crate::prototypes::Item;
+    pub use crate::prototypes::{Item, Recipe, RecipeIngredient, RecipeProduct};
     pub use crate::settings::{
         BoolSetting, DoubleSetting, IntSetting, ModSettingValue, StringSetting, data, settings,
     };

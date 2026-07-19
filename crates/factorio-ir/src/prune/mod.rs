@@ -14,7 +14,12 @@ mod struct_utils;
 
 use crate::module::Module;
 
-use self::{apply::prune_module, module_graph::ModuleGraph, reachability::compute_reachability};
+use self::{apply::prune_module, reachability::compute_reachability};
+
+pub use module_graph::ModuleGraph;
+pub use struct_utils::{
+    find_struct_constant, find_struct_constant_in_module_tree, struct_owner_module,
+};
 
 /// Remove unreachable functions and exports from transpiled modules.
 ///
@@ -68,6 +73,7 @@ mod tests {
             imports: vec![],
             submodules: vec![],
             locales: vec![],
+            pending_locales: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {
@@ -118,6 +124,7 @@ mod tests {
             imports: vec![],
             submodules: vec![],
             locales: vec![],
+            pending_locales: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {
@@ -165,6 +172,7 @@ mod tests {
             imports: vec![],
             submodules: vec![],
             locales: vec![],
+            pending_locales: vec![],
             symbols: vec![
                 Symbol {
                     scope: Scope::Public,

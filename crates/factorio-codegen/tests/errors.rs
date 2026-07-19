@@ -20,6 +20,7 @@ fn rejects_exported_local_functions() {
         imports: vec![],
         submodules: vec![],
         locales: vec![],
+        pending_locales: vec![],
         symbols: vec![Symbol {
             scope: Scope::Private,
             statement: Statement::FunctionDecl(Function {
