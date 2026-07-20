@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [package.metadata.factorio]
 mod_name = "provider"
-dependencies = ["provider >= 0.1.8"]
+dependencies = ["provider >= 0.1.9"]
 module_root = "lua"
 interface = "provider"
 remote_fns = ["greet"]

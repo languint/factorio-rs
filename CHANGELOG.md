@@ -7,11 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- MSRV raised to **1.88** (edition 2024 let-chains in `if` / `while`; 1.85 was
-  insufficient for the workspace).
-
 ## [0.1.9] - 2026-07-19
 
 ### Added
@@ -26,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Prototypes guide covers item -> recipe -> technology + `technology_name` locale.
 - Example: `examples/gui_basics` - `OnPlayerCreated` frame + label + `LuaStyle`.
 - CI: MSRV job on Rust **1.88** (`clippy` + `test --workspace`) alongside stable.
+
+### Changed
+
+- MSRV raised to **1.88** (edition 2024 let-chains in `if` / `while`; 1.85 was
+  insufficient for the workspace).
 
 ## [0.1.8] - 2026-07-19
 
