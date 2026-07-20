@@ -171,6 +171,8 @@ fn collect_from_items(
                         options.bindings(),
                     )?;
                 }
+                let mut parent_dyn_fn_params = HashMap::new();
+                super::traits::collect_dyn_fn_params(items, &mut parent_dyn_fn_params);
 
                 // Emit parent support once per enclosing item list (structs, trait
                 // methods, free fns, vtables) into the shared test module.
@@ -194,6 +196,7 @@ fn collect_from_items(
                         import_fragments,
                         &parent_user_structs,
                         &parent_traits,
+                        &parent_dyn_fn_params,
                     )?;
                 } else {
                     let child_path = resolve_mod_file(source_dir, source_path, &mod_name)?;
@@ -215,6 +218,7 @@ fn collect_from_items(
                         import_fragments,
                         &parent_user_structs,
                         &parent_traits,
+                        &parent_dyn_fn_params,
                     )?;
                 }
             }
@@ -359,6 +363,7 @@ fn lower_test_module_items(
     import_fragments: &mut Vec<ImportFragment>,
     parent_user_structs: &HashSet<String>,
     parent_traits: &std::collections::BTreeMap<String, super::context::TraitInfo>,
+    parent_dyn_fn_params: &HashMap<String, Vec<Option<String>>>,
 ) -> FrontendResult<()> {
     let mut remote_locals = HashMap::new();
     let mut remote_fn_locals = HashMap::new();
@@ -402,6 +407,7 @@ fn lower_test_module_items(
         traits: parent_traits.clone(),
         user_structs: parent_user_structs.clone(),
         dyn_locals: HashMap::new(),
+        dyn_fn_params: parent_dyn_fn_params.clone(),
         assoc_bindings: HashMap::new(),
         vtables: Vec::new(),
         lints: options.lints,
@@ -421,6 +427,7 @@ fn lower_test_module_items(
         )?;
     }
     super::collect_user_structs(items, &mut ctx.user_structs);
+    super::traits::collect_dyn_fn_params(items, &mut ctx.dyn_fn_params);
 
     let mut nested_mods: Vec<(String, &[Item])> = Vec::new();
 
@@ -461,9 +468,10 @@ fn lower_test_module_items(
             }
         }
     }
-    // Capture structs/traits for nested test mods before dropping ctx.
+    // Capture structs/traits/dyn params for nested test mods before dropping ctx.
     let nested_user_structs = ctx.user_structs.clone();
     let nested_traits = ctx.traits.clone();
+    let nested_dyn_fn_params = ctx.dyn_fn_params.clone();
     drop(ctx);
 
     for (mod_name, nested_items) in nested_mods {
@@ -479,6 +487,7 @@ fn lower_test_module_items(
             import_fragments,
             &nested_user_structs,
             &nested_traits,
+            &nested_dyn_fn_params,
         )?;
     }
 

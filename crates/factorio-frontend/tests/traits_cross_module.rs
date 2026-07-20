@@ -10,7 +10,9 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::must_ok_parse;
-use factorio_frontend::{ParseOptions, TraitCatalog, build_trait_catalog, parse_module_with_options};
+use factorio_frontend::{
+    ParseOptions, TraitCatalog, build_trait_catalog, parse_module_with_options,
+};
 use factorio_ir::{expression::Expression, lint::LintConfig, statement::Statement};
 
 fn catalog_from_shared_alert(source: &str) -> TraitCatalog {

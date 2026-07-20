@@ -7,34 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Example: `examples/traits_demo`, cross-module `Alert` trait (`shared.alert`)
-  with default `announce`, per-type overrides, static calls, and `&dyn Alert`
-  helpers.
-- **Associated types** on traits (`type Output;`, `Self::Output` in methods);
-  required in every impl. Dyn coerce rejects traits with associated types.
-- **Same-crate cross-module traits:** `use crate::module::Trait` seeds the
-  local trait catalog from a project-wide `TraitCatalog` built at check/build.
-
-### Fixed
-
-- Dyn trait parameters register as dyn locals so calls dispatch through `_vt`
-  (not inherent method lowering).
-- User-struct method calls emit `Type.method(receiver, ...)` so trait default
-  bodies can call other trait methods on `self` (avoids the Factorio zero-arg
-  property-read heuristic). Struct-literal receivers (`Point { .. }.m()`) and
-  `#[cfg(test)]` modules that `use super::*` now resolve the same way.
-- Dyn cast targets peel through `Type::Paren` / `Type::Group`; `&dyn Trait`
-  parameter comments render as `&dyn Trait` (not `&unsupported`).
-- `examples/traits_demo` uses explicit `&value as &dyn Alert` coerces so call
-  sites emit fat pointers (`{ _data, _vt }`).
-- `#[cfg(test)]` suites now include parent-module structs, free functions, and
-  trait vtables so `use super::*` tests can call them from `factorio_rs_tests.lua`
-  (event handlers stay out of the suite).
-- Dyn vtables forward-declare private concrete type locals so Lua closures
-  capture upvalues instead of nil globals.
-
 ## [0.2.0] - 2026-07-20
 
 ### Added
@@ -50,17 +22,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `recipe_category!`, `item_group!`, `item_subgroup!`, `module!`.
 - Recipe fluid ingredients and prototype macro path cross-refs (from prior
   unreleased work).
-- **Traits (static):** `trait` + `impl Trait for Struct` (same-module); methods
+- **Traits (static):** `trait` + `impl Trait for Struct` (same-crate); methods
   merge onto the concrete type table; default method bodies filled when omitted.
+- **Same-crate cross-module traits:** `use crate::module::Trait` seeds the
+  local trait catalog from a project-wide `TraitCatalog` built at check/build.
+- **Associated types** on traits (`type Output;`, `Self::Output` in methods);
+  required in every impl. Dyn coerce rejects traits with associated types.
 - **Traits (dyn):** `&dyn Trait` / `Box<dyn Trait>` as Lua fat pointers
   `{ _data, _vt }` with per-impl `__vt_Trait_Concrete` vtables and dyn method
-  dispatch.
+  dispatch. Call sites to dyn parameters auto-coerce concrete args
+  (`f(&value)`, `f(Struct { .. })`); explicit `as &dyn Trait` remains optional.
+- Example: `examples/traits_demo`, cross-module `Alert` trait (`shared.alert`)
+  with default `announce`, per-type overrides, static calls, and `&dyn Alert`
+  helpers.
 
 ### Changed
 
 - Data-stage stubs are no longer allowlist-gated; use `factorio_api::prototypes`
   (or `prelude::prototypes`) for the full surface. Prelude still re-exports the
   five rich types + companions by name.
+
+### Fixed
+
+- Dyn trait parameters register as dyn locals so calls dispatch through `_vt`
+  (not inherent method lowering).
+- User-struct method calls emit `Type.method(receiver, ...)` so trait default
+  bodies can call other trait methods on `self` (avoids the Factorio zero-arg
+  property-read heuristic). Struct-literal receivers (`Point { .. }.m()`) and
+  `#[cfg(test)]` modules that `use super::*` now resolve the same way.
+- Dyn cast targets peel through `Type::Paren` / `Type::Group`; `&dyn Trait`
+  parameter comments render as `&dyn Trait` (not `&unsupported`).
+- `#[cfg(test)]` suites now include parent-module structs, free functions, and
+  trait vtables so `use super::*` tests can call them from `factorio_rs_tests.lua`
+  (event handlers stay out of the suite).
+- Dyn vtables forward-declare private concrete type locals so Lua closures
+  capture upvalues instead of nil globals.
 
 ### Notes
 

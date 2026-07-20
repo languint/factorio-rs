@@ -278,6 +278,7 @@ pub fn lower_items(
         traits: std::collections::BTreeMap::new(),
         user_structs: std::collections::HashSet::new(),
         dyn_locals: std::collections::HashMap::new(),
+        dyn_fn_params: std::collections::HashMap::new(),
         assoc_bindings: std::collections::HashMap::new(),
         vtables: Vec::new(),
         lints,
@@ -288,15 +289,10 @@ pub fn lower_items(
     types::collect_type_aliases(items, &mut ctx.type_aliases)?;
     traits::collect_traits(items, &mut ctx.traits)?;
     if let Some(catalog) = trait_catalog {
-        traits::seed_traits_from_imports(
-            items,
-            catalog,
-            &mut ctx.traits,
-            module_prefix,
-            bindings,
-        )?;
+        traits::seed_traits_from_imports(items, catalog, &mut ctx.traits, module_prefix, bindings)?;
     }
     collect_user_structs(items, &mut ctx.user_structs);
+    traits::collect_dyn_fn_params(items, &mut ctx.dyn_fn_params);
     let mut module_state = ModuleLowerState {
         module_name,
         stage,
@@ -787,13 +783,13 @@ fn lower_enum_item(
                     })
                     .collect::<FrontendResult<Vec<_>>>()?,
             },
-            syn::Fields::Named(fields) => factorio_ir::enumeration::EnumVariantFields::Named(
-                lower_struct_fields(
+            syn::Fields::Named(fields) => {
+                factorio_ir::enumeration::EnumVariantFields::Named(lower_struct_fields(
                     &syn::Fields::Named(fields.clone()),
                     &ctx.type_aliases,
                     &ctx.assoc_bindings,
-                )?,
-            ),
+                )?)
+            }
         };
         let info_fields = match &fields {
             factorio_ir::enumeration::EnumVariantFields::Unit => context::EnumVariantFields::Unit,

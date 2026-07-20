@@ -13,8 +13,9 @@ pub use error::{FrontendError, FrontendResult};
 pub use lower::tests::{FactorioTest, TestSuite, discover_tests};
 pub use lower::{
     ParseOptions, TraitCatalog, build_trait_catalog, parse_discovered_module,
-    parse_discovered_module_with_options, parse_discovered_module_with_prefix, parse_locale_pending,
-    parse_module, parse_module_with_options, parse_module_with_prefix, resolve_project_locales,
+    parse_discovered_module_with_options, parse_discovered_module_with_prefix,
+    parse_locale_pending, parse_module, parse_module_with_options, parse_module_with_prefix,
+    resolve_project_locales,
 };
 pub use paths::{lua_output_path, module_name_from_source, require_local_name};
 pub use report::{

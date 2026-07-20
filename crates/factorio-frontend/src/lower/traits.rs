@@ -377,6 +377,37 @@ pub fn vtable_name(trait_name: &str, concrete_name: &str) -> String {
     format!("__vt_{trait_name}_{concrete_name}")
 }
 
+/// Record free functions that take `&dyn Trait` / `Box<dyn Trait>` parameters.
+///
+/// Call sites use this map to auto-coerce concrete arguments into fat pointers
+/// without an explicit `as &dyn Trait` cast.
+pub fn collect_dyn_fn_params(items: &[Item], out: &mut HashMap<String, Vec<Option<String>>>) {
+    for item in items {
+        match item {
+            Item::Fn(function) => {
+                let params: Vec<Option<String>> = function
+                    .sig
+                    .inputs
+                    .iter()
+                    .map(|input| match input {
+                        FnArg::Receiver(_) => None,
+                        FnArg::Typed(pat_type) => dyn_trait_name(&pat_type.ty),
+                    })
+                    .collect();
+                if params.iter().any(Option::is_some) {
+                    out.insert(function.sig.ident.to_string(), params);
+                }
+            }
+            Item::Mod(item_mod) => {
+                if let Some((_, nested)) = &item_mod.content {
+                    collect_dyn_fn_params(nested, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Reject non-object-safe traits when coercing to `dyn`.
 pub fn ensure_object_safe(
     trait_info: &TraitInfo,

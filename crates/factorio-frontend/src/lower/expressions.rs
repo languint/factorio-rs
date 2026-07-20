@@ -420,11 +420,14 @@ fn lower_call_expression(
             1 => factorio_ir::expression::Expression::Identifier(segments[0].clone()),
             _ => factorio_ir::expression::Expression::QualifiedPath { segments },
         };
-        let args = call
-            .args
-            .iter()
-            .map(|arg| lower_expression(arg, ctx, self_type))
-            .collect::<FrontendResult<Vec<_>>>()?;
+        let dyn_params = match &func {
+            factorio_ir::expression::Expression::Identifier(name) => {
+                ctx.dyn_fn_params.get(name).cloned()
+            }
+            _ => None,
+        };
+        let args =
+            lower_call_args_with_dyn_coerce(&call.args, dyn_params.as_deref(), ctx, self_type)?;
         return Ok(factorio_ir::expression::Expression::Call {
             func: Box::new(func),
             args,
@@ -777,25 +780,77 @@ fn lower_cast_expression(
     let Some(trait_name) = super::traits::dyn_trait_name(&cast.ty) else {
         return lower_expression(&cast.expr, ctx, self_type);
     };
+    coerce_expr_to_dyn(&cast.expr, &trait_name, ctx, self_type, location(cast))
+}
 
-    let trait_info = ctx.traits.get(&trait_name).cloned().ok_or_else(|| {
+/// Lower call arguments, wrapping concrete values as fat pointers when the
+/// callee parameter is `&dyn Trait` / `Box<dyn Trait>`.
+fn lower_call_args_with_dyn_coerce(
+    args: &syn::punctuated::Punctuated<Expr, syn::token::Comma>,
+    dyn_params: Option<&[Option<String>]>,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Vec<factorio_ir::expression::Expression>> {
+    args.iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            let expected = dyn_params
+                .and_then(|params| params.get(index))
+                .and_then(|t| t.as_deref());
+            match expected {
+                Some(trait_name) => lower_dyn_call_arg(arg, trait_name, ctx, self_type),
+                None => lower_expression(arg, ctx, self_type),
+            }
+        })
+        .collect()
+}
+
+fn lower_dyn_call_arg(
+    arg: &Expr,
+    trait_name: &str,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    // Explicit cast already produces a fat pointer.
+    if let Expr::Cast(cast) = arg
+        && super::traits::dyn_trait_name(&cast.ty).as_deref() == Some(trait_name)
+    {
+        return lower_expression(arg, ctx, self_type);
+    }
+
+    // Already a dyn local (optionally behind `&`): pass through.
+    if dyn_receiver_local(arg, ctx).is_some_and(|d| d.trait_name == trait_name) {
+        return lower_expression(arg, ctx, self_type);
+    }
+
+    coerce_expr_to_dyn(arg, trait_name, ctx, self_type, location(arg))
+}
+
+fn coerce_expr_to_dyn(
+    expr: &Expr,
+    trait_name: &str,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+    loc: factorio_ir::span::SourceLoc,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let trait_info = ctx.traits.get(trait_name).cloned().ok_or_else(|| {
         FrontendError::UnsupportedExpression {
-            location: location(cast).with_note(format!(
-                "unknown trait `{trait_name}` in dyn cast; define it in this module or `use` it from another module"
+            location: loc.clone().with_note(format!(
+                "unknown trait `{trait_name}` in dyn coerce; define it in this module or `use` it from another module"
             )),
         }
     })?;
-    super::traits::ensure_object_safe(&trait_info, location(cast))?;
+    super::traits::ensure_object_safe(&trait_info, loc.clone())?;
 
-    let concrete_name = super::traits::resolve_concrete_type(&cast.expr, ctx).ok_or_else(|| {
+    let concrete_name = super::traits::resolve_concrete_type(expr, ctx).ok_or_else(|| {
         FrontendError::UnsupportedExpression {
-            location: location(cast).with_note(
-                "could not resolve concrete type for dyn cast; use a struct literal or typed local",
+            location: loc.with_note(
+                "could not resolve concrete type for dyn coerce; use a struct literal, typed local, or `as &dyn Trait`",
             ),
         }
     })?;
 
-    let vt = super::traits::vtable_name(&trait_name, &concrete_name);
+    let vt = super::traits::vtable_name(trait_name, &concrete_name);
     if !ctx.vtables.iter().any(|vtable| vtable.name == vt) {
         ctx.vtables.push(factorio_ir::module::VTable {
             name: vt.clone(),
@@ -804,7 +859,7 @@ fn lower_cast_expression(
         });
     }
 
-    let inner = super::traits::peel_box_new(&cast.expr);
+    let inner = super::traits::peel_box_new(expr);
     let data = lower_expression(inner, ctx, self_type)?;
     Ok(factorio_ir::expression::Expression::FatPointer {
         data: Box::new(data),

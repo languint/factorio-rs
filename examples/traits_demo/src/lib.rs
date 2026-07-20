@@ -76,20 +76,18 @@ mod control {
         belt.announce();
         science.announce();
 
-        let total = priority_of(&power as &dyn Alert)
-            + priority_of(&belt as &dyn Alert)
-            + priority_of(&science as &dyn Alert);
+        let total = priority_of(&power) + priority_of(&belt) + priority_of(&science);
 
         shout(&PowerDrop {
             machine: "electric-furnace",
             percent: 5,
-        } as &dyn Alert);
+        });
         shout(&BeltJam {
             lane: "copper green",
-        } as &dyn Alert);
+        });
         shout(&ScienceStall {
             pack: "production-science-pack",
-        } as &dyn Alert);
+        });
 
         println!("total alert priority: {total}");
     }
@@ -119,11 +117,10 @@ mod control {
             let total = priority_of(&PowerDrop {
                 machine: "lab",
                 percent: 20,
-            } as &dyn Alert)
-                + priority_of(&BeltJam { lane: "main" } as &dyn Alert)
+            }) + priority_of(&BeltJam { lane: "main" })
                 + priority_of(&ScienceStall {
                     pack: "automation-science-pack",
-                } as &dyn Alert);
+                });
             assert_eq!(total, 210);
         }
     }

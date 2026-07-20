@@ -124,7 +124,10 @@ pub fn run(x: N) -> i32 {
     assert_eq!(struct_decl.methods.len(), 1);
     assert_eq!(struct_decl.methods[0].name, "map_value");
     assert_eq!(
-        struct_decl.methods[0].debug.as_ref().map(|d| d.return_type.as_deref()),
+        struct_decl.methods[0]
+            .debug
+            .as_ref()
+            .map(|d| d.return_type.as_deref()),
         Some(Some("i32"))
     );
 }
@@ -337,6 +340,95 @@ pub fn run(p: Point) -> i32 {
     assert!(
         matches!(args.first(), Some(Expression::FatPointer { vtable, .. }) if vtable == "__vt_Display_Point"),
         "expected FatPointer arg, got {args:?}"
+    );
+}
+
+#[test]
+fn dyn_call_arg_auto_coerces_without_cast() {
+    let source = r#"
+struct Point { x: i32 }
+trait Display { fn show(&self) -> i32; }
+impl Display for Point { fn show(&self) -> i32 { self.x } }
+fn priority(d: &dyn Display) -> i32 { d.show() }
+pub fn run() -> i32 {
+    priority(&Point { x: 7 })
+}
+"#;
+    let module = must_ok_parse(parse_module(source, "shared.traits"));
+    let run = module
+        .symbols
+        .iter()
+        .find_map(|sym| match &sym.statement {
+            Statement::FunctionDecl(f) if f.name == "run" => Some(f),
+            _ => None,
+        })
+        .or_else(|| {
+            module.body.statements.iter().find_map(|s| match s {
+                Statement::FunctionDecl(f) if f.name == "run" => Some(f),
+                _ => None,
+            })
+        })
+        .expect("expected run function");
+
+    let Statement::Return(Some(Expression::Call { args, .. })) = &run.body.statements[0] else {
+        panic!("expected return call, got {:?}", run.body.statements[0]);
+    };
+    assert!(
+        matches!(
+            args.first(),
+            Some(Expression::FatPointer { vtable, data })
+                if vtable == "__vt_Display_Point"
+                    && matches!(
+                        data.as_ref(),
+                        Expression::StructLiteral { struct_name, .. }
+                            if struct_name.as_deref() == Some("Point")
+                    )
+        ),
+        "expected auto FatPointer arg, got {args:?}"
+    );
+}
+
+#[test]
+fn dyn_call_arg_auto_coerces_borrowed_local() {
+    let source = r#"
+struct Point { x: i32 }
+trait Display { fn show(&self) -> i32; }
+impl Display for Point { fn show(&self) -> i32 { self.x } }
+fn priority(d: &dyn Display) -> i32 { d.show() }
+pub fn run() -> i32 {
+    let p = Point { x: 3 };
+    priority(&p)
+}
+"#;
+    let module = must_ok_parse(parse_module(source, "shared.traits"));
+    let run = module
+        .symbols
+        .iter()
+        .find_map(|sym| match &sym.statement {
+            Statement::FunctionDecl(f) if f.name == "run" => Some(f),
+            _ => None,
+        })
+        .or_else(|| {
+            module.body.statements.iter().find_map(|s| match s {
+                Statement::FunctionDecl(f) if f.name == "run" => Some(f),
+                _ => None,
+            })
+        })
+        .expect("expected run function");
+
+    let Statement::Return(Some(Expression::Call { args, .. })) =
+        &run.body.statements.last().unwrap()
+    else {
+        panic!("expected return call, got {:?}", run.body.statements);
+    };
+    assert!(
+        matches!(
+            args.first(),
+            Some(Expression::FatPointer { vtable, data })
+                if vtable == "__vt_Display_Point"
+                    && matches!(data.as_ref(), Expression::Identifier(name) if name == "p")
+        ),
+        "expected auto FatPointer for `&p`, got {args:?}"
     );
 }
 

@@ -174,7 +174,11 @@ fn lower_parameter(
             Ok(factorio_ir::function::Parameter {
                 name,
                 r#type,
-                source_type: Some(type_source_string(ty, &ctx.type_aliases, &ctx.assoc_bindings)),
+                source_type: Some(type_source_string(
+                    ty,
+                    &ctx.type_aliases,
+                    &ctx.assoc_bindings,
+                )),
             })
         }
     }

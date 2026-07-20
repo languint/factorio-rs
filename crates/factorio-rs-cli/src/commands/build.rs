@@ -234,8 +234,8 @@ fn lower_project(
     let package = CargoPackage::load(project_root)?;
     let lint_config = config.lints.resolve()?;
     let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
-    let trait_catalog =
-        factorio_frontend::build_trait_catalog(&source_contents, &source_dir).map_err(|err| {
+    let trait_catalog = factorio_frontend::build_trait_catalog(&source_contents, &source_dir)
+        .map_err(|err| {
             // Surface catalog errors with the first source file for path context.
             if let Some((path, source)) = source_contents.first() {
                 let filename = display_filename(path);

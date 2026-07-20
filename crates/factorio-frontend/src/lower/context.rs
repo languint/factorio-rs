@@ -68,6 +68,9 @@ pub struct LowerContext<'a> {
     pub user_structs: HashSet<String>,
     /// Locals that hold dyn fat pointers.
     pub dyn_locals: HashMap<String, DynLocal>,
+    /// Free function name -> per-parameter dyn trait (`None` = not a dyn param).
+    /// Used to auto-coerce concrete args at call sites (`f(&value)` -> fat pointer).
+    pub dyn_fn_params: HashMap<String, Vec<Option<String>>>,
     /// Associated type bindings for the trait impl currently being lowered
     /// (`Self::Output` -> concrete type). Empty outside trait impl method lowering.
     pub assoc_bindings: HashMap<String, syn::Type>,

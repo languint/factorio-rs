@@ -17,7 +17,7 @@ learning a feature:
 
 Lua has no native traits or borrow checker. Option-like values are usually
 **value or `nil`**; Results are tagged `{ ok }` / `{ err }` tables. Tables also
-stand in for structs, arrays, and maps. Same-module Rust traits lower to method
+stand in for structs, arrays, and maps. Same-crate Rust traits lower to method
 tables (and dyn fat pointers); see [Traits](#traits).
 
 ## Top-level items
@@ -56,7 +56,8 @@ Same-crate `trait` + `impl Trait for Struct` is supported:
   `use crate::shared::alert::Alert` (project build builds a trait catalog).
 - `&dyn Trait` / `Box<dyn Trait>` lower to Lua fat pointers `{ _data, _vt }`
   with per-impl `__vt_Trait_Concrete` vtables and dyn method dispatch.
-  Prefer `&value as &dyn Trait` when coercing.
+  Call sites to dyn parameters auto-coerce concrete args (`f(&value)`);
+  `as &dyn Trait` is still supported for locals and explicit casts.
 - Dyn coerce requires object-safe methods (no `Self` by value in signatures
   beyond the receiver pattern the frontend accepts; no associated types).
 
