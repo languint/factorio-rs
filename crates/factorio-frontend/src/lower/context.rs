@@ -122,7 +122,7 @@ impl LowerContext<'_> {
 
     /// Snapshot length before lowering an expression that may emit `?` hoists.
     #[must_use]
-    pub fn try_hoist_mark(&self) -> usize {
+    pub const fn try_hoist_mark(&self) -> usize {
         self.try_hoists.len()
     }
 

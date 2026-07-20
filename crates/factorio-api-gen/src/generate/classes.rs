@@ -417,7 +417,7 @@ fn generate_class(
         reserved_names.insert(method_rust_name(&method.name).to_string());
     }
 
-    let methods = all_methods.iter().map(|(method, defining_class)| {
+    let methods = all_methods.iter().map(|&(method, defining_class)| {
         let params_struct = takes_table_map
             .get(&(defining_class.to_string(), method.name.clone()))
             .filter(|_| method.format.takes_table);
