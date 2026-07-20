@@ -70,8 +70,8 @@ impl TestSuite {
 /// `source_dir` is the project's `src/` root (used to resolve `mod tests;` files).
 ///
 /// Parent-module structs, inherent/trait impls, free functions (except event
-/// handlers), and trait vtables are lowered into the suite so `use super::*`
-/// tests can call them as locals in `factorio_rs_tests.lua`.
+/// handlers), trait vtables, and `use` imports are lowered into the suite so
+/// `use super::*` tests can call them as locals in `factorio_rs_tests.lua`.
 ///
 /// # Errors
 /// Returns lowering / parse failures for test modules.
@@ -85,6 +85,7 @@ pub fn discover_tests(
     let mut helpers = Vec::new();
     let mut vtables = Vec::new();
     let mut import_fragments = Vec::new();
+    let mut parent_imports = Vec::new();
     let mut seen_lua_names = HashMap::<String, usize>::new();
 
     for (path, source) in sources {
@@ -101,13 +102,17 @@ pub fn discover_tests(
             &mut vtables,
             &mut seen_lua_names,
             &mut import_fragments,
+            &mut parent_imports,
         )?;
     }
+
+    let mut imports = merge_imports(import_fragments, options.module_prefix);
+    merge_parent_imports(&mut imports, parent_imports);
 
     Ok(TestSuite {
         tests,
         helpers,
-        imports: merge_imports(import_fragments, options.module_prefix),
+        imports,
         vtables,
     })
 }
@@ -126,6 +131,7 @@ fn collect_from_items(
     vtables: &mut Vec<factorio_ir::module::VTable>,
     seen_lua_names: &mut HashMap<String, usize>,
     import_fragments: &mut Vec<ImportFragment>,
+    parent_imports: &mut Vec<factorio_ir::module::ModuleImport>,
 ) -> FrontendResult<()> {
     let mut parent_support_done = false;
     for item in items {
@@ -146,6 +152,7 @@ fn collect_from_items(
                     vtables,
                     seen_lua_names,
                     import_fragments,
+                    parent_imports,
                 )?;
             }
             Item::Mod(item_mod) if attrs::is_cfg_test(&item_mod.attrs) => {
@@ -175,12 +182,13 @@ fn collect_from_items(
                 super::traits::collect_dyn_fn_params(items, &mut parent_dyn_fn_params);
 
                 // Emit parent support once per enclosing item list (structs, trait
-                // methods, free fns, vtables) into the shared test module.
+                // methods, free fns, vtables, imports) into the shared test module.
                 if !parent_support_done {
-                    let (parent_helpers, parent_vtables) =
+                    let (parent_helpers, parent_vtables, parent_module_imports) =
                         lower_parent_support_items(items, options, diagnostics)?;
                     merge_parent_helpers(helpers, parent_helpers);
                     merge_parent_vtables(vtables, parent_vtables);
+                    parent_imports.extend(parent_module_imports);
                     parent_support_done = true;
                 }
 
@@ -236,6 +244,7 @@ fn collect_from_items(
                         vtables,
                         seen_lua_names,
                         import_fragments,
+                        parent_imports,
                     )?;
                 }
             }
@@ -253,6 +262,7 @@ fn lower_parent_support_items(
 ) -> FrontendResult<(
     Vec<factorio_ir::statement::Statement>,
     Vec<factorio_ir::module::VTable>,
+    Vec<factorio_ir::module::ModuleImport>,
 )> {
     let support: Vec<Item> = parent_items
         .iter()
@@ -260,7 +270,7 @@ fn lower_parent_support_items(
         .cloned()
         .collect();
     if support.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
     }
 
     let module = super::lower_items(
@@ -282,7 +292,7 @@ fn lower_parent_support_items(
     for symbol in module.symbols {
         helpers.push(symbol.statement);
     }
-    Ok((helpers, module.vtables))
+    Ok((helpers, module.vtables, module.imports))
 }
 
 fn include_parent_item_for_tests(item: &Item) -> bool {
@@ -346,6 +356,25 @@ fn merge_parent_vtables(
     for vt in parent_vtables {
         if !vtables.iter().any(|existing| existing.name == vt.name) {
             vtables.push(vt);
+        }
+    }
+}
+
+fn merge_parent_imports(
+    imports: &mut Vec<factorio_ir::module::ModuleImport>,
+    parent_imports: Vec<factorio_ir::module::ModuleImport>,
+) {
+    for import in parent_imports {
+        if let Some(existing) = imports.iter_mut().find(|existing| {
+            existing.module == import.module && existing.factorio_mod == import.factorio_mod
+        }) {
+            for item in import.items {
+                if !existing.items.iter().any(|known| known.local == item.local) {
+                    existing.items.push(item);
+                }
+            }
+        } else {
+            imports.push(import);
         }
     }
 }
@@ -691,6 +720,47 @@ mod unit_tests {
         assert!(
             lua.contains("local function double"),
             "missing double:\n{lua}"
+        );
+    }
+
+    #[test]
+    fn parent_use_imports_land_in_test_suite() {
+        let source = r"
+            use crate::settings::Settings;
+
+            const KEY: &str = Settings::CASUAL_MODE;
+
+            #[cfg(test)]
+            mod tests {
+                #[test]
+                fn smoke() {
+                    assert!(true);
+                }
+            }
+        ";
+        let lints = LintConfig::allow_all();
+        let options = ParseOptions::new(&lints).with_prefix("msr");
+        let mut diagnostics = Vec::new();
+        let sources = vec![(PathBuf::from("src/control.rs"), source.to_string())];
+        let suite = discover_tests(Path::new("src"), &sources, &options, &mut diagnostics).unwrap();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert!(
+            suite.imports.iter().any(|import| {
+                import.module == "settings"
+                    && import
+                        .items
+                        .iter()
+                        .any(|item| item.name == "Settings" && item.local == "Settings")
+            }),
+            "expected settings::Settings import, got {:?}",
+            suite.imports
+        );
+        let lua = factorio_codegen::LuaGenerator::with_mod_name("mandatory_spaghetti")
+            .generate_module(&suite.to_module())
+            .unwrap();
+        assert!(
+            lua.contains("msr_settings") && lua.contains("Settings"),
+            "expected Settings require binding in:\n{lua}"
         );
     }
 }

@@ -52,9 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `#[cfg(test)]` modules that `use super::*` now resolve the same way.
 - Dyn cast targets peel through `Type::Paren` / `Type::Group`; `&dyn Trait`
   parameter comments render as `&dyn Trait` (not `&unsupported`).
-- `#[cfg(test)]` suites now include parent-module structs, free functions, and
-  trait vtables so `use super::*` tests can call them from `factorio_rs_tests.lua`
-  (event handlers stay out of the suite).
+- `#[cfg(test)]` suites now include parent-module structs, free functions,
+  trait vtables, and `use` imports so `use super::*` tests can call them from
+  `factorio_rs_tests.lua` (event handlers stay out of the suite).
 - Dyn vtables forward-declare private concrete type locals so Lua closures
   capture upvalues instead of nil globals.
 
