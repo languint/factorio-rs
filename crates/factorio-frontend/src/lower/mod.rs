@@ -363,7 +363,6 @@ pub fn collect_user_structs(items: &[syn::Item], out: &mut std::collections::Has
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn lower_top_level_item(
     item: &Item,
     module_name: &str,
@@ -371,44 +370,8 @@ fn lower_top_level_item(
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<()> {
     match item {
-        Item::Fn(function) => {
-            let mut lowered = lower_function(function, ctx)?;
-            apply_default_export(
-                &mut lowered,
-                &function.vis,
-                module_state.default_export.as_ref(),
-            );
-            let statement = factorio_ir::statement::Statement::FunctionDecl(lowered);
-            if let factorio_ir::statement::Statement::FunctionDecl(ref func) = statement
-                && func.event.is_some()
-                && module_state.stage != factorio_ir::stage::Stage::Control
-            {
-                return Err(FrontendError::EventOutsideControlStage {
-                    module: module_state.module_name.to_string(),
-                });
-            }
-            push_scoped_statement(
-                statement,
-                &function.vis,
-                module_state.body,
-                module_state.symbols,
-            );
-        }
-        Item::Const(item_const) => {
-            let value = lower_expression(&item_const.expr, ctx, None)?;
-            let name = item_const.ident.to_string();
-            push_scoped_statement(
-                factorio_ir::statement::Statement::VariableDecl {
-                    name,
-                    ty: factorio_ir::r#type::Type::Void,
-                    source_type: None,
-                    value,
-                },
-                &item_const.vis,
-                module_state.body,
-                module_state.symbols,
-            );
-        }
+        Item::Fn(function) => lower_top_level_fn(function, module_state, ctx)?,
+        Item::Const(item_const) => lower_top_level_const(item_const, module_state, ctx)?,
         Item::Struct(item_struct) => {
             lower_struct_item(item_struct, module_state.structs, module_state.enums, ctx)?;
         }
@@ -421,206 +384,15 @@ fn lower_top_level_item(
         Item::Trait(_) | Item::Type(_) => {
             // Catalogued before lowering (`collect_traits` / `collect_type_aliases`); no IR.
         }
-        Item::Use(use_item) => {
-            let fragments = lower_use(
-                use_item,
-                ctx.module_prefix,
-                ctx.bindings,
-                &mut ctx.remote_locals,
-                &mut ctx.remote_fn_locals,
-            )?;
-            // Populate the bare-import rename map so that path expressions like
-            // `adjacent_blacklist::check` get rewritten to `ms_adjacent_blacklist.check`.
-            // We only do this for bare module imports (item == None), NOT for item
-            // imports like `use crate::settings::Settings` - that keeps the Factorio
-            // global `settings` safe from being renamed.
-            if !ctx.module_prefix.is_empty() {
-                for fragment in &fragments {
-                    if fragment.item.is_none() {
-                        let bare = require_local_name(&fragment.module);
-                        if bare != fragment.require_local {
-                            ctx.bare_import_renames
-                                .insert(bare, fragment.require_local.clone());
-                        }
-                    }
-                }
-            }
-            module_state.use_imports.extend(fragments);
-        }
+        Item::Use(use_item) => lower_top_level_use(use_item, module_state, ctx)?,
         Item::Mod(item_mod) if item_mod.content.is_none() => {
-            // File modules gated on `#[cfg(test)]` are only loaded by the test runner.
-            if attrs::is_cfg_test(&item_mod.attrs) {
-                return Ok(());
-            }
-            module_state
-                .submodules
-                .push(submodule_path(module_name, &item_mod.ident.to_string()));
+            lower_file_mod(item_mod, module_name, module_state);
         }
         Item::Mod(item_mod) => {
-            // `#[cfg(test)]` modules are only lowered by the test runner.
-            if attrs::is_cfg_test(&item_mod.attrs) {
-                return Ok(());
-            }
-            let Some(export) = item_mod
-                .attrs
-                .iter()
-                .find_map(attrs::parse_factorio_export_attribute)
-            else {
-                ctx.emit_lint(
-                    factorio_ir::lint::LintId::SkippedMod,
-                    format!(
-                        "inline `mod {}` is skipped when lowering; add `#[factorio_rs::export]` or use a file module",
-                        item_mod.ident
-                    ),
-                    util::location(item_mod),
-                )?;
-                return Ok(());
-            };
-            let Some((_, items)) = &item_mod.content else {
-                return Ok(());
-            };
-            let previous = module_state.default_export.take();
-            module_state.default_export = Some(export);
-            for nested in items {
-                lower_top_level_item(nested, module_name, module_state, ctx)?;
-            }
-            module_state.default_export = previous;
+            lower_inline_mod(item_mod, module_name, module_state, ctx)?;
         }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "mod_settings") => {
-            let expanded = mod_settings::expand(mac.mac.tokens.clone())?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "item") => {
-            let expanded = items::expand(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "recipe") => {
-            let expanded = recipes::expand(mac.mac.tokens.clone())?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "technology") => {
-            let expanded = technologies::expand(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "fluid") => {
-            let expanded = fluids::expand(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "assembling_machine") => {
-            let expanded =
-                assembling_machines::expand(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "container") => {
-            let expanded =
-                extra_protos::expand_container(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "inserter") => {
-            let expanded =
-                extra_protos::expand_inserter(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "transport_belt") => {
-            let expanded =
-                extra_protos::expand_transport_belt(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "furnace") => {
-            let expanded =
-                extra_protos::expand_furnace(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "mining_drill") => {
-            let expanded =
-                extra_protos::expand_mining_drill(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "lab") => {
-            let expanded = extra_protos::expand_lab(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "resource") => {
-            let expanded =
-                extra_protos::expand_resource(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "tile") => {
-            let expanded =
-                extra_protos::expand_tile(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "autoplace_control") => {
-            let expanded = extra_protos::expand_autoplace_control(
-                mac.mac.tokens.clone(),
-                module_state.mod_name,
-            )?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "recipe_category") => {
-            let expanded = extra_protos::expand_recipe_category(
-                mac.mac.tokens.clone(),
-                module_state.mod_name,
-            )?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "item_group") => {
-            let expanded =
-                extra_protos::expand_item_group(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "item_subgroup") => {
-            let expanded =
-                extra_protos::expand_item_subgroup(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "module") => {
-            let expanded =
-                extra_protos::expand_module(mac.mac.tokens.clone(), module_state.mod_name)?;
-            for item in &expanded {
-                lower_top_level_item(item, module_name, module_state, ctx)?;
-            }
-        }
-        Item::Macro(mac) if is_known_macro(&mac.mac, "locale") => {
-            module_state
-                .pending_locales
-                .extend(locale::parse_pending(mac.mac.tokens.clone())?);
+        Item::Macro(mac) => {
+            lower_known_macro(mac, module_name, module_state, ctx)?;
         }
         item => {
             return Err(FrontendError::UnsupportedItem {
@@ -630,6 +402,216 @@ fn lower_top_level_item(
         }
     }
 
+    Ok(())
+}
+
+fn lower_top_level_fn(
+    function: &syn::ItemFn,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    let mut lowered = lower_function(function, ctx)?;
+    apply_default_export(
+        &mut lowered,
+        &function.vis,
+        module_state.default_export.as_ref(),
+    );
+    let statement = factorio_ir::statement::Statement::FunctionDecl(lowered);
+    if let factorio_ir::statement::Statement::FunctionDecl(ref func) = statement
+        && func.event.is_some()
+        && module_state.stage != factorio_ir::stage::Stage::Control
+    {
+        return Err(FrontendError::EventOutsideControlStage {
+            module: module_state.module_name.to_string(),
+        });
+    }
+    push_scoped_statement(
+        statement,
+        &function.vis,
+        module_state.body,
+        module_state.symbols,
+    );
+    Ok(())
+}
+
+fn lower_top_level_const(
+    item_const: &syn::ItemConst,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    let value = lower_expression(&item_const.expr, ctx, None)?;
+    let name = item_const.ident.to_string();
+    push_scoped_statement(
+        factorio_ir::statement::Statement::VariableDecl {
+            name,
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value,
+        },
+        &item_const.vis,
+        module_state.body,
+        module_state.symbols,
+    );
+    Ok(())
+}
+
+fn lower_top_level_use(
+    use_item: &syn::ItemUse,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    let fragments = lower_use(
+        use_item,
+        ctx.module_prefix,
+        ctx.bindings,
+        &mut ctx.remote_locals,
+        &mut ctx.remote_fn_locals,
+    )?;
+    // Populate the bare-import rename map so that path expressions like
+    // `adjacent_blacklist::check` get rewritten to `ms_adjacent_blacklist.check`.
+    // We only do this for bare module imports (item == None), NOT for item
+    // imports like `use crate::settings::Settings` - that keeps the Factorio
+    // global `settings` safe from being renamed.
+    if !ctx.module_prefix.is_empty() {
+        for fragment in &fragments {
+            if fragment.item.is_none() {
+                let bare = require_local_name(&fragment.module);
+                if bare != fragment.require_local {
+                    ctx.bare_import_renames
+                        .insert(bare, fragment.require_local.clone());
+                }
+            }
+        }
+    }
+    module_state.use_imports.extend(fragments);
+    Ok(())
+}
+
+fn lower_file_mod(
+    item_mod: &syn::ItemMod,
+    module_name: &str,
+    module_state: &mut ModuleLowerState<'_>,
+) {
+    // File modules gated on `#[cfg(test)]` are only loaded by the test runner.
+    if attrs::is_cfg_test(&item_mod.attrs) {
+        return;
+    }
+    module_state
+        .submodules
+        .push(submodule_path(module_name, &item_mod.ident.to_string()));
+}
+
+fn lower_inline_mod(
+    item_mod: &syn::ItemMod,
+    module_name: &str,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    // `#[cfg(test)]` modules are only lowered by the test runner.
+    if attrs::is_cfg_test(&item_mod.attrs) {
+        return Ok(());
+    }
+    let Some(export) = item_mod
+        .attrs
+        .iter()
+        .find_map(attrs::parse_factorio_export_attribute)
+    else {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::SkippedMod,
+            format!(
+                "inline `mod {}` is skipped when lowering; add `#[factorio_rs::export]` or use a file module",
+                item_mod.ident
+            ),
+            util::location(item_mod),
+        )?;
+        return Ok(());
+    };
+    let Some((_, items)) = &item_mod.content else {
+        return Ok(());
+    };
+    let previous = module_state.default_export.take();
+    module_state.default_export = Some(export);
+    for nested in items {
+        lower_top_level_item(nested, module_name, module_state, ctx)?;
+    }
+    module_state.default_export = previous;
+    Ok(())
+}
+
+fn lower_expanded_items(
+    items: &[Item],
+    module_name: &str,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    for item in items {
+        lower_top_level_item(item, module_name, module_state, ctx)?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn lower_known_macro(
+    mac: &syn::ItemMacro,
+    module_name: &str,
+    module_state: &mut ModuleLowerState<'_>,
+    ctx: &mut LowerContext<'_>,
+) -> FrontendResult<()> {
+    let tokens = mac.mac.tokens.clone();
+    let mod_name = module_state.mod_name;
+    let expanded = if is_known_macro(&mac.mac, "mod_settings") {
+        Some(mod_settings::expand(tokens)?)
+    } else if is_known_macro(&mac.mac, "item") {
+        Some(items::expand(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "recipe") {
+        Some(recipes::expand(tokens)?)
+    } else if is_known_macro(&mac.mac, "technology") {
+        Some(technologies::expand(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "fluid") {
+        Some(fluids::expand(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "assembling_machine") {
+        Some(assembling_machines::expand(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "container") {
+        Some(extra_protos::expand_container(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "inserter") {
+        Some(extra_protos::expand_inserter(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "transport_belt") {
+        Some(extra_protos::expand_transport_belt(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "furnace") {
+        Some(extra_protos::expand_furnace(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "mining_drill") {
+        Some(extra_protos::expand_mining_drill(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "lab") {
+        Some(extra_protos::expand_lab(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "resource") {
+        Some(extra_protos::expand_resource(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "tile") {
+        Some(extra_protos::expand_tile(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "autoplace_control") {
+        Some(extra_protos::expand_autoplace_control(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "recipe_category") {
+        Some(extra_protos::expand_recipe_category(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "item_group") {
+        Some(extra_protos::expand_item_group(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "item_subgroup") {
+        Some(extra_protos::expand_item_subgroup(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "module") {
+        Some(extra_protos::expand_module(tokens, mod_name)?)
+    } else if is_known_macro(&mac.mac, "locale") {
+        module_state
+            .pending_locales
+            .extend(locale::parse_pending(tokens)?);
+        None
+    } else {
+        return Err(FrontendError::UnsupportedItem {
+            item: "macro".to_string(),
+            location: location(mac),
+        });
+    };
+
+    if let Some(expanded) = expanded {
+        lower_expanded_items(&expanded, module_name, module_state, ctx)?;
+    }
     Ok(())
 }
 
