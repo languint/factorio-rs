@@ -25,6 +25,7 @@ fn rewrites_associated_paths_inside_struct_methods() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::StructDecl(Struct {

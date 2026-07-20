@@ -25,6 +25,7 @@ fn generates_binary_ops_and_conditionals() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

@@ -67,8 +67,8 @@ pnpm dev
 
 High leverage:
 
-- Grow data-stage prototypes beyond the current allowlist (more entity kinds,
-  richer curated fields from `prototype-api.json`)
+- Richer prototype companions / more dual-path macros / language surface
+  (traits already exist same-module; cross-module traits welcome via issue first)
 - Shrink GUI `Tags` / elem-filter `LuaAny` where enums fit
 - Docs recipes, examples, and clearer frontend errors / lints
 

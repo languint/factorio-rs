@@ -20,7 +20,10 @@ Factorio-oriented subset of Rust; the CLI typechecks against generated API stubs
 ## Why
 
 - **Typed Factorio APIs** - `cargo check` / rust-analyzer against generated stubs
+  (runtime classes plus ~260 data-stage prototype stubs)
 - **Transpile safety** - lints catch Rust patterns that nil-crash or miscompile in Lua
+- **Familiar Rust subset** - structs, enums, collections, and same-crate traits /
+  dyn dispatch - plus prototype macros (`item!`, `recipe!`, ...)
 - **Cargo-shaped deps** - share APIs between mods with `#[factorio_rs::export]` and normal Cargo dependencies
 - **Familiar workflow** - `init` / `check` / `build` / `package` / `install` / `test`
 
@@ -89,6 +92,7 @@ pnpm dev
 | [`locale_test`](examples/locale_test)                             | `locale!` and mod settings        |
 | [`provider`](examples/provider) / [`consumer`](examples/consumer) | Cross-mod exports via Cargo       |
 | [`tracing_test`](examples/tracing_test)                           | Optional `tracing` -> `game.print` |
+| [`traits_demo`](examples/traits_demo)                             | Traits: static, defaults, `&dyn`  |
 | [`mandatory_spaghetti`](examples/mandatory_spaghetti)             | Larger control-stage sample       |
 
 ## License

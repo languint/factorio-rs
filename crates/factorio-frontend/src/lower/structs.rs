@@ -50,6 +50,7 @@ impl PendingStruct {
 pub fn lower_struct_fields(
     fields: &Fields,
     aliases: &std::collections::HashMap<String, TypeAlias>,
+    assoc: &std::collections::HashMap<String, Type>,
 ) -> FrontendResult<Vec<factorio_ir::structure::StructField>> {
     match fields {
         Fields::Named(fields) => fields
@@ -63,8 +64,8 @@ pub fn lower_struct_fields(
                 })?;
                 Ok(factorio_ir::structure::StructField {
                     name: name.to_string(),
-                    ty: lower_type(&field.ty, aliases)?,
-                    source_type: Some(type_source_string(&field.ty, aliases)),
+                    ty: lower_type(&field.ty, aliases, assoc)?,
+                    source_type: Some(type_source_string(&field.ty, aliases, assoc)),
                 })
             })
             .collect(),

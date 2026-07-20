@@ -333,6 +333,29 @@ pub fn collect_references_from_expression(
             method,
             args,
         ),
+        Expression::FatPointer { data, .. } => {
+            collect_references_from_expression(graph, module, data, locals, reachability, pending);
+        }
+        Expression::DynMethodCall { receiver, args, .. } => {
+            collect_references_from_expression(
+                graph,
+                module,
+                receiver,
+                locals,
+                reachability,
+                pending,
+            );
+            for arg in args {
+                collect_references_from_expression(
+                    graph,
+                    module,
+                    arg,
+                    locals,
+                    reachability,
+                    pending,
+                );
+            }
+        }
         Expression::StructLiteral { fields, .. } => {
             for (_, value) in fields {
                 collect_references_from_expression(
@@ -737,13 +760,15 @@ fn enqueue_import_path(
 fn infer_struct_type_from_expression(expression: &Expression) -> Option<String> {
     match expression {
         Expression::Call { func, .. } => infer_struct_type_from_call(func),
-        Expression::MethodCall { receiver, .. } => match receiver.as_ref() {
-            Expression::Identifier(name) => Some(name.clone()),
-            Expression::QualifiedPath { segments } if !segments.is_empty() => {
-                Some(segments[0].clone())
+        Expression::MethodCall { receiver, .. } | Expression::DynMethodCall { receiver, .. } => {
+            match receiver.as_ref() {
+                Expression::Identifier(name) => Some(name.clone()),
+                Expression::QualifiedPath { segments } if !segments.is_empty() => {
+                    Some(segments[0].clone())
+                }
+                _ => None,
             }
-            _ => None,
-        },
+        }
         _ => None,
     }
 }

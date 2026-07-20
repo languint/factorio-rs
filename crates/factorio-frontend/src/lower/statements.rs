@@ -91,7 +91,8 @@ fn lower_statement(
                 return Ok(stmts);
             }
 
-            let (name, annotated_type) = lower_binding(&local.pat, &ctx.type_aliases)?;
+            let (name, annotated_type) =
+                lower_binding(&local.pat, &ctx.type_aliases, &ctx.assoc_bindings)?;
             let (mut hoists, value) = lower_expr(&init.expr, ctx, self_type)?;
             let (ty, source_type) = if let Some((ty, source_type)) = annotated_type {
                 (ty, Some(source_type))
@@ -102,11 +103,10 @@ fn lower_statement(
                 (ty, source_type)
             };
             if let syn::Pat::Type(pat_type) = &local.pat {
-                if let Some(key) = rust_type_key(&pat_type.ty, &ctx.type_aliases) {
-                    ctx.bind_type(name.clone(), key);
-                }
-                if is_option_type(&pat_type.ty, &ctx.type_aliases) {
-                    ctx.bind_option(name.clone());
+                bind_typed_local(&name, &pat_type.ty, &value, &init.expr, ctx);
+            } else if let factorio_ir::expression::Expression::FatPointer { vtable, .. } = &value {
+                if let Some((trait_name, concrete)) = parse_vtable_parts(vtable) {
+                    ctx.bind_dyn(name.clone(), super::traits::dyn_local(trait_name, concrete));
                 }
             } else if let Some(key) = infer_debug_type_key(&value, ctx) {
                 ctx.bind_type(name.clone(), key);
@@ -1426,5 +1426,44 @@ impl syn::parse::Parse for MatchesMacroInput {
             input.parse::<syn::Token![,]>()?;
         }
         Ok(Self { expr, pat, guard })
+    }
+}
+
+/// Split `__vt_Trait_Concrete` into `(Trait, Concrete)`.
+fn parse_vtable_parts(vtable: &str) -> Option<(String, String)> {
+    let rest = vtable.strip_prefix("__vt_")?;
+    let (trait_name, concrete) = rest.split_once('_')?;
+    if trait_name.is_empty() || concrete.is_empty() {
+        return None;
+    }
+    Some((trait_name.to_string(), concrete.to_string()))
+}
+
+fn bind_typed_local(
+    name: &str,
+    ty: &syn::Type,
+    value: &factorio_ir::expression::Expression,
+    init_expr: &Expr,
+    ctx: &mut LowerContext<'_>,
+) {
+    if let Some(key) = rust_type_key(ty, &ctx.type_aliases, &ctx.assoc_bindings) {
+        ctx.bind_type(name.to_string(), key);
+    }
+    if is_option_type(ty, &ctx.type_aliases, &ctx.assoc_bindings) {
+        ctx.bind_option(name.to_string());
+    }
+    if let Some(trait_name) = super::traits::dyn_trait_name(ty) {
+        let concrete = match value {
+            factorio_ir::expression::Expression::FatPointer { vtable, .. } => {
+                parse_vtable_parts(vtable)
+                    .map_or_else(|| "Unknown".to_string(), |(_, concrete)| concrete)
+            }
+            _ => super::traits::resolve_concrete_type(init_expr, ctx)
+                .unwrap_or_else(|| "Unknown".to_string()),
+        };
+        ctx.bind_dyn(
+            name.to_string(),
+            super::traits::dyn_local(trait_name, concrete),
+        );
     }
 }

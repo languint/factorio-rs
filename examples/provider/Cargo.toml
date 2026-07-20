@@ -8,7 +8,7 @@ publish = false
 
 [package.metadata.factorio]
 mod_name = "provider"
-dependencies = ["provider >= 0.1.9"]
+dependencies = ["provider >= 0.2.0"]
 module_root = "lua"
 interface = "provider"
 remote_fns = ["greet"]

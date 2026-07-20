@@ -24,6 +24,7 @@ fn debug_level_one_adds_type_comments_to_functions() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {
@@ -75,6 +76,7 @@ fn debug_level_zero_adds_header_without_inline_types() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

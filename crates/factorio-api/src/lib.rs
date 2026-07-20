@@ -480,6 +480,7 @@ pub mod prelude {
     pub use crate::lua_fn;
     pub use crate::lua_fn0;
     pub use crate::lua_fn2;
+    pub use crate::prototypes;
     pub use crate::prototypes::{
         AssemblingMachine, BoundingBox, Color, EnergySource, Fluid, Item, MinableProperties,
         Recipe, RecipeIngredient, RecipeProduct, Technology, TechnologyUnit,

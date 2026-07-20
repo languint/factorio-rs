@@ -135,6 +135,31 @@ Declare assembling-machine entity prototypes (`AssemblingMachines::*` +
 
 Full guide: [Prototypes](../guides/prototypes/).
 
+## Other prototype macros
+
+Same dual-path pattern (name-const module + `register_*` + typed stub). Macros
+emit sparse tables; fill complex Factorio fields via hand-written `data.extend`
+when needed. Full field notes: [Prototypes](../guides/prototypes/).
+
+| Macro | Const module | Register fn | Stub |
+| --- | --- | --- | --- |
+| `container!` | `Containers` | `register_containers` | `Container` |
+| `inserter!` | `Inserters` | `register_inserters` | `Inserter` |
+| `transport_belt!` | `TransportBelts` | `register_transport_belts` | `TransportBelt` |
+| `furnace!` | `Furnaces` | `register_furnaces` | `Furnace` |
+| `mining_drill!` | `MiningDrills` | `register_mining_drills` | `MiningDrill` |
+| `lab!` | `Labs` | `register_labs` | `Lab` |
+| `resource!` | `Resources` | `register_resources` | `ResourceEntity` |
+| `tile!` | `Tiles` | `register_tiles` | `Tile` |
+| `autoplace_control!` | `AutoplaceControls` | `register_autoplace_controls` | `AutoplaceControl` |
+| `recipe_category!` | `RecipeCategories` | `register_recipe_categories` | `RecipeCategory` |
+| `item_group!` | `ItemGroups` | `register_item_groups` | `ItemGroup` |
+| `item_subgroup!` | `ItemSubgroups` | `register_item_subgroups` | `ItemSubgroup` |
+| `module!` | `Modules` | `register_modules` | `Module` |
+
+Import stubs such as `Container` via `factorio_rs::prelude::prototypes::Container`
+(or `factorio_api::prototypes`).
+
 ## `locale!`
 
 See [Locale](../guides/locale/).
@@ -152,7 +177,7 @@ In executable code, **`println!`**, **`format!`**, **`matches!`**, (with the
 - `serde_json::to_string` / ... -> `helpers.table_to_json` / `string.pack` (see [Serde / JSON](../guides/serde/))
 
 Item macros such as `mod_settings!`, `item!`, `recipe!`, `technology!`,
-`fluid!`, `assembling_machine!`, and `locale!` are handled separately during
-module lowering.
+`fluid!`, `assembling_machine!`, `container!`, `inserter!`, and `locale!` are
+handled separately during module lowering.
 
 Full syntax inventory: [Supported Rust](../guides/language/).

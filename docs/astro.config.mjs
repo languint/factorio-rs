@@ -147,6 +147,7 @@ export default defineConfig({
               slug: "examples/mandatory-spaghetti",
             },
             { label: "tracing_test", slug: "examples/tracing-test" },
+            { label: "traits_demo", slug: "examples/traits-demo" },
             { label: "provider / consumer", slug: "examples/dependencies" },
           ],
         },

@@ -19,6 +19,7 @@ pub fn item_name(item: &syn::Item) -> String {
         syn::Item::Static(item) => format!("static {}", item.ident),
         syn::Item::Use(_) => "use".to_string(),
         syn::Item::Type(item) => format!("type {}", item.ident),
+        syn::Item::Trait(item) => format!("trait {}", item.ident),
         syn::Item::Macro(_) => "macro".to_string(),
         _ => "item".to_string(),
     }

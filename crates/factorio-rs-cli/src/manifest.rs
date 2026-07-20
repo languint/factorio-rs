@@ -547,6 +547,7 @@ mod tests {
             submodules: vec![],
             locales: vec![],
             pending_locales: vec![],
+            vtables: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {
@@ -572,6 +573,7 @@ mod tests {
             submodules: vec![],
             locales: vec![],
             pending_locales: vec![],
+            vtables: vec![],
             symbols: vec![],
         }
     }
@@ -600,6 +602,7 @@ mod tests {
             submodules: vec![],
             locales: vec![],
             pending_locales: vec![],
+            vtables: vec![],
             symbols: vec![Symbol {
                 scope: Scope::Public,
                 statement: Statement::FunctionDecl(Function {

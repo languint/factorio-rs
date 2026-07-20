@@ -1,0 +1,11 @@
+[package]
+name = "traits_demo"
+version.workspace = true
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+factorio-rs = { path = "../../crates/factorio-rs" }

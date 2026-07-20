@@ -222,32 +222,47 @@ fn lower_project(
         return Err(CliError::NoSourceFiles { path: source_dir });
     }
 
-    let package = CargoPackage::load(project_root)?;
-    let lint_config = config.lints.resolve()?;
-    let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
-    let parse_options = ParseOptions::new(&lint_config)
-        .with_prefix(lua_module_prefix)
-        .with_bindings(&bindings)
-        .with_mod_name(&package.name);
-
-    let mut discovered_modules = Vec::new();
-    let mut failed = false;
-
-    let file_count = u64::try_from(sources.len()).unwrap_or(u64::MAX);
-    if let Some(progress) = progress.as_deref_mut() {
-        progress.start_files(file_count, "Lower");
-    }
-
+    let mut source_contents = Vec::with_capacity(sources.len());
     for source_path in &sources {
-        if let Some(progress) = progress.as_deref() {
-            progress.tick_file(progress::display_rel(project_root, source_path));
-        }
-
         let source = std::fs::read_to_string(source_path).map_err(|err| CliError::ReadFile {
             path: source_path.clone(),
             source: err,
         })?;
-        let discovered = discover_modules(&source_dir, source_path, &source)?;
+        source_contents.push((source_path.clone(), source));
+    }
+
+    let package = CargoPackage::load(project_root)?;
+    let lint_config = config.lints.resolve()?;
+    let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
+    let trait_catalog =
+        factorio_frontend::build_trait_catalog(&source_contents, &source_dir).map_err(|err| {
+            // Surface catalog errors with the first source file for path context.
+            if let Some((path, source)) = source_contents.first() {
+                let filename = display_filename(path);
+                let _ = eprint_frontend_error(&filename, source, &err);
+            }
+            CliError::Frontend(err)
+        })?;
+    let parse_options = ParseOptions::new(&lint_config)
+        .with_prefix(lua_module_prefix)
+        .with_bindings(&bindings)
+        .with_mod_name(&package.name)
+        .with_trait_catalog(&trait_catalog);
+
+    let mut discovered_modules = Vec::new();
+    let mut failed = false;
+
+    let file_count = u64::try_from(source_contents.len()).unwrap_or(u64::MAX);
+    if let Some(progress) = progress.as_deref_mut() {
+        progress.start_files(file_count, "Lower");
+    }
+
+    for (source_path, source) in &source_contents {
+        if let Some(progress) = progress.as_deref() {
+            progress.tick_file(progress::display_rel(project_root, source_path));
+        }
+
+        let discovered = discover_modules(&source_dir, source_path, source)?;
         let filename = display_filename(source_path);
 
         for module_spec in discovered {
@@ -260,7 +275,7 @@ fn lower_project(
                 Ok(module) => {
                     for diagnostic in &file_diagnostics {
                         with_progress_suspended(progress.as_deref(), || {
-                            let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                            let _ = eprint_diagnostic(&filename, source, diagnostic);
                         });
                         if diagnostic.is_error() {
                             failed = true;
@@ -271,11 +286,11 @@ fn lower_project(
                 Err(err) => {
                     for diagnostic in &file_diagnostics {
                         with_progress_suspended(progress.as_deref(), || {
-                            let _ = eprint_diagnostic(&filename, &source, diagnostic);
+                            let _ = eprint_diagnostic(&filename, source, diagnostic);
                         });
                     }
                     with_progress_suspended(progress.as_deref(), || {
-                        let _ = eprint_frontend_error(&filename, &source, &err);
+                        let _ = eprint_frontend_error(&filename, source, &err);
                     });
                     failed = true;
                 }

@@ -24,6 +24,7 @@ fn omit_trailing_nil_args_from_calls() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

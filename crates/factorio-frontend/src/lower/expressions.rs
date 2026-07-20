@@ -111,8 +111,8 @@ pub fn lower_expression(
             })
         }
         Expr::Reference(reference) => lower_expression(&reference.expr, ctx, self_type),
-        // `x as T` - Lua has no casts; lower the inner value.
-        Expr::Cast(cast) => lower_expression(&cast.expr, ctx, self_type),
+        // `x as T`.
+        Expr::Cast(cast) => lower_cast_expression(cast, ctx, self_type),
         // `(expr)` - transparent grouping.
         Expr::Paren(paren) => lower_expression(&paren.expr, ctx, self_type),
         // `if cond { a } else { b }` as an expression -> safe Lua if/else (not `and`/`or`).
@@ -604,47 +604,10 @@ fn lower_method_call(
         });
     }
 
-    // Result-typed receivers: prefer Result helpers (including unwrap -> `.ok`).
-    if receiver_is_result(&call.receiver, ctx) {
-        if method == "unwrap" && call.args.is_empty() {
-            ctx.emit_lint(
-                factorio_ir::lint::LintId::Unwrap,
-                "`.unwrap()` does not check for Err in Lua; use `if let Ok(...)` or `?` instead",
-                location(call),
-            )?;
-            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
-            return Ok(result_ok_field(receiver));
-        }
-        if method == "expect" && call.args.len() == 1 {
-            ctx.emit_lint(
-                factorio_ir::lint::LintId::Expect,
-                "`.expect(...)` does not check for Err in Lua; the message is discarded",
-                location(call),
-            )?;
-            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
-            return Ok(result_ok_field(receiver));
-        }
-        if let Some(expr) = lower_result_method(call, ctx, self_type)? {
-            return Ok(expr);
-        }
+    if let Some(expr) = lower_result_option_methods(call, &method, ctx, self_type)? {
+        return Ok(expr);
     }
 
-    if method == "unwrap" && call.args.is_empty() {
-        ctx.emit_lint(
-            factorio_ir::lint::LintId::Unwrap,
-            "`.unwrap()` does not check for nil in Lua; use `if let Some(...)` instead",
-            location(call),
-        )?;
-        return lower_expression(&call.receiver, ctx, self_type);
-    }
-    if method == "expect" && call.args.len() == 1 {
-        ctx.emit_lint(
-            factorio_ir::lint::LintId::Expect,
-            "`.expect(...)` does not check for nil in Lua; the message is discarded",
-            location(call),
-        )?;
-        return lower_expression(&call.receiver, ctx, self_type);
-    }
     if TRANSPARENT_METHODS.contains(&method.as_str()) && call.args.is_empty() {
         return lower_expression(&call.receiver, ctx, self_type);
     }
@@ -672,16 +635,180 @@ fn lower_method_call(
         return Ok(expr);
     }
 
+    // Dyn fat-pointer method dispatch.
+    if dyn_receiver_local(&call.receiver, ctx).is_some() {
+        let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+        let args = call
+            .args
+            .iter()
+            .map(|arg| lower_expression(arg, ctx, self_type))
+            .collect::<FrontendResult<Vec<_>>>()?;
+        return Ok(factorio_ir::expression::Expression::DynMethodCall {
+            receiver: Box::new(receiver),
+            method: lua_method_name(&method),
+            args,
+        });
+    }
+
     let receiver = lower_expression(&call.receiver, ctx, self_type)?;
     let args = call
         .args
         .iter()
         .map(|arg| lower_expression(arg, ctx, self_type))
         .collect::<FrontendResult<Vec<_>>>()?;
+    let method_name = lua_method_name(&method);
+
+    // User struct / trait methods: emit `Type.method(receiver, args...)` so Lua
+    // receives `self`.
+    if let Some(owner) = user_method_owner(&call.receiver, ctx, self_type) {
+        let mut call_args = Vec::with_capacity(args.len() + 1);
+        call_args.push(receiver);
+        call_args.extend(args);
+        return Ok(factorio_ir::expression::Expression::Call {
+            func: Box::new(factorio_ir::expression::Expression::QualifiedPath {
+                segments: vec![owner, method_name],
+            }),
+            args: call_args,
+        });
+    }
+
     Ok(factorio_ir::expression::Expression::MethodCall {
         receiver: Box::new(receiver),
-        method: lua_method_name(&method),
+        method: method_name,
         args,
+    })
+}
+
+fn user_method_owner(
+    receiver: &Expr,
+    ctx: &LowerContext<'_>,
+    self_type: Option<&str>,
+) -> Option<String> {
+    let name = match receiver {
+        Expr::Path(path) if path.path.segments.len() == 1 => {
+            path.path.segments[0].ident.to_string()
+        }
+        Expr::Struct(item) => {
+            let name = item.path.segments.last()?.ident.to_string();
+            return ctx.is_user_struct(&name).then_some(name);
+        }
+        Expr::Paren(paren) => return user_method_owner(&paren.expr, ctx, self_type),
+        Expr::Group(group) => return user_method_owner(&group.expr, ctx, self_type),
+        Expr::Reference(reference) => return user_method_owner(&reference.expr, ctx, self_type),
+        _ => return None,
+    };
+    if name == "self" {
+        let owner = self_type?;
+        return ctx.is_user_struct(owner).then(|| owner.to_string());
+    }
+    let key = ctx.binding_type(&name)?;
+    ctx.is_user_struct(key).then(|| key.to_string())
+}
+
+fn lower_result_option_methods(
+    call: &syn::ExprMethodCall,
+    method: &str,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Option<factorio_ir::expression::Expression>> {
+    // Result-typed receivers: prefer Result helpers (including unwrap -> `.ok`).
+    if receiver_is_result(&call.receiver, ctx) {
+        if method == "unwrap" && call.args.is_empty() {
+            ctx.emit_lint(
+                factorio_ir::lint::LintId::Unwrap,
+                "`.unwrap()` does not check for Err in Lua; use `if let Ok(...)` or `?` instead",
+                location(call),
+            )?;
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            return Ok(Some(result_ok_field(receiver)));
+        }
+        if method == "expect" && call.args.len() == 1 {
+            ctx.emit_lint(
+                factorio_ir::lint::LintId::Expect,
+                "`.expect(...)` does not check for Err in Lua; the message is discarded",
+                location(call),
+            )?;
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            return Ok(Some(result_ok_field(receiver)));
+        }
+        if let Some(expr) = lower_result_method(call, ctx, self_type)? {
+            return Ok(Some(expr));
+        }
+    }
+
+    if method == "unwrap" && call.args.is_empty() {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::Unwrap,
+            "`.unwrap()` does not check for nil in Lua; use `if let Some(...)` instead",
+            location(call),
+        )?;
+        return Ok(Some(lower_expression(&call.receiver, ctx, self_type)?));
+    }
+    if method == "expect" && call.args.len() == 1 {
+        ctx.emit_lint(
+            factorio_ir::lint::LintId::Expect,
+            "`.expect(...)` does not check for nil in Lua; the message is discarded",
+            location(call),
+        )?;
+        return Ok(Some(lower_expression(&call.receiver, ctx, self_type)?));
+    }
+    Ok(None)
+}
+
+fn dyn_receiver_local<'a>(
+    receiver: &Expr,
+    ctx: &'a LowerContext<'_>,
+) -> Option<&'a super::context::DynLocal> {
+    match receiver {
+        Expr::Path(path) if path.path.segments.len() == 1 => {
+            ctx.dyn_local(&path.path.segments[0].ident.to_string())
+        }
+        Expr::Paren(paren) => dyn_receiver_local(&paren.expr, ctx),
+        Expr::Reference(reference) => dyn_receiver_local(&reference.expr, ctx),
+        _ => None,
+    }
+}
+
+fn lower_cast_expression(
+    cast: &syn::ExprCast,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<factorio_ir::expression::Expression> {
+    let Some(trait_name) = super::traits::dyn_trait_name(&cast.ty) else {
+        return lower_expression(&cast.expr, ctx, self_type);
+    };
+
+    let trait_info = ctx.traits.get(&trait_name).cloned().ok_or_else(|| {
+        FrontendError::UnsupportedExpression {
+            location: location(cast).with_note(format!(
+                "unknown trait `{trait_name}` in dyn cast; define it in this module or `use` it from another module"
+            )),
+        }
+    })?;
+    super::traits::ensure_object_safe(&trait_info, location(cast))?;
+
+    let concrete_name = super::traits::resolve_concrete_type(&cast.expr, ctx).ok_or_else(|| {
+        FrontendError::UnsupportedExpression {
+            location: location(cast).with_note(
+                "could not resolve concrete type for dyn cast; use a struct literal or typed local",
+            ),
+        }
+    })?;
+
+    let vt = super::traits::vtable_name(&trait_name, &concrete_name);
+    if !ctx.vtables.iter().any(|vtable| vtable.name == vt) {
+        ctx.vtables.push(factorio_ir::module::VTable {
+            name: vt.clone(),
+            concrete_type: concrete_name,
+            methods: trait_info.methods.keys().cloned().collect(),
+        });
+    }
+
+    let inner = super::traits::peel_box_new(&cast.expr);
+    let data = lower_expression(inner, ctx, self_type)?;
+    Ok(factorio_ir::expression::Expression::FatPointer {
+        data: Box::new(data),
+        vtable: vt,
     })
 }
 

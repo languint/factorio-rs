@@ -44,9 +44,9 @@ mod schema_prototype;
 
 use std::path::Path;
 
+pub use generate::PROTOTYPE_RICH_OVERRIDES;
 pub use schema::RuntimeApi;
 pub use schema_prototype::PrototypeApi;
-pub use generate::PROTOTYPE_ALLOWLIST;
 
 pub struct GeneratedApi {
     pub application_version: String,
@@ -140,6 +140,11 @@ pub fn bundled_prototype_api_json() -> &'static str {
 pub fn generate_prototypes_from_bundled() -> Result<String, String> {
     let api = parse_prototype_api(bundled_prototype_api_json()).map_err(|e| e.to_string())?;
     generate::generate_prototypes(&api)
+}
+
+pub fn generate_prototype_type_map_from_bundled() -> Result<String, String> {
+    let api = parse_prototype_api(bundled_prototype_api_json()).map_err(|e| e.to_string())?;
+    generate::generate_prototype_type_map(&api)
 }
 
 pub fn write_generated_prototypes(output_dir: &Path, source: &str) -> std::io::Result<()> {

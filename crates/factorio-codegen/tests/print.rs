@@ -23,6 +23,7 @@ fn generates_format_concat_for_println() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {

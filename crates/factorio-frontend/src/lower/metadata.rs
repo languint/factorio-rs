@@ -47,12 +47,17 @@ pub fn extract_doc_comments(attrs: &[Attribute]) -> Option<String> {
 fn format_fn_arg_for_comment(
     arg: &FnArg,
     aliases: &std::collections::HashMap<String, TypeAlias>,
+    assoc: &std::collections::HashMap<String, syn::Type>,
 ) -> String {
     match arg {
         FnArg::Receiver(receiver) => receiver_source_string(receiver),
         FnArg::Typed(pat_type) => {
             let name = lower_binding_pattern(&pat_type.pat).unwrap_or_else(|_| "_".to_string());
-            format!("{}: {}", name, type_source_string(&pat_type.ty, aliases))
+            format!(
+                "{}: {}",
+                name,
+                type_source_string(&pat_type.ty, aliases, assoc)
+            )
         }
     }
 }
@@ -61,14 +66,15 @@ pub fn function_header_comment(
     visibility: &Visibility,
     signature: &Signature,
     aliases: &std::collections::HashMap<String, TypeAlias>,
+    assoc: &std::collections::HashMap<String, syn::Type>,
 ) -> String {
     let params = signature
         .inputs
         .iter()
-        .map(|arg| format_fn_arg_for_comment(arg, aliases))
+        .map(|arg| format_fn_arg_for_comment(arg, aliases, assoc))
         .collect::<Vec<_>>()
         .join(", ");
-    let return_suffix = return_type_string(signature, aliases)
+    let return_suffix = return_type_string(signature, aliases, assoc)
         .map_or_else(String::new, |return_type| format!(" -> {return_type}"));
 
     format!(

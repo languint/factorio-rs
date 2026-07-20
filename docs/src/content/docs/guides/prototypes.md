@@ -1,19 +1,22 @@
 ---
 title: Prototypes
-description: Register Factorio data-stage prototypes with typed stubs and macros (item, recipe, technology, fluid, assembling-machine).
+description: Register Factorio data-stage prototypes with ~260 typed stubs and macros (item, recipe, technology, fluid, entities, ...).
 ---
 
 Prototype registration happens in the **data** stage (`data.rs`,
 `#[factorio_rs::data]`, or `data_mod!`). factorio-rs gives you:
 
-- allowlisted stub structs generated from bundled `prototype-api.json`
-  (`Item`, `Recipe`, `Technology`, `Fluid`, `AssemblingMachine`, …)
-- curated companions (`RecipeIngredient`, `Color`, `EnergySource`, …) for
+- sparse typed stubs for **all** Factorio prototype typenames (~260) from
+  bundled `prototype-api.json`, with auto field classification (common/entity
+  packs, `LuaAny` escapes) and rich curated overrides for `Item` / `Recipe` /
+  `Technology` / `Fluid` / `AssemblingMachine`
+- curated companions (`RecipeIngredient`, `Color`, `EnergySource`, ...) for
   special Lua shapes
-- macros (`item!`, `recipe!`, `technology!`, `fluid!`, `assembling_machine!`)
-  that expand to name constants + a `pub fn` register helper
+- macros (`item!`, `recipe!`, `technology!`, `fluid!`, `assembling_machine!`,
+  plus entity/category helpers like `container!`, `inserter!`, ...) that expand
+  to name constants + a `pub fn` register helper
 - codegen that injects Factorio’s `type = "..."` discriminant from the Rust
-  struct name
+  struct name (`prototype_lua_typename`)
 
 Every **`pub fn`** in a data-stage module runs from `data.lua` at load time -
 see [Stages](stages/).
@@ -23,6 +26,17 @@ see [Stages](stages/).
 Import from the prelude and call `data.extend` with struct literals. Prefer
 `..Default::default()` so unset optional fields omit as Lua `nil` (sparse
 tables).
+
+The five rich types (`Item`, `Recipe`, `Technology`, `Fluid`,
+`AssemblingMachine`) and their companions are re-exported by name from
+`factorio_rs::prelude::*`. The full stub surface lives under
+`factorio_api::prototypes` (also `factorio_rs::prelude::prototypes`):
+
+```rust
+use factorio_rs::prelude::*;
+use factorio_rs::prelude::prototypes::Container;
+// or: use factorio_api::prototypes::Container;
+```
 
 ```rust
 use factorio_rs::prelude::*;
@@ -314,6 +328,33 @@ Required: `name`, `icon`, `crafting_speed`, `crafting_categories`,
 `usage_priority`, `icon_size`, `flags`, `max_health`, `module_slots`,
 `subgroup`, `order`. Collision / selection boxes and `minable` can be set on
 the typed stub when you need them.
+
+## Other prototype macros
+
+High-value dual-path macros follow the same pattern (name-const module +
+`register_*` helper). See [Macros and attributes](../reference/macros/) for the
+full inventory:
+
+| Macro | Const module | Register fn | Stub |
+| --- | --- | --- | --- |
+| `container!` | `Containers` | `register_containers` | `Container` |
+| `inserter!` | `Inserters` | `register_inserters` | `Inserter` |
+| `transport_belt!` | `TransportBelts` | `register_transport_belts` | `TransportBelt` |
+| `furnace!` | `Furnaces` | `register_furnaces` | `Furnace` |
+| `mining_drill!` | `MiningDrills` | `register_mining_drills` | `MiningDrill` |
+| `lab!` | `Labs` | `register_labs` | `Lab` |
+| `resource!` | `Resources` | `register_resources` | `ResourceEntity` |
+| `tile!` | `Tiles` | `register_tiles` | `Tile` |
+| `autoplace_control!` | `AutoplaceControls` | `register_autoplace_controls` | `AutoplaceControl` |
+| `recipe_category!` | `RecipeCategories` | `register_recipe_categories` | `RecipeCategory` |
+| `item_group!` | `ItemGroups` | `register_item_groups` | `ItemGroup` |
+| `item_subgroup!` | `ItemSubgroups` | `register_item_subgroups` | `ItemSubgroup` |
+| `module!` | `Modules` | `register_modules` | `Module` |
+
+Macros emit sparse tables and may omit complex required Factorio fields
+(collision boxes, animations, ...). Fill those via hand-written `data.extend` on
+the typed stub when needed. Complex properties may be skipped or typed as
+`LuaAny` on auto-curated stubs.
 
 ## Items + recipes + technologies
 

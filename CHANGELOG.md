@@ -9,17 +9,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Allowlisted data-stage stubs generated from bundled `prototype-api.json`
-  (`Item`, `Recipe`, `Technology`, `Fluid`, `AssemblingMachine`) with curated
-  companions (`Color`, `BoundingBox`, `EnergySource`, `MinableProperties`, …).
-- `fluid!` and `assembling_machine!` dual-path macros (`Fluids::*` /
-  `AssemblingMachines::*` + register helpers).
-- Recipe fluid ingredients: `RecipeIngredient.fluid` / `recipe!` `fluid = true`
-  (or `type = "fluid"`) injects Lua `type = "fluid"`.
-- Prototype macro cross-refs: ingredient/result/tech unlock and prerequisite
-  `name` fields accept paths (`Items::WIDGET`, `Recipes::CRAFT_WIDGET`) as well
-  as string literals.
-- CONTRIBUTING near-term high-leverage list refreshed.
+- Example: `examples/traits_demo`, cross-module `Alert` trait (`shared.alert`)
+  with default `announce`, per-type overrides, static calls, and `&dyn Alert`
+  helpers.
+- **Associated types** on traits (`type Output;`, `Self::Output` in methods);
+  required in every impl. Dyn coerce rejects traits with associated types.
+- **Same-crate cross-module traits:** `use crate::module::Trait` seeds the
+  local trait catalog from a project-wide `TraitCatalog` built at check/build.
+
+### Fixed
+
+- Dyn trait parameters register as dyn locals so calls dispatch through `_vt`
+  (not inherent method lowering).
+- User-struct method calls emit `Type.method(receiver, ...)` so trait default
+  bodies can call other trait methods on `self` (avoids the Factorio zero-arg
+  property-read heuristic). Struct-literal receivers (`Point { .. }.m()`) and
+  `#[cfg(test)]` modules that `use super::*` now resolve the same way.
+- Dyn cast targets peel through `Type::Paren` / `Type::Group`; `&dyn Trait`
+  parameter comments render as `&dyn Trait` (not `&unsupported`).
+- `examples/traits_demo` uses explicit `&value as &dyn Alert` coerces so call
+  sites emit fat pointers (`{ _data, _vt }`).
+- `#[cfg(test)]` suites now include parent-module structs, free functions, and
+  trait vtables so `use super::*` tests can call them from `factorio_rs_tests.lua`
+  (event handlers stay out of the suite).
+- Dyn vtables forward-declare private concrete type locals so Lua closures
+  capture upvalues instead of nil globals.
+
+## [0.2.0] - 2026-07-20
+
+### Added
+
+- Sparse typed stubs for **all** Factorio prototype typenames (~260) from bundled
+  `prototype-api.json`, with auto field classification (common/entity packs,
+  `LuaAny` escapes) and rich curated overrides for `Item` / `Recipe` /
+  `Technology` / `Fluid` / `AssemblingMachine`.
+- Generated `prototype_lua_typename` map for Lua `type = "..."` injection.
+- Dual-path macros: `fluid!`, `assembling_machine!`, plus high-value
+  `container!`, `inserter!`, `transport_belt!`, `furnace!`, `mining_drill!`,
+  `lab!`, `resource!` (-> `ResourceEntity`), `tile!`, `autoplace_control!`,
+  `recipe_category!`, `item_group!`, `item_subgroup!`, `module!`.
+- Recipe fluid ingredients and prototype macro path cross-refs (from prior
+  unreleased work).
+- **Traits (static):** `trait` + `impl Trait for Struct` (same-module); methods
+  merge onto the concrete type table; default method bodies filled when omitted.
+- **Traits (dyn):** `&dyn Trait` / `Box<dyn Trait>` as Lua fat pointers
+  `{ _data, _vt }` with per-impl `__vt_Trait_Concrete` vtables and dyn method
+  dispatch.
+
+### Changed
+
+- Data-stage stubs are no longer allowlist-gated; use `factorio_api::prototypes`
+  (or `prelude::prototypes`) for the full surface. Prelude still re-exports the
+  five rich types + companions by name.
+
+### Notes
+
+- Trait support: same-crate traits (local or `use`d); associated types without
+  bounds/defaults. No generics or supertraits. Dyn coerce requires object-safe
+  methods (no associated types).
+- Complex prototype properties remain skipped or `LuaAny`; macros omit some
+  required complex fields (sparse tables) - fill via hand-written `data.extend`
+  when needed.
 
 ## [0.1.9] - 2026-07-19
 
@@ -215,7 +265,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mod_settings!`, `locale!`, events and filters, build profiles, dead-code prune.
 - `format!` / `println!`, thumbnails, documentation site.
 
-[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/languint/factorio-rs/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/languint/factorio-rs/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/languint/factorio-rs/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/languint/factorio-rs/compare/v0.1.6...v0.1.7

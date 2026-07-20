@@ -7,6 +7,9 @@ use syn::{
     spanned::Spanned,
 };
 
+mod proto_common;
+mod proto_macros;
+
 /// Marks a control-stage function as a Factorio event handler.
 ///
 /// The event is inferred from the handler name and first parameter type
@@ -1531,12 +1534,17 @@ impl Parse for FluidProtoEntry {
         let span = ident.span();
         Ok(Self {
             ident,
-            name: name
-                .ok_or_else(|| syn::Error::new(span, "fluid block missing required field `name`"))?,
-            icon: icon
-                .ok_or_else(|| syn::Error::new(span, "fluid block missing required field `icon`"))?,
+            name: name.ok_or_else(|| {
+                syn::Error::new(span, "fluid block missing required field `name`")
+            })?,
+            icon: icon.ok_or_else(|| {
+                syn::Error::new(span, "fluid block missing required field `icon`")
+            })?,
             default_temperature: default_temperature.ok_or_else(|| {
-                syn::Error::new(span, "fluid block missing required field `default_temperature`")
+                syn::Error::new(
+                    span,
+                    "fluid block missing required field `default_temperature`",
+                )
             })?,
             base_color: base_color.ok_or_else(|| {
                 syn::Error::new(span, "fluid block missing required field `base_color`")
@@ -1776,9 +1784,7 @@ impl Parse for AssemblingMachineProtoEntry {
                 other => {
                     return Err(syn::Error::new(
                         field.span(),
-                        format!(
-                            "unknown assembling_machine field `{other}`"
-                        ),
+                        format!("unknown assembling_machine field `{other}`"),
                     ));
                 }
             }
@@ -1789,10 +1795,16 @@ impl Parse for AssemblingMachineProtoEntry {
         Ok(Self {
             ident,
             name: name.ok_or_else(|| {
-                syn::Error::new(span, "assembling_machine block missing required field `name`")
+                syn::Error::new(
+                    span,
+                    "assembling_machine block missing required field `name`",
+                )
             })?,
             icon: icon.ok_or_else(|| {
-                syn::Error::new(span, "assembling_machine block missing required field `icon`")
+                syn::Error::new(
+                    span,
+                    "assembling_machine block missing required field `icon`",
+                )
             })?,
             crafting_speed: crafting_speed.ok_or_else(|| {
                 syn::Error::new(
@@ -2001,4 +2013,69 @@ impl Parse for LocaleEntry {
         let _: Option<Token![,]> = input.parse()?;
         Ok(Self { key, value })
     }
+}
+
+#[proc_macro]
+pub fn container(input: TokenStream) -> TokenStream {
+    proto_macros::container(input)
+}
+
+#[proc_macro]
+pub fn inserter(input: TokenStream) -> TokenStream {
+    proto_macros::inserter(input)
+}
+
+#[proc_macro]
+pub fn transport_belt(input: TokenStream) -> TokenStream {
+    proto_macros::transport_belt(input)
+}
+
+#[proc_macro]
+pub fn furnace(input: TokenStream) -> TokenStream {
+    proto_macros::furnace(input)
+}
+
+#[proc_macro]
+pub fn mining_drill(input: TokenStream) -> TokenStream {
+    proto_macros::mining_drill(input)
+}
+
+#[proc_macro]
+pub fn lab(input: TokenStream) -> TokenStream {
+    proto_macros::lab(input)
+}
+
+#[proc_macro]
+pub fn resource(input: TokenStream) -> TokenStream {
+    proto_macros::resource(input)
+}
+
+#[proc_macro]
+pub fn tile(input: TokenStream) -> TokenStream {
+    proto_macros::tile(input)
+}
+
+#[proc_macro]
+pub fn autoplace_control(input: TokenStream) -> TokenStream {
+    proto_macros::autoplace_control(input)
+}
+
+#[proc_macro]
+pub fn recipe_category(input: TokenStream) -> TokenStream {
+    proto_macros::recipe_category(input)
+}
+
+#[proc_macro]
+pub fn item_group(input: TokenStream) -> TokenStream {
+    proto_macros::item_group(input)
+}
+
+#[proc_macro]
+pub fn item_subgroup(input: TokenStream) -> TokenStream {
+    proto_macros::item_subgroup(input)
+}
+
+#[proc_macro]
+pub fn module(input: TokenStream) -> TokenStream {
+    proto_macros::module_proto(input)
 }

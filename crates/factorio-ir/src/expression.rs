@@ -67,4 +67,16 @@ pub enum Expression {
         params: Vec<String>,
         body: Block,
     },
+    /// Fat pointer for `dyn Trait`: `{ _data = ..., _vt = __vt_Trait_Concrete }`.
+    FatPointer {
+        data: Box<Self>,
+        /// Fully qualified vtable symbol name, e.g. `__vt_Display_Point`.
+        vtable: String,
+    },
+    /// Dynamic dispatch: `recv._vt.method(recv, args...)`.
+    DynMethodCall {
+        receiver: Box<Self>,
+        method: String,
+        args: Vec<Self>,
+    },
 }

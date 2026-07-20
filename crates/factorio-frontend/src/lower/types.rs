@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use syn::{GenericArgument, GenericParam, PathArguments, Type, TypePath};
+use syn::{GenericArgument, GenericParam, PathArguments, Type, TypeParamBound, TypePath};
 
 use crate::error::{FrontendError, FrontendResult};
 
@@ -15,30 +15,35 @@ pub struct TypeAlias {
 
 /// Resolve type aliases (and nested aliases) before IR/binding helpers run.
 #[must_use]
-pub fn resolve_type(ty: &Type, aliases: &HashMap<String, TypeAlias>) -> Type {
+pub fn resolve_type(
+    ty: &Type,
+    aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
+) -> Type {
     let mut stack = HashSet::new();
-    resolve_type_rec(ty, aliases, &mut stack)
+    resolve_type_rec(ty, aliases, assoc, &mut stack)
 }
 
 fn resolve_type_rec(
     ty: &Type,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
     stack: &mut HashSet<String>,
 ) -> Type {
     match ty {
         Type::Reference(reference) => {
             let mut resolved = reference.clone();
-            resolved.elem = Box::new(resolve_type_rec(&reference.elem, aliases, stack));
+            resolved.elem = Box::new(resolve_type_rec(&reference.elem, aliases, assoc, stack));
             Type::Reference(resolved)
         }
         Type::Tuple(tuple) => {
             let mut resolved = tuple.clone();
             for elem in &mut resolved.elems {
-                *elem = resolve_type_rec(elem, aliases, stack);
+                *elem = resolve_type_rec(elem, aliases, assoc, stack);
             }
             Type::Tuple(resolved)
         }
-        Type::Path(path) => resolve_path_type(path, aliases, stack),
+        Type::Path(path) => resolve_path_type(path, aliases, assoc, stack),
         other => other.clone(),
     }
 }
@@ -46,15 +51,29 @@ fn resolve_type_rec(
 fn resolve_path_type(
     path: &TypePath,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
     stack: &mut HashSet<String>,
 ) -> Type {
+    // `Self::AssocName` -> concrete type from the active trait impl.
+    if path.qself.is_none()
+        && path.path.segments.len() == 2
+        && path.path.segments[0].ident == "Self"
+        && matches!(path.path.segments[0].arguments, PathArguments::None)
+        && matches!(path.path.segments[1].arguments, PathArguments::None)
+    {
+        let assoc_name = path.path.segments[1].ident.to_string();
+        if let Some(replacement) = assoc.get(&assoc_name) {
+            return resolve_type_rec(replacement, aliases, assoc, stack);
+        }
+    }
+
     let Some(segment) = path.path.segments.last() else {
         return Type::Path(path.clone());
     };
     let name = segment.ident.to_string();
 
     // Resolve generic arguments even when the path itself is not an alias.
-    let resolved_args = resolve_path_arguments(&segment.arguments, aliases, stack);
+    let resolved_args = resolve_path_arguments(&segment.arguments, aliases, assoc, stack);
 
     let Some(alias) = aliases.get(&name) else {
         let mut path = path.clone();
@@ -90,7 +109,7 @@ fn resolve_path_type(
     };
 
     let substituted = substitute_type(&alias.ty, &subst);
-    let resolved = resolve_type_rec(&substituted, aliases, stack);
+    let resolved = resolve_type_rec(&substituted, aliases, assoc, stack);
     stack.remove(&name);
     resolved
 }
@@ -98,6 +117,7 @@ fn resolve_path_type(
 fn resolve_path_arguments(
     arguments: &PathArguments,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
     stack: &mut HashSet<String>,
 ) -> PathArguments {
     match arguments {
@@ -105,7 +125,7 @@ fn resolve_path_arguments(
             let mut args = args.clone();
             for arg in &mut args.args {
                 if let GenericArgument::Type(inner) = arg {
-                    *inner = resolve_type_rec(inner, aliases, stack);
+                    *inner = resolve_type_rec(inner, aliases, assoc, stack);
                 }
             }
             PathArguments::AngleBracketed(args)
@@ -230,14 +250,16 @@ pub fn collect_type_aliases(
 pub fn lower_type(
     ty: &Type,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
 ) -> FrontendResult<factorio_ir::r#type::Type> {
-    lower_type_resolved(&resolve_type(ty, aliases))
+    lower_type_resolved(&resolve_type(ty, aliases, assoc))
 }
 
 fn lower_type_resolved(ty: &Type) -> FrontendResult<factorio_ir::r#type::Type> {
     match ty {
         Type::Path(path) => lower_path_type(path),
         Type::Tuple(tuple) if tuple.elems.is_empty() => Ok(factorio_ir::r#type::Type::Void),
+        Type::TraitObject(_) => Ok(factorio_ir::r#type::Type::Void),
         Type::Reference(reference) if is_self_type(&reference.elem) => {
             Ok(factorio_ir::r#type::Type::Void)
         }
@@ -247,6 +269,10 @@ fn lower_type_resolved(ty: &Type) -> FrontendResult<factorio_ir::r#type::Type> {
                 && inner.path.is_ident("str")
             {
                 return Ok(factorio_ir::r#type::Type::Str);
+            }
+            // `&dyn Trait` / `&mut dyn Trait`
+            if matches!(reference.elem.as_ref(), Type::TraitObject(_)) {
+                return Ok(factorio_ir::r#type::Type::Void);
             }
             Err(FrontendError::UnsupportedType {
                 ty: "unsupported reference type".to_string(),
@@ -288,12 +314,13 @@ fn is_self_type(ty: &Type) -> bool {
 pub fn lower_binding(
     pattern: &syn::Pat,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
 ) -> FrontendResult<(String, Option<(factorio_ir::r#type::Type, String)>)> {
     match pattern {
         syn::Pat::Type(pat_type) => {
             let name = lower_binding_pattern(&pat_type.pat)?;
-            let ty = lower_type(&pat_type.ty, aliases)?;
-            let source_type = type_source_string(&pat_type.ty, aliases);
+            let ty = lower_type(&pat_type.ty, aliases, assoc)?;
+            let source_type = type_source_string(&pat_type.ty, aliases, assoc);
             Ok((name, Some((ty, source_type))))
         }
         pattern => {
@@ -330,13 +357,31 @@ pub const fn infer_type_from_expression(
 
 /// Last-segment type name for Debug format selection (`Option` / references peeled).
 #[must_use]
-pub fn rust_type_key(ty: &Type, aliases: &HashMap<String, TypeAlias>) -> Option<String> {
-    rust_type_key_resolved(&resolve_type(ty, aliases))
+pub fn rust_type_key(
+    ty: &Type,
+    aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
+) -> Option<String> {
+    rust_type_key_resolved(&resolve_type(ty, aliases, assoc))
 }
 
 fn rust_type_key_resolved(ty: &Type) -> Option<String> {
     match ty {
         Type::Reference(reference) => rust_type_key_resolved(&reference.elem),
+        Type::TraitObject(obj) => {
+            // Prefer the trait name for dyn bindings.
+            obj.bounds.iter().find_map(|bound| {
+                if let TypeParamBound::Trait(trait_bound) = bound {
+                    trait_bound
+                        .path
+                        .segments
+                        .last()
+                        .map(|s| s.ident.to_string())
+                } else {
+                    None
+                }
+            })
+        }
         Type::Path(path) => {
             let segment = path.path.segments.last()?;
             let name = segment.ident.to_string();
@@ -357,8 +402,12 @@ fn rust_type_key_resolved(ty: &Type) -> Option<String> {
 
 /// `true` when `ty` is `Option<_>` (aliases resolved, references peeled).
 #[must_use]
-pub fn is_option_type(ty: &Type, aliases: &HashMap<String, TypeAlias>) -> bool {
-    is_option_type_resolved(&resolve_type(ty, aliases))
+pub fn is_option_type(
+    ty: &Type,
+    aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
+) -> bool {
+    is_option_type_resolved(&resolve_type(ty, aliases, assoc))
 }
 
 fn is_option_type_resolved(ty: &Type) -> bool {
@@ -374,8 +423,12 @@ fn is_option_type_resolved(ty: &Type) -> bool {
 }
 
 #[must_use]
-pub fn type_source_string(ty: &Type, aliases: &HashMap<String, TypeAlias>) -> String {
-    type_source_string_resolved(&resolve_type(ty, aliases))
+pub fn type_source_string(
+    ty: &Type,
+    aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
+) -> String {
+    type_source_string_resolved(&resolve_type(ty, aliases, assoc))
 }
 
 fn type_source_string_resolved(ty: &Type) -> String {
@@ -405,6 +458,29 @@ fn type_source_string_resolved(ty: &Type) -> String {
                 .join(", ");
             format!("({elements})")
         }
+        Type::TraitObject(obj) => {
+            let bounds = obj
+                .bounds
+                .iter()
+                .filter_map(|bound| match bound {
+                    TypeParamBound::Trait(trait_bound) => Some(
+                        trait_bound
+                            .path
+                            .segments
+                            .iter()
+                            .map(|segment| segment.ident.to_string())
+                            .collect::<Vec<_>>()
+                            .join("::"),
+                    ),
+                    TypeParamBound::Lifetime(_) => Some("Lifetime".to_string()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(" + ");
+            format!("dyn {bounds}")
+        }
+        Type::Paren(paren) => type_source_string_resolved(&paren.elem),
+        Type::Group(group) => type_source_string_resolved(&group.elem),
         _ => "unsupported".to_string(),
     }
 }
@@ -421,10 +497,11 @@ pub fn receiver_source_string(receiver: &syn::Receiver) -> String {
 pub fn return_type_string(
     signature: &syn::Signature,
     aliases: &HashMap<String, TypeAlias>,
+    assoc: &HashMap<String, Type>,
 ) -> Option<String> {
     match &signature.output {
         syn::ReturnType::Default => None,
-        syn::ReturnType::Type(_, ty) => Some(type_source_string(ty, aliases)),
+        syn::ReturnType::Type(_, ty) => Some(type_source_string(ty, aliases, assoc)),
     }
 }
 

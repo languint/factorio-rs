@@ -51,10 +51,7 @@ pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec
         let _ = writeln!(
             extend_items,
             "AssemblingMachine {{ name: \"{}\", icon: \"{icon}\", crafting_speed: {}, crafting_categories: &[{categories}], energy_usage: \"{}\", energy_source: EnergySource {{ r#type: \"{}\", usage_priority: {usage_priority}, ..Default::default() }}, icon_size: {icon_size}, flags: {flags}, minable: None, max_health: {max_health}, collision_box: None, selection_box: None, module_slots: {module_slots}, subgroup: {subgroup}, order: {order}, ..Default::default() }},",
-            entry.name,
-            entry.crafting_speed,
-            entry.energy_usage,
-            entry.energy_type,
+            entry.name, entry.crafting_speed, entry.energy_usage, entry.energy_type,
         );
     }
 

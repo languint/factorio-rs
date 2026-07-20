@@ -15,9 +15,10 @@ learning a feature:
 | `Vec`, ranges, `.map`/`.filter`/`.collect` | [Collections](../language/collections/) - [Filter entities](../recipes/filter-entities/) |
 | `type` aliases | [Type aliases](../language/type-aliases/) |
 
-Lua has no traits or borrow checker. Option-like values are usually
+Lua has no native traits or borrow checker. Option-like values are usually
 **value or `nil`**; Results are tagged `{ ok }` / `{ err }` tables. Tables also
-stand in for structs, arrays, and maps.
+stand in for structs, arrays, and maps. Same-module Rust traits lower to method
+tables (and dyn fat pointers); see [Traits](#traits).
 
 ## Top-level items
 
@@ -25,19 +26,45 @@ stand in for structs, arrays, and maps.
 | --------------------------- | ---------------------------------------------------------------- |
 | `fn`                        | Private -> `local function`; `pub` -> `module.name` (see below) |
 | `struct` + inherent `impl`  | Fields, methods, associated `const`s                             |
+| `trait` + `impl Trait for T` | Same-crate traits (`use` across modules); methods merge onto the concrete type; see [Traits](#traits) |
 | `enum` + inherent `impl`    | Unit, tuple, and named variants as tagged tables                 |
 | `const`                     | Becomes a local (or exported) binding                            |
 | `type Name = ...`           | Transparent; resolved then forgotten (no Lua emission)           |
 | `use crate::...`            | Binding crates with `[package.metadata.factorio]` also lower; see [Sharing code between mods](dependencies/). `crate::` paths become `require`s |
 | `#[factorio_rs::export]`      | Publishes a fn via remote (control) or require (shared); see [Sharing code between mods](dependencies/) |
 | `mod name;`                 | Declares a submodule file                                        |
-| `mod_settings!` / `item!` / `recipe!` / `technology!` / `fluid!` / `assembling_machine!` / `locale!` | Expanded / collected at transpile time |
+| Prototype / locale macros   | `mod_settings!`, `item!`, `recipe!`, `technology!`, `fluid!`, `assembling_machine!`, `container!`, ... - see [Macros](../reference/macros/) |
 | Doc comments                | Emitted as Lua comments when debug comments are on               |
 
-**Not supported (yet):** `trait`, trait `impl`, `static`, tuple structs, unknown macros at item position.
+**Not supported (yet):** `static`, tuple structs, unknown macros at item position,
+trait generics / supertraits / associated-type bounds or defaults.
 
 `type` aliases, enums, and collection iterators have dedicated pages (links in
 the table above).
+
+### Traits
+
+Same-crate `trait` + `impl Trait for Struct` is supported:
+
+- Trait methods merge onto the concrete type’s method table (call as
+  `value.method()`).
+- Default method bodies in the trait are filled into impls that omit them.
+- Associated types (`type Output;`) are supported without bounds or defaults;
+  use `Self::Output` in method signatures. Dyn coerce rejects traits that
+  declare associated types (not object-safe).
+- Import a trait from another module in the same crate with
+  `use crate::shared::alert::Alert` (project build builds a trait catalog).
+- `&dyn Trait` / `Box<dyn Trait>` lower to Lua fat pointers `{ _data, _vt }`
+  with per-impl `__vt_Trait_Concrete` vtables and dyn method dispatch.
+  Prefer `&value as &dyn Trait` when coercing.
+- Dyn coerce requires object-safe methods (no `Self` by value in signatures
+  beyond the receiver pattern the frontend accepts; no associated types).
+
+Non-goals for now: generics on traits, supertraits, associated-type bounds /
+defaults, and traits imported from other Factorio mods (binding crates).
+
+See the [`traits_demo`](../examples/traits-demo/) example for a Factorio-flavored
+walkthrough (cross-module `Alert`, defaults, overrides, static + dyn dispatch).
 
 ### `pub fn` vs `fn`
 
@@ -242,7 +269,7 @@ See [Stages](stages/) for how files map to Factorio load phases.
 | Stages / discovery   | [Stages](stages/)             |
 | `#[event]` + filters | [Events](events/)             |
 | `mod_settings!`      | [Mod settings](mod-settings/) |
-| `item!` / `recipe!` / `technology!` / `fluid!` / `assembling_machine!` | [Prototypes](prototypes/) |
+| `item!` / `recipe!` / `technology!` / `fluid!` / `assembling_machine!` / ... | [Prototypes](prototypes/) / [Macros](../reference/macros/) |
 | `locale!`            | [Locale](locale/)             |
 | Profiles / prune     | [Profiles](profiles/)         |
 
@@ -308,7 +335,7 @@ still fails the build as unsupported syntax when known unsafe.
 | Error | Typical cause |
 | --- | --- |
 | `unsupported expression (Async)` / ... | Use a supported construct (see [Language](language/)) |
-| `unsupported item` | `trait` / unknown macro / unsupported item form |
+| `unsupported item` | Unknown macro / unsupported item form (`static`, tuple struct, ...) |
 | `let binding requires an initializer` | `let x;` without value |
 | `event handlers are only allowed in control-stage modules` | Move handler to control |
 | `could not resolve locale key` | `Settings::FOO` not in this module |

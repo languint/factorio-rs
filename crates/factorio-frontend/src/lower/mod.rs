@@ -9,13 +9,14 @@ use crate::{
     paths::require_local_name,
 };
 
+mod assembling_machines;
 pub mod assert_macros;
 pub mod attrs;
-mod assembling_machines;
 pub mod context;
 pub mod event_filter;
 pub mod event_handler;
 pub mod expressions;
+mod extra_protos;
 mod fluids;
 pub mod functions;
 pub mod imports;
@@ -26,6 +27,7 @@ pub use locale::{parse_pending as parse_locale_pending, resolve_project_locales}
 pub mod metadata;
 mod mod_settings;
 pub mod print;
+mod proto_macros;
 mod recipes;
 mod serde_json;
 pub mod statements;
@@ -33,6 +35,8 @@ pub mod structs;
 mod technologies;
 mod test_steps;
 pub mod tests;
+mod traits;
+pub use traits::{TraitCatalog, build_trait_catalog};
 pub mod types;
 pub mod util;
 
@@ -52,6 +56,8 @@ pub struct ParseOptions<'a> {
     pub bindings: Option<&'a crate::BindingRegistry>,
     /// Cargo `[package].name` / Factorio mod id (for `item!` icon path rewriting).
     pub mod_name: Option<&'a str>,
+    /// Project-wide trait catalog for same-crate cross-module `use` of traits.
+    pub trait_catalog: Option<&'a traits::TraitCatalog>,
 }
 
 impl<'a> ParseOptions<'a> {
@@ -62,6 +68,7 @@ impl<'a> ParseOptions<'a> {
             lints,
             bindings: None,
             mod_name: None,
+            trait_catalog: None,
         }
     }
 
@@ -80,6 +87,12 @@ impl<'a> ParseOptions<'a> {
     #[must_use]
     pub const fn with_mod_name(mut self, mod_name: &'a str) -> Self {
         self.mod_name = Some(mod_name);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_trait_catalog(mut self, catalog: &'a traits::TraitCatalog) -> Self {
+        self.trait_catalog = Some(catalog);
         self
     }
 
@@ -170,6 +183,7 @@ pub fn parse_module_with_options(
         diagnostics,
         None,
         options.mod_name,
+        options.trait_catalog,
     )
     .and_then(|mut module| {
         locale::resolve_project_locales(std::slice::from_mut(&mut module))?;
@@ -225,11 +239,12 @@ pub fn parse_discovered_module_with_options(
         diagnostics,
         discovered.default_export.as_ref(),
         options.mod_name,
+        options.trait_catalog,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
-fn lower_items(
+pub fn lower_items(
     items: &[Item],
     module_name: &str,
     stage: factorio_ir::stage::Stage,
@@ -239,6 +254,7 @@ fn lower_items(
     diagnostics: &mut Vec<Diagnostic>,
     default_export: Option<&factorio_ir::function::ExportMeta>,
     mod_name: Option<&str>,
+    trait_catalog: Option<&traits::TraitCatalog>,
 ) -> FrontendResult<factorio_ir::module::Module> {
     let mut body = Vec::new();
     let mut symbols = Vec::new();
@@ -259,12 +275,28 @@ fn lower_items(
         enums: std::collections::HashMap::new(),
         type_aliases: std::collections::HashMap::new(),
         option_bindings: std::collections::HashSet::new(),
+        traits: std::collections::BTreeMap::new(),
+        user_structs: std::collections::HashSet::new(),
+        dyn_locals: std::collections::HashMap::new(),
+        assoc_bindings: std::collections::HashMap::new(),
+        vtables: Vec::new(),
         lints,
         diagnostics,
         try_hoists: Vec::new(),
         try_tmp_counter: 0,
     };
     types::collect_type_aliases(items, &mut ctx.type_aliases)?;
+    traits::collect_traits(items, &mut ctx.traits)?;
+    if let Some(catalog) = trait_catalog {
+        traits::seed_traits_from_imports(
+            items,
+            catalog,
+            &mut ctx.traits,
+            module_prefix,
+            bindings,
+        )?;
+    }
+    collect_user_structs(items, &mut ctx.user_structs);
     let mut module_state = ModuleLowerState {
         module_name,
         stage,
@@ -286,6 +318,9 @@ fn lower_items(
     finalize_pending_structs(structs, &mut body, &mut symbols);
     finalize_pending_enums(enums, &mut body, &mut symbols);
 
+    let vtables = std::mem::take(&mut ctx.vtables);
+    drop(ctx);
+
     let mut all_imports = use_imports;
     all_imports.extend(inline_imports);
 
@@ -298,6 +333,7 @@ fn lower_items(
         submodules,
         locales: Vec::new(),
         pending_locales,
+        vtables,
     })
 }
 
@@ -313,6 +349,22 @@ struct ModuleLowerState<'a> {
     pending_locales: &'a mut Vec<factorio_ir::locale::PendingLocaleFile>,
     default_export: Option<factorio_ir::function::ExportMeta>,
     mod_name: Option<&'a str>,
+}
+
+pub fn collect_user_structs(items: &[syn::Item], out: &mut std::collections::HashSet<String>) {
+    for item in items {
+        match item {
+            syn::Item::Struct(s) => {
+                out.insert(s.ident.to_string());
+            }
+            syn::Item::Mod(m) if m.content.is_some() => {
+                if let Some((_, nested)) = &m.content {
+                    collect_user_structs(nested, out);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -369,6 +421,9 @@ fn lower_top_level_item(
         }
         Item::Impl(item_impl) => {
             lower_impl_item(item_impl, module_state.structs, module_state.enums, ctx)?;
+        }
+        Item::Trait(_) | Item::Type(_) => {
+            // Catalogued before lowering (`collect_traits` / `collect_type_aliases`); no IR.
         }
         Item::Use(use_item) => {
             let fragments = lower_use(
@@ -472,13 +527,104 @@ fn lower_top_level_item(
                 lower_top_level_item(item, module_name, module_state, ctx)?;
             }
         }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "container") => {
+            let expanded =
+                extra_protos::expand_container(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "inserter") => {
+            let expanded =
+                extra_protos::expand_inserter(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "transport_belt") => {
+            let expanded =
+                extra_protos::expand_transport_belt(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "furnace") => {
+            let expanded =
+                extra_protos::expand_furnace(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "mining_drill") => {
+            let expanded =
+                extra_protos::expand_mining_drill(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "lab") => {
+            let expanded = extra_protos::expand_lab(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "resource") => {
+            let expanded =
+                extra_protos::expand_resource(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "tile") => {
+            let expanded =
+                extra_protos::expand_tile(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "autoplace_control") => {
+            let expanded = extra_protos::expand_autoplace_control(
+                mac.mac.tokens.clone(),
+                module_state.mod_name,
+            )?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "recipe_category") => {
+            let expanded = extra_protos::expand_recipe_category(
+                mac.mac.tokens.clone(),
+                module_state.mod_name,
+            )?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "item_group") => {
+            let expanded =
+                extra_protos::expand_item_group(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "item_subgroup") => {
+            let expanded =
+                extra_protos::expand_item_subgroup(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
+        Item::Macro(mac) if is_known_macro(&mac.mac, "module") => {
+            let expanded =
+                extra_protos::expand_module(mac.mac.tokens.clone(), module_state.mod_name)?;
+            for item in &expanded {
+                lower_top_level_item(item, module_name, module_state, ctx)?;
+            }
+        }
         Item::Macro(mac) if is_known_macro(&mac.mac, "locale") => {
             module_state
                 .pending_locales
                 .extend(locale::parse_pending(mac.mac.tokens.clone())?);
-        }
-        Item::Type(_) => {
-            // Collected in `collect_type_aliases` before lowering; no IR.
         }
         item => {
             return Err(FrontendError::UnsupportedItem {
@@ -508,7 +654,8 @@ fn lower_struct_item(
         .entry(name)
         .or_insert_with(|| PendingStruct::new(item_struct.vis.clone()));
     entry.visibility = item_struct.vis.clone();
-    entry.fields = lower_struct_fields(&item_struct.fields, &ctx.type_aliases)?;
+    entry.fields =
+        lower_struct_fields(&item_struct.fields, &ctx.type_aliases, &ctx.assoc_bindings)?;
     entry.doc = extract_doc_comments(&item_struct.attrs);
     Ok(())
 }
@@ -519,15 +666,20 @@ fn lower_impl_item(
     enums: &mut BTreeMap<String, PendingEnum>,
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<()> {
-    if item_impl.trait_.is_some() {
-        return Err(FrontendError::UnsupportedItem {
-            item: "trait impl".to_string(),
-            location: location(item_impl),
-        });
-    }
+    let trait_name = if let Some((_, trait_path, _)) = &item_impl.trait_ {
+        Some(trait_impl_name(trait_path, item_impl)?)
+    } else {
+        None
+    };
 
     let struct_name = impl_type_name(&item_impl.self_ty)?;
     if let Some(entry) = enums.get_mut(&struct_name) {
+        if trait_name.is_some() {
+            return Err(FrontendError::UnsupportedItem {
+                item: format!("trait impl for enum `{struct_name}`"),
+                location: location(item_impl),
+            });
+        }
         for impl_item in &item_impl.items {
             match impl_item {
                 ImplItem::Fn(method) => {
@@ -549,12 +701,25 @@ fn lower_impl_item(
         }
         return Ok(());
     }
+
     let entry = structs
         .entry(struct_name.clone())
         .or_insert_with(|| PendingStruct::new(Visibility::Inherited));
+
+    if let Some(trait_name) = trait_name.as_ref() {
+        return traits::lower_trait_impl(item_impl, trait_name, &struct_name, entry, ctx);
+    }
+
     for impl_item in &item_impl.items {
         match impl_item {
             ImplItem::Fn(method) => {
+                let method_name = method.sig.ident.to_string();
+                if entry.methods.iter().any(|m| m.name == method_name) {
+                    return Err(FrontendError::UnsupportedItem {
+                        item: format!("method `{method_name}` already defined on `{struct_name}`"),
+                        location: location(method),
+                    });
+                }
                 entry
                     .methods
                     .push(lower_impl_method(method, &struct_name, ctx)?);
@@ -573,6 +738,16 @@ fn lower_impl_item(
     }
 
     Ok(())
+}
+
+fn trait_impl_name(trait_path: &syn::Path, item_impl: &syn::ItemImpl) -> FrontendResult<String> {
+    if trait_path.segments.len() != 1 {
+        return Err(FrontendError::UnsupportedItem {
+            item: "trait path with multiple segments".to_string(),
+            location: location(item_impl),
+        });
+    }
+    Ok(trait_path.segments[0].ident.to_string())
 }
 
 fn lower_enum_item(
@@ -607,11 +782,17 @@ fn lower_enum_item(
                 types: fields
                     .unnamed
                     .iter()
-                    .map(|field| types::lower_type(&field.ty, &ctx.type_aliases))
+                    .map(|field| {
+                        types::lower_type(&field.ty, &ctx.type_aliases, &ctx.assoc_bindings)
+                    })
                     .collect::<FrontendResult<Vec<_>>>()?,
             },
             syn::Fields::Named(fields) => factorio_ir::enumeration::EnumVariantFields::Named(
-                lower_struct_fields(&syn::Fields::Named(fields.clone()), &ctx.type_aliases)?,
+                lower_struct_fields(
+                    &syn::Fields::Named(fields.clone()),
+                    &ctx.type_aliases,
+                    &ctx.assoc_bindings,
+                )?,
             ),
         };
         let info_fields = match &fields {

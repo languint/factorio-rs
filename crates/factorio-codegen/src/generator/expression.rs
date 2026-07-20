@@ -2,25 +2,7 @@ use std::fmt::Write as _;
 
 use factorio_ir::expression::Expression;
 
-use crate::{LuaGenerator, attribute_property_for_setter};
-
-/// Map a Rust prototype struct name to its fixed Factorio `type` discriminant string.
-/// Returns `None` for non-prototype structs.
-fn prototype_lua_type(struct_name: &str) -> Option<&'static str> {
-    match struct_name {
-        "BoolSetting" => Some("bool-setting"),
-        "IntSetting" => Some("int-setting"),
-        "DoubleSetting" => Some("double-setting"),
-        "StringSetting" => Some("string-setting"),
-        "Item" | "RecipeProduct" => Some("item"),
-        "Recipe" => Some("recipe"),
-        "Technology" => Some("technology"),
-        "UnlockRecipeEffect" => Some("unlock-recipe"),
-        "Fluid" => Some("fluid"),
-        "AssemblingMachine" => Some("assembling-machine"),
-        _ => None,
-    }
-}
+use crate::{LuaGenerator, attribute_property_for_setter, prototype_lua_typename};
 
 impl LuaGenerator {
     #[must_use]
@@ -113,6 +95,23 @@ impl LuaGenerator {
                 else_expr,
             } => self.generate_if_expr(condition, then_expr, else_expr),
             Expression::Closure { params, body } => self.generate_closure(params, body),
+            Expression::FatPointer { data, vtable } => {
+                let data = self.generate_expression(data);
+                format!("{{ _data = {data}, _vt = {vtable} }}")
+            }
+            Expression::DynMethodCall {
+                receiver,
+                method,
+                args,
+            } => {
+                let recv = self.generate_expression(receiver);
+                let args_lua = self.generate_arg_list(args);
+                if args_lua.is_empty() {
+                    format!("{recv}._vt.{method}({recv})")
+                } else {
+                    format!("{recv}._vt.{method}({recv}, {args_lua})")
+                }
+            }
             Expression::BinaryOp { .. } => {
                 unreachable!("binary operators are handled by generate_expression_prec")
             }
@@ -312,7 +311,7 @@ impl LuaGenerator {
                 });
                 (Some(if is_fluid { "fluid" } else { "item" }), &["fluid"])
             } else {
-                (struct_name.and_then(prototype_lua_type), &[])
+                (struct_name.and_then(prototype_lua_typename), &[])
             };
 
         let type_prefix = injected_type.map(|t| format!("type = \"{t}\", "));

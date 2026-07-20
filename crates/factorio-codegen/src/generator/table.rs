@@ -55,7 +55,11 @@ impl LuaGenerator {
         };
 
         let prefix = if scope == Scope::Private && module_name.is_none() {
-            "local "
+            if self.forward_declared_locals.contains(&struct_decl.name) {
+                ""
+            } else {
+                "local "
+            }
         } else {
             ""
         };
@@ -102,7 +106,11 @@ impl LuaGenerator {
             (Scope::Private, Some(_)) => unreachable!(),
         };
         let prefix = if scope == Scope::Private && module_name.is_none() {
-            "local "
+            if self.forward_declared_locals.contains(&enum_decl.name) {
+                ""
+            } else {
+                "local "
+            }
         } else {
             ""
         };

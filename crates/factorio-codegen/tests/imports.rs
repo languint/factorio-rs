@@ -30,6 +30,7 @@ fn generates_require_statements() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Public,
             statement: Statement::FunctionDecl(Function {
@@ -83,6 +84,7 @@ fn generates_foreign_require_statements() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![],
     };
 
@@ -108,6 +110,7 @@ fn generates_foreign_require_with_empty_module_root() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![],
     };
 

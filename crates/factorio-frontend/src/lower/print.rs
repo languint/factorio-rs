@@ -377,6 +377,9 @@ pub fn infer_debug_type_key(
             struct_name: Some(name),
             ..
         } => Some(name.clone()),
+        factorio_ir::expression::Expression::FatPointer { data, .. } => {
+            infer_debug_type_key(data, ctx)
+        }
         factorio_ir::expression::Expression::StructLiteral {
             struct_name: None, ..
         }

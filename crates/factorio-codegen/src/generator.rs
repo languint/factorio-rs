@@ -30,6 +30,8 @@ pub struct LuaGenerator {
     profile: Option<String>,
     exported_functions: std::collections::HashSet<String>,
     current_module_table: Option<String>,
+    /// Locals forward-declared before vtables so closures capture upvalues.
+    forward_declared_locals: std::collections::HashSet<String>,
 }
 
 impl Default for LuaGenerator {
@@ -57,6 +59,7 @@ impl LuaGenerator {
             profile: None,
             exported_functions: std::collections::HashSet::new(),
             current_module_table: None,
+            forward_declared_locals: std::collections::HashSet::new(),
         }
     }
 
@@ -73,6 +76,7 @@ impl LuaGenerator {
             profile: None,
             exported_functions: std::collections::HashSet::new(),
             current_module_table: None,
+            forward_declared_locals: std::collections::HashSet::new(),
         }
     }
 
@@ -89,6 +93,7 @@ impl LuaGenerator {
             profile: None,
             exported_functions: std::collections::HashSet::new(),
             current_module_table: None,
+            forward_declared_locals: std::collections::HashSet::new(),
         }
     }
 
@@ -124,6 +129,7 @@ impl LuaGenerator {
             profile: self.profile.clone(),
             exported_functions: self.exported_functions.clone(),
             current_module_table: self.current_module_table.clone(),
+            forward_declared_locals: self.forward_declared_locals.clone(),
         }
     }
 
@@ -245,6 +251,7 @@ impl LuaGenerator {
         self.output.clear();
         self.indent_level = 0;
         self.exported_functions.clear();
+        self.forward_declared_locals.clear();
 
         for symbol in &module.symbols {
             if let Statement::FunctionDecl(function) = &symbol.statement {
@@ -262,6 +269,10 @@ impl LuaGenerator {
         self.output.push('\n');
 
         self.generate_imports(&module.imports);
+
+        // Forward-declare private concrete type locals so vtable closures capture
+        // upvalues when structs are assigned later in the body.
+        self.generate_vtables(&module.vtables, Some(&module_name), module);
 
         for statement in &module.body.statements {
             self.generate_statement(statement, Some(module), None, Scope::Private)?;
@@ -317,6 +328,43 @@ impl LuaGenerator {
         }
     }
 
+    fn generate_vtables(
+        &mut self,
+        vtables: &[factorio_ir::module::VTable],
+        module_name: Option<&str>,
+        module: &Module,
+    ) {
+        let mut forward = std::collections::BTreeSet::new();
+        for vtable in vtables {
+            if !concrete_type_is_public(module, &vtable.concrete_type) {
+                forward.insert(vtable.concrete_type.clone());
+            }
+        }
+        if !forward.is_empty() {
+            let names = forward.iter().cloned().collect::<Vec<_>>().join(", ");
+            self.write_line(&format!("local {names}"));
+            self.forward_declared_locals.extend(forward);
+            self.output.push('\n');
+        }
+
+        for vtable in vtables {
+            let concrete_path =
+                resolve_concrete_table_path(module, module_name, &vtable.concrete_type);
+            self.write_line(&format!("local {} = {{", vtable.name));
+            self.indent_level += 1;
+            for method in &vtable.methods {
+                self.write_line(&format!(
+                    "{method} = function(self, ...) return {concrete_path}.{method}(self._data, ...) end,"
+                ));
+            }
+            self.indent_level -= 1;
+            self.write_line("}");
+        }
+        if !vtables.is_empty() {
+            self.output.push('\n');
+        }
+    }
+
     fn generate_submodules(&mut self, submodules: &[String]) {
         for submodule in submodules {
             self.write_line(&format!(
@@ -368,4 +416,30 @@ fn escape_lua_string(value: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "\\r")
         .replace('\t', "\\t")
+}
+
+fn concrete_type_is_public(module: &Module, concrete_type: &str) -> bool {
+    module.symbols.iter().any(|symbol| {
+        matches!(
+            &symbol.statement,
+            Statement::StructDecl(s) if s.name == concrete_type
+        ) || matches!(
+            &symbol.statement,
+            Statement::EnumDecl(e) if e.name == concrete_type
+        )
+    })
+}
+
+fn resolve_concrete_table_path(
+    module: &Module,
+    module_name: Option<&str>,
+    concrete_type: &str,
+) -> String {
+    if concrete_type_is_public(module, concrete_type)
+        && let Some(module_name) = module_name
+    {
+        format!("{module_name}.{concrete_type}")
+    } else {
+        concrete_type.to_string()
+    }
 }

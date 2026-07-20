@@ -160,10 +160,21 @@ fn load_test_suite(
     let sources = collect_sources(&source_dir)?;
     let lint_config = config.lints.resolve()?;
     let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
+    let trait_catalog = match factorio_frontend::build_trait_catalog(&sources, &source_dir) {
+        Ok(catalog) => catalog,
+        Err(err) => {
+            if let Some((path, source)) = sources.first() {
+                let filename = display_filename(path);
+                let _ = eprint_frontend_error(&filename, source, &err);
+            }
+            return Err(CliError::Frontend(err));
+        }
+    };
     let parse_options = ParseOptions::new(&lint_config)
         .with_prefix(lua_module_prefix)
         .with_bindings(&bindings)
-        .with_mod_name(&package.name);
+        .with_mod_name(&package.name)
+        .with_trait_catalog(&trait_catalog);
 
     let mut diagnostics = Vec::new();
     let suite = match discover_tests(&source_dir, &sources, &parse_options, &mut diagnostics) {

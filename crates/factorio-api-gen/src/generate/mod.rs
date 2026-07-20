@@ -24,6 +24,6 @@ pub use events::{
 pub use identifications::{
     generate_identifications, identification_concept_names, identification_signatures,
 };
-pub use prototypes::{PROTOTYPE_ALLOWLIST, generate_prototypes};
+pub use prototypes::{PROTOTYPE_RICH_OVERRIDES, generate_prototype_type_map, generate_prototypes};
 pub use types::KnownTypes;
 pub use unions::{collect_literal_unions, generate_unions};

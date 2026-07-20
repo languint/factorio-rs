@@ -13,7 +13,7 @@ In your mod’s `Cargo.toml`:
 
 ```toml
 [dependencies]
-factorio-rs = { version = "0.1.9", features = ["serde"] }
+factorio-rs = { version = "0.2.0", features = ["serde"] }
 ```
 
 That pulls in `serde` and `serde_json` so derives and calls type-check under

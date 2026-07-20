@@ -60,6 +60,7 @@ fn locale_resolves_imported_items_const_across_modules() {
             }
             "#,
         ),
+        vtables: vec![],
     };
 
     let mut modules = vec![items_module, locale_module];
@@ -107,6 +108,7 @@ fn locale_unresolved_without_import_or_local_const() {
             }
             "#,
         ),
+        vtables: vec![],
     };
 
     let err = resolve_project_locales(std::slice::from_mut(&mut locale_module)).unwrap_err();
@@ -140,6 +142,7 @@ fn locale_resolves_renamed_import() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
     };
 
     let locale_module = Module {
@@ -169,6 +172,7 @@ fn locale_resolves_renamed_import() {
             }
             "#,
         ),
+        vtables: vec![],
     };
 
     let mut modules = vec![items_module, locale_module];

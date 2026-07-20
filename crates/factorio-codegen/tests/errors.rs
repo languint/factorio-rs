@@ -21,6 +21,7 @@ fn rejects_exported_local_functions() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
         symbols: vec![Symbol {
             scope: Scope::Private,
             statement: Statement::FunctionDecl(Function {

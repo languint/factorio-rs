@@ -31,6 +31,17 @@ pub struct ImportedItem {
     pub local: String,
 }
 
+/// Vtable emitted for a `(Trait, Concrete)` pair used by `dyn` coercion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VTable {
+    /// Symbol name, e.g. `__vt_Display_Point`.
+    pub name: String,
+    /// Concrete type whose methods the vtable forwards to.
+    pub concrete_type: String,
+    /// Method names present on the trait (and thus on this vtable).
+    pub methods: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     pub name: String,
@@ -44,6 +55,8 @@ pub struct Module {
     /// Parsed `locale!` blocks waiting for `Type::CONST` resolution (possibly
     /// across imports). Cleared once [`locales`](Self::locales) is filled.
     pub pending_locales: Vec<PendingLocaleFile>,
+    /// Vtables for `dyn Trait` dispatch, emitted before other module locals.
+    pub vtables: Vec<VTable>,
 }
 
 impl Module {

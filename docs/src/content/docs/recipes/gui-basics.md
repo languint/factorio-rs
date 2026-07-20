@@ -43,7 +43,7 @@ pub fn on_player_created(event: OnPlayerCreatedEvent) {
 }
 ```
 
-`r#type` is Rust’s way of naming Factorio’s `type` field (`frame`, `label`, …).
+`r#type` is Rust’s way of naming Factorio’s `type` field (`frame`, `label`, ...).
 `GuiElementType` lives in the prelude via generated unions.
 `player_index.into()` builds the `IndexOrName` Factorio accepts for `get_player`.
 
@@ -54,7 +54,7 @@ pub fn on_player_created(event: OnPlayerCreatedEvent) {
 | `player.gui().screen().add(...)` | `player.gui.screen.add{ type = "frame", ... }` |
 | `frame.set_caption("Hi")` | `frame.caption = "Hi"` |
 | `frame.style().set_width(280)` | `frame.style.width = 280` |
-| `frame.set_style("…")` | `frame.style = "…"` |
+| `frame.set_style("...")` | `frame.style = "..."` |
 
 Caption can also be set at create time (`caption: Some(...)`) as above, or later
 with `set_caption`.

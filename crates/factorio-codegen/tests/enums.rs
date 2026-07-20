@@ -56,6 +56,7 @@ fn generates_tagged_enum_tables_and_methods() {
         submodules: vec![],
         locales: vec![],
         pending_locales: vec![],
+        vtables: vec![],
     };
 
     let output = must_ok(LuaGenerator::new().generate_module(&module));

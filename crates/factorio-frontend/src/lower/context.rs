@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use factorio_ir::lint::{Diagnostic, LintConfig, LintId, LintLevel};
 
@@ -9,6 +9,33 @@ use crate::{
 };
 
 use super::imports::ImportFragment;
+
+/// Catalog entry for a trait method
+#[derive(Clone)]
+pub struct TraitMethodInfo {
+    pub name: String,
+    pub has_receiver: bool,
+    /// `true` when the return type is `Self` (not object-safe for dyn).
+    pub returns_self: bool,
+    /// Default method body, lowered into impls that omit the method.
+    pub default_body: Option<syn::ImplItemFn>,
+}
+
+/// Catalog entry for a trait defined in the current module.
+#[derive(Clone)]
+pub struct TraitInfo {
+    pub name: String,
+    pub methods: BTreeMap<String, TraitMethodInfo>,
+    /// Associated type names declared on the trait.
+    pub associated_types: std::collections::BTreeSet<String>,
+}
+
+/// Local binding that holds a `dyn Trait` fat pointer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynLocal {
+    pub trait_name: String,
+    pub concrete_name: String,
+}
 
 pub struct LowerContext<'a> {
     pub imports: &'a mut Vec<ImportFragment>,
@@ -35,6 +62,17 @@ pub struct LowerContext<'a> {
     pub type_aliases: HashMap<String, super::types::TypeAlias>,
     /// Locals annotated as `Option<_>` (kept even though [`Self::binding_types`] peels Option).
     pub option_bindings: HashSet<String>,
+    /// Traits defined in this module (name -> methods / defaults).
+    pub traits: BTreeMap<String, TraitInfo>,
+    /// User-defined struct names in this module (for static method dispatch).
+    pub user_structs: HashSet<String>,
+    /// Locals that hold dyn fat pointers.
+    pub dyn_locals: HashMap<String, DynLocal>,
+    /// Associated type bindings for the trait impl currently being lowered
+    /// (`Self::Output` -> concrete type). Empty outside trait impl method lowering.
+    pub assoc_bindings: HashMap<String, syn::Type>,
+    /// Vtables recorded from trait impls (emitted on the IR module).
+    pub vtables: Vec<factorio_ir::module::VTable>,
     /// Lint levels from `Factorio.toml` `[lints]` (defaults deny).
     pub lints: &'a LintConfig,
     /// Collected warn/deny diagnostics (allow is skipped). Deny no longer aborts
@@ -101,6 +139,20 @@ impl LowerContext<'_> {
 
     pub fn bind_option(&mut self, name: impl Into<String>) {
         self.option_bindings.insert(name.into());
+    }
+
+    pub fn bind_dyn(&mut self, name: impl Into<String>, dyn_local: DynLocal) {
+        self.dyn_locals.insert(name.into(), dyn_local);
+    }
+
+    #[must_use]
+    pub fn is_user_struct(&self, name: &str) -> bool {
+        self.user_structs.contains(name)
+    }
+
+    #[must_use]
+    pub fn dyn_local(&self, name: &str) -> Option<&DynLocal> {
+        self.dyn_locals.get(name)
     }
 
     #[must_use]

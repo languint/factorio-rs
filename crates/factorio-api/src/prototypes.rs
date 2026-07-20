@@ -1,8 +1,6 @@
 //! Hand-written data-stage companions and helpers for generated prototypes.
 //!
-//! Generated allowlisted stubs (`Item`, `Recipe`, `Technology`, `Fluid`,
-//! `AssemblingMachine`) live in `OUT_DIR/prototypes_gen.rs`. These companions
-//! have special Lua emission rules (ingredient `type`, science-pack tuples, …).
+//! Generated stubs for every Factorio typename (~260).
 
 include!(concat!(env!("OUT_DIR"), "/prototypes_gen.rs"));
 
