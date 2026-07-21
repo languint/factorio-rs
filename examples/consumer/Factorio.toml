@@ -6,4 +6,4 @@ title = "consumer"
 description = "Example mod that depends on provider via a Cargo path dependency"
 factorio_version = "2.0"
 # Library Cargo metadata also contributes deps; this shows an explicit extra entry.
-dependencies = ["? space-age", "provider >= 0.2.1"]
+dependencies = ["? space-age", "provider >= 0.3.0"]
