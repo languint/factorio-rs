@@ -11,14 +11,7 @@ use crate::generate::types::{KnownTypes, is_integer_api_type_pub, map_numeric_ty
 use crate::schema::{ApiType, Concept, RuntimeApi};
 
 /// Concepts that stay as open `LuaAny` (too open or not useful as enums).
-const SKIP: &[&str] = &[
-    "Any",
-    "AnyBasic",
-    "LocalisedString",
-    "Tags",
-    "MapGenSize",
-    "RenderLayer",
-];
+const SKIP: &[&str] = &["Any", "AnyBasic", "LocalisedString"];
 
 /// Collect Identification-style concept names that should become enums.
 pub fn identification_concept_names(

@@ -468,6 +468,9 @@ pub use lua_libs::{LuaMath, LuaStringLib, LuaTableLib};
 pub use map::{event_filter_type, event_type_to_name};
 pub use unions::literal_enum_variant_str;
 
+/// Re-export generated flag-set helper (dict-of-true concepts).
+pub use concepts::is_flag_set_type;
+
 pub mod prelude {
     pub use crate::LocalisedString;
     pub use crate::SettingValue;
@@ -487,7 +490,8 @@ pub mod prelude {
         TechnologyUnitIngredient, UnlockRecipeEffect,
     };
     pub use crate::settings::{
-        BoolSetting, DoubleSetting, IntSetting, ModSettingValue, StringSetting, data, settings,
+        BoolSetting, DoubleSetting, IntSetting, ModSettingValue, SettingsDictionary, StringSetting,
+        data, settings,
     };
     pub use crate::unions::*;
 }

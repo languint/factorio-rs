@@ -360,17 +360,14 @@ fn lower_call_expression(
         });
     }
 
-    if let Some(type_name) = identification_ctor_type(&call.func) {
-        ctx.emit_lint(
-            factorio_ir::lint::LintId::IdentificationCtor,
-            format!(
-                "`{type_name}::...(...)` is not lowered to Lua; pass a payload with `.into()` (e.g. `force.into()` or `\"enemy\".into()`)"
-            ),
-            location(call),
-        )?;
-        return Ok(factorio_ir::expression::Expression::Literal(
-            factorio_ir::literal::Literal::Nil,
-        ));
+    if identification_ctor_type(&call.func).is_some() {
+        if call.args.len() != 1 {
+            return Err(FrontendError::UnsupportedExpression {
+                location: location(call)
+                    .with_note("Identification constructors take exactly one payload argument"),
+            });
+        }
+        return lower_expression(&call.args[0], ctx, self_type);
     }
 
     if let Expr::Path(path) = call.func.as_ref() {
@@ -461,7 +458,7 @@ fn identification_ctor_type(func: &Expr) -> Option<String> {
         return None;
     }
     let type_name = segments[segments.len() - 2].as_str();
-    if factorio_api::debug_types::is_identification_type(type_name) {
+    if factorio_api::debug_types::is_payload_ctor_type(type_name) {
         Some(type_name.to_string())
     } else {
         None

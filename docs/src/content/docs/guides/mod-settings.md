@@ -48,7 +48,7 @@ Stage keywords use underscores (`runtime_global`). Generated Lua uses Factorioâ€
 use factorio_rs::prelude::*;
 use crate::settings::Settings;
 
-const CASUAL_MODE: bool = settings.startup.get::<bool>(Settings::CASUAL_MODE);
+const CASUAL_MODE: bool = settings.startup.get_bool(Settings::CASUAL_MODE);
 ```
 
 Put locale strings for setting names/descriptions in a `locale!` block - see [Locale](locale/).
@@ -56,9 +56,10 @@ Put locale strings for setting names/descriptions in a `locale!` block - see [Lo
 ## Reading values in Lua terms
 
 ```rust
-settings.startup.get::<bool>(Settings::CASUAL_MODE)
+settings.startup.get_bool(Settings::CASUAL_MODE)
+// or: settings.startup.get::<bool>(Settings::CASUAL_MODE)
 ```
 
 lowers roughly to `settings.startup["msr-casual-mode"].value`.
 
-Setting / API structs often use `..Default::default()` so only the fields you set appear in the Lua table - see [Supported Rust](language/).
+Also available: `get_int`, `get_double`, `get_string`.

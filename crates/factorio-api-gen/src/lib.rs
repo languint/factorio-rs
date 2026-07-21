@@ -79,6 +79,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
     let identification_signatures = generate::identification_signatures(api, &identification_names);
     let mut concept_names = generate::generatable_concept_names(api, &filter_concept_names);
     concept_names.extend(identification_names.iter().cloned());
+    let flag_sets = generate::flag_set_concept_names(api);
     let union_registry = generate::collect_literal_unions(api);
     let known = generate::KnownTypes {
         classes: &class_names,
@@ -87,6 +88,7 @@ pub fn generate_runtime_api(api: &RuntimeApi) -> GeneratedApi {
         identification_signatures: &identification_signatures,
         unions: union_registry.names(),
         union_registry: &union_registry,
+        flag_sets: &flag_sets,
     };
     let event_filters = generate::generate_event_filters(api);
     let concepts = {

@@ -86,6 +86,42 @@ fn nests_known_concepts_in_copy_fields() {
 }
 
 #[test]
+fn emits_luastruct_flag_sets_and_tags() {
+    let generated = generate_from_bundled_api().expect("generate");
+    let concepts = &generated.concepts;
+
+    for name in [
+        "GameViewSettings",
+        "MapSettings",
+        "DifficultySettings",
+        "MouseButtonFlags",
+        "Tags",
+        "MapGenSize",
+        "RenderLayer",
+        "PropertyExpressionNames",
+    ] {
+        assert!(
+            concepts.contains(&format!("pub struct {name}"))
+                || concepts.contains(&format!("pub enum {name}")),
+            "missing typed concept {name}"
+        );
+    }
+    assert!(
+        concepts.contains("pub fn is_flag_set_type"),
+        "flag-set helper missing"
+    );
+    assert!(
+        generated
+            .classes
+            .contains("fn tags (& self) -> crate :: concepts :: Tags")
+            || generated
+                .classes
+                .contains("fn tags(&self) -> crate::concepts::Tags"),
+        "LuaEntity/LuaGuiElement tags() should return concepts::Tags"
+    );
+}
+
+#[test]
 fn map_location_self_cycle_stays_lua_any() {
     let generated = generate_from_bundled_api().expect("generate");
     assert!(
@@ -240,6 +276,10 @@ fn emits_is_identification_type_helper() {
         generated.debug_types.contains("ForceID"),
         "is_identification_type should match ForceID"
     );
+    assert!(
+        generated.debug_types.contains("fn is_payload_ctor_type"),
+        "debug_types should expose is_payload_ctor_type"
+    );
 }
 
 #[test]
@@ -262,6 +302,11 @@ fn function_parameters_use_lua_function() {
         !classes.contains("handler : crate :: LuaAny")
             && !classes.contains("handler: crate::LuaAny"),
         "event handlers must not be typed as LuaAny"
+    );
+    assert!(
+        classes.contains("filters : Option < Vec < crate :: EventFilterEntry > >")
+            || classes.contains("filters: Option<Vec<crate::EventFilterEntry>>"),
+        "on_event filters should be Option<Vec<EventFilterEntry>>"
     );
     assert!(
         classes.contains("impl Into < crate :: LocalisedString >")

@@ -69,7 +69,7 @@ High leverage:
 
 - Richer prototype companions / more dual-path macros / language surface
   (traits already exist same-module; cross-module traits welcome via issue first)
-- Shrink GUI `Tags` / elem-filter `LuaAny` where enums fit
+- Shrink remaining choose-elem filter / graphics `LuaAny` where concrete types fit
 - Docs recipes, examples, and clearer frontend errors / lints
 
 Good starter tasks:

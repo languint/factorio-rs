@@ -74,6 +74,14 @@ pub fn generate_debug_types(api: &RuntimeApi, known: &KnownTypes<'_>) -> String 
             #identification_match
         }
 
+        /// Enums whose constructors lower to the payload (`ForceID::Name(...)`,
+        /// `MapGenSize::Number(...)`, `RenderLayer::Named(...)`).
+        #[must_use]
+        pub fn is_payload_ctor_type(name: &str) -> bool {
+            is_identification_type(name)
+                || matches!(name, "MapGenSize" | "RenderLayer" | "IndexOrName")
+        }
+
         /// Field type key for generated event/concept structs (last path segment form).
         #[must_use]
         pub fn struct_field_type(struct_name: &str, field: &str) -> Option<&'static str> {

@@ -1,3 +1,10 @@
+/// Typed Factorio mod-settings tables (`settings.startup`, ...).
+///
+/// Prefer [`SettingsDictionary::get_bool`] / [`get_int`] / [`get_double`] /
+/// [`get_string`] over indexing into opaque values.
+
+/// One mod setting entry (`settings.startup["name"]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModSettingValue {
     pub value: crate::LuaAny,
 }
@@ -6,16 +13,66 @@ pub static UNIT_MOD_SETTING: ModSettingValue = ModSettingValue {
     value: crate::LuaAny,
 };
 
+/// A settings stage dictionary (`startup` / `global` / `player_default`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SettingsDictionary;
+
+impl SettingsDictionary {
+    /// Read a bool setting: `settings.startup["name"].value`.
+    #[must_use]
+    pub const fn get_bool(self, _name: &'static str) -> bool {
+        false
+    }
+
+    /// Read an integer setting.
+    #[must_use]
+    pub const fn get_int(self, _name: &'static str) -> i64 {
+        0
+    }
+
+    /// Read a double setting.
+    #[must_use]
+    pub const fn get_double(self, _name: &'static str) -> f64 {
+        0.0
+    }
+
+    /// Read a string setting.
+    #[must_use]
+    pub const fn get_string(self, _name: &'static str) -> &'static str {
+        ""
+    }
+
+    /// Fall back to the generic typed read used by older mods.
+    #[must_use]
+    pub const fn get<T: crate::SettingValue>(self, _name: &'static str) -> T {
+        T::STUB
+    }
+
+    /// Index into a setting entry (`.value` still opaque for uncommon types).
+    #[must_use]
+    pub fn setting(self, _name: &'static str) -> ModSettingValue {
+        UNIT_MOD_SETTING
+    }
+}
+
+impl std::ops::Index<&str> for SettingsDictionary {
+    type Output = ModSettingValue;
+
+    fn index(&self, _key: &str) -> &ModSettingValue {
+        &UNIT_MOD_SETTING
+    }
+}
+
 pub struct SettingTable {
-    pub startup: crate::LuaAny,
-    pub global: crate::LuaAny,
-    pub player_default: crate::LuaAny,
+    pub startup: SettingsDictionary,
+    pub global: SettingsDictionary,
+    pub player_default: SettingsDictionary,
 }
 
 pub const settings: SettingTable = SettingTable {
-    startup: crate::LuaAny,
-    global: crate::LuaAny,
-    player_default: crate::LuaAny,
+    startup: SettingsDictionary,
+    global: SettingsDictionary,
+    player_default: SettingsDictionary,
 };
 
 pub struct LuaDataInterface;

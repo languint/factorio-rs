@@ -1,5 +1,5 @@
 factorio_rs::control_mod! {
-    use factorio_rs::prelude::*;
+    use factorio_rs::{factorio_api::IndexOrName, prelude::*};
 
     /// Locale keys for greetings (`__1__` is the player name).
     /// Indices are 1-based in the `/greet <n>` command (`/greet 1` ... `/greet 3`).
@@ -48,7 +48,7 @@ factorio_rs::control_mod! {
 
     pub fn greet(command: CustomCommandData) {
         if let Some(player_index) = command.player_index
-            && let Some(player) = game.get_player(player_index.into())
+            && let Some(player) = game.get_player(IndexOrName::Index(player_index))
         {
             if let Some(parameter) = command.parameter {
                 if parameter == "1" {

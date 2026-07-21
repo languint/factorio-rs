@@ -198,6 +198,43 @@ impl ApiType {
             .unwrap_or_default()
     }
 
+    /// Attributes of a `LuaStruct` complex type, as `(name, read/write type, optional)`.
+    ///
+    /// Prefers `read_type` when present, otherwise `write_type`.
+    pub fn attributes(&self) -> Vec<(String, ApiType, bool)> {
+        self.0
+            .get("attributes")
+            .and_then(|value| value.as_array())
+            .map(|attrs| {
+                attrs
+                    .iter()
+                    .filter_map(|a| {
+                        let name = a.get("name")?.as_str()?.to_string();
+                        let ty = a
+                            .get("read_type")
+                            .or_else(|| a.get("write_type"))
+                            .cloned()
+                            .map(ApiType)?;
+                        let optional = a.get("optional").and_then(|v| v.as_bool()).unwrap_or(false);
+                        Some((name, ty, optional))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Whether this dictionary maps keys to the literal `true` (Factorio flag sets).
+    pub fn is_flag_set_dictionary(&self) -> bool {
+        if self.complex_type() != Some("dictionary") {
+            return false;
+        }
+        let Some(value) = self.child_type("value") else {
+            return false;
+        };
+        value.complex_type() == Some("literal")
+            && value.0.get("value").and_then(serde_json::Value::as_bool) == Some(true)
+    }
+
     /// Non-`nil` arms of a `union` complex type.
     pub fn non_nil_options(&self) -> Vec<ApiType> {
         self.options()

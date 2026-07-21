@@ -41,7 +41,8 @@ parent struct can remain `Copy`.
 ## Identification enums
 
 Mixed unions such as `ForceID`, `PlayerIdentification`, `ScriptRenderTarget`,
-and `ForceSet` are generated as enums with `From` arms for each payload:
+and `ForceSet` are generated as enums. Prefer **exact constructors**; the
+frontend lowers them to the Factorio payload (no `.into()` needed):
 
 ```rust
 pub enum ForceID {
@@ -50,18 +51,16 @@ pub enum ForceID {
     Force(LuaForce),
 }
 
-// ForceSet also accepts LuaForce / &str / u8 via From
 surface.find_entities_filtered(EntitySearchFilters {
     area: Some(area),
-    force: Some(source.force().into()),
-    name: Some(source.name().into()),
+    force: Some(ForceSet::One(ForceID::Force(source.force()))),
+    name: Some(EntityID::Name(source.name())),
     ..Default::default()
 });
 ```
 
-Prefer `.into()` on payloads (`force.into()`, `"enemy".into()`) over enum
-constructors like `ForceID::Name(...)`, which are rejected by the
-[`identification_ctor`](lints/#identification_ctor-e0005) lint.
+`From` impls still exist for compatibility, but constructors keep the intended
+arm visible at the call site.
 
 `T | array<T>` in the schema collapses to `T` at the stub layer (the array form
 is still valid in Lua; it just isn’t modeled in Rust yet).
@@ -70,10 +69,23 @@ Anonymous `uint32 | string` parameters (`game.get_player`, `game.get_surface`,
 ...) use `IndexOrName`:
 
 ```rust
-if let Some(player) = game.get_player(player_index.into()) {
+if let Some(player) = game.get_player(IndexOrName::Index(player_index)) {
     // ...
 }
 ```
+
+## Flag sets, Tags, and LuaStructs
+
+- **Flag sets** (`MouseButtonFlags`, `SelectionModeFlags`,
+  `EntityPrototypeFlags`, ...): `Copy` structs with `flags: &'static [&str]`.
+  Lowers to `{ ["left"] = true, ... }`.
+- **`Tags`**: `Tags { pairs: &[TagPair { key, value }] }` for string values.
+- **`GameViewSettings` / `MapSettings` / `DifficultySettings`**: generated from
+  schema `LuaStruct` attributes (no longer `LuaAny`).
+- **`MapGenSize` / `RenderLayer`**: payload enums (`Number` / `Named`);
+  constructors lower like Identification enums.
+- **`script.on_event` filters**: `Option<Vec<EventFilterEntry>>` (same entries as
+  `#[factorio_rs::event(filter = ...)]`).
 
 ## Callbacks (`LuaFunction`)
 
@@ -124,14 +136,14 @@ lowers to the same Lua property write form.
 
 Keep using `LuaAny` (or expect it) for truly open values:
 
-- `Any` / `AnyBasic`
-- Unstructured `table`
-- `Tags` and similar open dictionaries
-- A few leftover heterogeneous unions not covered by Identification enums
+- `Any` / `AnyBasic` payloads (including non-string Tag values)
+- Unstructured anonymous `table` parameters
+- Prototype graphics / animation packs still skipped by the classifier
+- `storage[...]` indexing and polymorphic lua stdlib helpers
+- Self-referential concept fields that must stay `Copy` (`MapLocation.position`)
 
-Prefer concrete concepts and Identification enums whenever the stubs expose
-them. Reaching for `.into()` should mean “this API accepts several Factorio
-shapes.”
+Prefer concrete concepts, flag sets, and Identification enums whenever the stubs
+expose them.
 
 ## Globals
 

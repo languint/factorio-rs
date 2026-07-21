@@ -12,13 +12,13 @@ screen frame + label, then tune layout with `style().set_width` / `set_padding`.
 #[factorio_rs::control]
 mod control {
     use factorio_rs::{
-        factorio_api::classes::LuaGuiElementAddParams,
+        factorio_api::{classes::LuaGuiElementAddParams, IndexOrName},
         prelude::*,
     };
 
     #[factorio_rs::event(OnPlayerCreated)]
     pub fn on_player_created(event: OnPlayerCreatedEvent) {
-        if let Some(player) = game.get_player(event.player_index.into()) {
+        if let Some(player) = game.get_player(IndexOrName::Index(event.player_index)) {
             let frame = player.gui().screen().add(LuaGuiElementAddParams {
                 r#type: GuiElementType::Frame,
                 name: Some("gui_basics_root".into()),

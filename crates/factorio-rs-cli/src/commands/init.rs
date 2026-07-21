@@ -29,7 +29,7 @@ factorio_version = "2.0"
 # expect = "allow"
 # format_spec = "allow"
 # variable_index = "deny"
-# identification_ctor = "deny"
+# identification_ctor = "allow"  # obsolete; constructors lower to payloads
 # option_if = "deny"
 # ambiguous_try = "deny"
 # ambiguous_method = "deny"
@@ -78,8 +78,6 @@ ignore = ["dist", ".factorio-rs", "target", "src/factorio_exports.rs"]
 [jobs.factorio-check]
 command = ["factorio-rs", "check"]
 need_stdout = true
-# Do not use Bacon's default watches (`examples`, workspace packages, …) —
-# in a Cargo workspace that watches `examples/` recursively and sees `dist/` writes.
 default_watch = false
 watch = ["src", "Factorio.toml", "Cargo.toml"]
 

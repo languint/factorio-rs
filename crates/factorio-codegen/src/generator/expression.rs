@@ -195,6 +195,20 @@ impl LuaGenerator {
             return format!("{receiver}[{key}].value");
         }
 
+        // Typed settings accessors share the same Lua shape as `.get`.
+        if matches!(
+            method,
+            "get_bool" | "get_int" | "get_double" | "get_string" | "setting"
+        ) && args.len() == 1
+        {
+            let receiver = self.generate_expression(receiver);
+            let key = self.generate_expression(&args[0]);
+            if method == "setting" {
+                return format!("{receiver}[{key}]");
+            }
+            return format!("{receiver}[{key}].value");
+        }
+
         // `storage.set(key, value)` -> `storage[key] = value` (Factorio persistent table).
         if method == "set" && args.len() == 2 && is_storage_receiver(receiver) {
             let receiver = self.generate_expression(receiver);
@@ -259,44 +273,8 @@ impl LuaGenerator {
         struct_name: Option<&str>,
         fields: &[(String, Expression)],
     ) -> String {
-        // Research ingredients are Factorio tuples `{ "pack", amount }`, not named tables.
-        if struct_name == Some("TechnologyUnitIngredient") {
-            let name = fields
-                .iter()
-                .find_map(|(n, v)| (n == "name").then(|| self.generate_expression(v)));
-            let amount = fields
-                .iter()
-                .find_map(|(n, v)| (n == "amount").then(|| self.generate_expression(v)));
-            if let (Some(name), Some(amount)) = (name, amount) {
-                let literal = format!("{{ {name}, {amount} }}");
-                return if let Some((_, table_path)) = &self.struct_table_context {
-                    format!("setmetatable({literal}, {{ __index = {table_path} }})")
-                } else {
-                    literal
-                };
-            }
-        }
-
-        // Bounding box: Factorio expects `{{left_top}, {right_bottom}}`.
-        if struct_name == Some("BoundingBox") {
-            let get = |key: &str| {
-                fields
-                    .iter()
-                    .find_map(|(n, v)| (n == key).then(|| self.generate_expression(v)))
-            };
-            if let (Some(lx), Some(ly), Some(rx), Some(ry)) = (
-                get("left_top_x"),
-                get("left_top_y"),
-                get("right_bottom_x"),
-                get("right_bottom_y"),
-            ) {
-                let literal = format!("{{{{ {lx}, {ly} }}, {{ {rx}, {ry} }}}}");
-                return if let Some((_, table_path)) = &self.struct_table_context {
-                    format!("setmetatable({literal}, {{ __index = {table_path} }})")
-                } else {
-                    literal
-                };
-            }
+        if let Some(literal) = self.try_special_struct_literal(struct_name, fields) {
+            return self.maybe_struct_metatable(literal);
         }
 
         // Recipe ingredients: `type = "item"` or `"fluid"` from the `fluid` bool field.
@@ -315,7 +293,6 @@ impl LuaGenerator {
             };
 
         let type_prefix = injected_type.map(|t| format!("type = \"{t}\", "));
-
         let field_strs = fields
             .iter()
             .filter(|(name, value)| {
@@ -355,13 +332,90 @@ impl LuaGenerator {
             Some(prefix) => prefix.trim_end_matches(", ").to_string(),
             None => field_strs,
         };
-        let literal = format!("{{ {inner} }}");
+        self.maybe_struct_metatable(format!("{{ {inner} }}"))
+    }
 
+    /// Special Factorio shapes (tech ingredients, flag sets, `Tags`, `BoundingBox`).
+    fn try_special_struct_literal(
+        &self,
+        struct_name: Option<&str>,
+        fields: &[(String, Expression)],
+    ) -> Option<String> {
+        // Research ingredients are Factorio tuples `{ "pack", amount }`, not named tables.
+        if struct_name == Some("TechnologyUnitIngredient") {
+            let name = fields
+                .iter()
+                .find_map(|(n, v)| (n == "name").then(|| self.generate_expression(v)))?;
+            let amount = fields
+                .iter()
+                .find_map(|(n, v)| (n == "amount").then(|| self.generate_expression(v)))?;
+            return Some(format!("{{ {name}, {amount} }}"));
+        }
+
+        // Flag sets: `{ flags = {"left", "right"} }` -> `{ ["left"] = true, ... }`.
+        if let Some(name) = struct_name
+            && is_flag_set_struct(name)
+            && let Some(flags_expr) = fields.iter().find_map(|(n, v)| (n == "flags").then_some(v))
+        {
+            return Some(generate_flag_set_table(flags_expr));
+        }
+
+        // Tags / PropertyExpressionNames: `{ pairs = [...] }` -> `{ [key] = value, ... }`.
+        if matches!(struct_name, Some("Tags" | "PropertyExpressionNames"))
+            && let Some(pairs_expr) = fields.iter().find_map(|(n, v)| (n == "pairs").then_some(v))
+        {
+            return Some(self.generate_string_pair_table(pairs_expr));
+        }
+
+        // Bounding box: Factorio expects `{{left_top}, {right_bottom}}`.
+        if struct_name == Some("BoundingBox") {
+            let get = |key: &str| {
+                fields
+                    .iter()
+                    .find_map(|(n, v)| (n == key).then(|| self.generate_expression(v)))
+            };
+            if let (Some(lx), Some(ly), Some(rx), Some(ry)) = (
+                get("left_top_x"),
+                get("left_top_y"),
+                get("right_bottom_x"),
+                get("right_bottom_y"),
+            ) {
+                return Some(format!("{{{{ {lx}, {ly} }}, {{ {rx}, {ry} }}}}"));
+            }
+        }
+
+        None
+    }
+
+    fn maybe_struct_metatable(&self, literal: String) -> String {
         if let Some((_, table_path)) = &self.struct_table_context {
             format!("setmetatable({literal}, {{ __index = {table_path} }})")
         } else {
             literal
         }
+    }
+
+    /// Array of `{ key, value }` structs -> `{ [key] = value, ... }`.
+    fn generate_string_pair_table(&self, pairs_expr: &Expression) -> String {
+        let entries = match pairs_expr {
+            Expression::Array { elements } => elements
+                .iter()
+                .filter_map(|item| match item {
+                    Expression::StructLiteral { fields, .. } => {
+                        let key = fields
+                            .iter()
+                            .find_map(|(n, v)| (n == "key").then(|| self.generate_expression(v)))?;
+                        let value = fields.iter().find_map(|(n, v)| {
+                            (n == "value").then(|| self.generate_expression(v))
+                        })?;
+                        Some(format!("[{key}] = {value}"))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        format!("{{ {} }}", entries.join(", "))
     }
 
     fn generate_enum_literal(
@@ -468,6 +522,34 @@ fn is_storage_receiver(receiver: &Expression) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_flag_set_struct(name: &str) -> bool {
+    matches!(
+        name,
+        "MouseButtonFlags"
+            | "SelectionModeFlags"
+            | "EntityPrototypeFlags"
+            | "ItemPrototypeFlags"
+            | "TriggerTargetMask"
+    )
+}
+
+/// `{ "left", "right" }` array -> `{ ["left"] = true, ... }`.
+fn generate_flag_set_table(flags_expr: &Expression) -> String {
+    let keys = match flags_expr {
+        Expression::Array { elements } => elements
+            .iter()
+            .filter_map(|item| match item {
+                Expression::Literal(factorio_ir::literal::Literal::String(s)) => {
+                    Some(format!("[\"{s}\"] = true"))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+    format!("{{ {} }}", keys.join(", "))
 }
 
 /// Drop trailing `nil` literals from call/method argument lists.

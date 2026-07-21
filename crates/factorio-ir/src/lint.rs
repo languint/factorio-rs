@@ -17,7 +17,8 @@ pub enum LintId {
     FormatSpec,
     /// Non-literal array indices are not shifted for Lua's 1-based tables.
     VariableIndex,
-    /// Identification enum constructors (e.g. `ForceID::Name(...)`) are not lowered; use `.into()`.
+    /// Obsolete: Identification constructors now lower to their payload. Kept so
+    /// existing `[lints] identification_ctor = ...` keys still parse.
     IdentificationCtor,
     /// Plain `if option` / `while option` uses Lua truthiness (`Some(false)` is skipped).
     OptionIf,
@@ -95,7 +96,6 @@ impl LintId {
             Self::Unwrap
             | Self::Expect
             | Self::VariableIndex
-            | Self::IdentificationCtor
             | Self::OptionIf
             | Self::AmbiguousTry
             | Self::AmbiguousMethod
@@ -104,6 +104,8 @@ impl LintId {
             | Self::ErrNil
             | Self::OptionTry
             | Self::StructRest => LintLevel::Deny,
+            // Constructors lower to payloads; keep the id for config compatibility only.
+            Self::IdentificationCtor => LintLevel::Allow,
         }
     }
 
@@ -119,7 +121,7 @@ impl LintId {
                 "literal indices are shifted `n -> n+1`; pass a 1-based index or use a literal"
             }
             Self::IdentificationCtor => {
-                "pass a payload with `.into()` instead, e.g. `force.into()` or `\"enemy\".into()`"
+                "Identification constructors (`ForceID::Name(...)`) now lower to the payload; this lint is unused"
             }
             Self::OptionIf => {
                 "use `if let Some(x) = opt` or `opt.is_some()` (Lua truthiness skips `Some(false)`)"
@@ -358,6 +360,7 @@ mod tests {
         assert_eq!(config.level(LintId::OptionTry), LintLevel::Deny);
         assert_eq!(config.level(LintId::IntegerDiv), LintLevel::Warn);
         assert_eq!(config.level(LintId::StructRest), LintLevel::Deny);
+        assert_eq!(config.level(LintId::IdentificationCtor), LintLevel::Allow);
     }
 
     #[test]

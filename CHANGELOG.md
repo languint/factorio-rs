@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`factorio-rs init --bacon`**: write a `bacon.toml` with `factorio-check`,
   `factorio-reload`, and `factorio-test` jobs.
 - Docs recipe: [Hot reload with Bacon](docs/src/content/docs/recipes/hot-reload-bacon.md).
+- Typed **LuaStruct** concepts: `GameViewSettings`, `MapSettings`,
+  `DifficultySettings`.
+- **Flag-set** concepts (`MouseButtonFlags`, `SelectionModeFlags`,
+  `EntityPrototypeFlags`, `ItemPrototypeFlags`, `TriggerTargetMask`) with
+  dict-of-true Lua lowering.
+- Named **`Tags`**, **`PropertyExpressionNames`**, **`MapGenSize`**,
+  **`RenderLayer`** concepts (replacing ambient `LuaAny` at those boundaries).
+- **`script.on_event` / `set_event_filter`** filters typed as
+  `Option<Vec<EventFilterEntry>>`.
+- **`SettingsDictionary`** accessors: `get_bool` / `get_int` / `get_double` /
+  `get_string` (plus existing generic `.get::<T>()`).
+
+### Changed
+
+- Identification enum constructors (`ForceID::Name(...)`, `IndexOrName::Index`,
+  ...) **lower to their payload**; prefer exact constructors over `.into()`.
+  Lint `identification_ctor` (`E0005`) is unused and defaults to `allow`.
 
 ### Fixed
 

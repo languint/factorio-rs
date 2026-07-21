@@ -48,5 +48,6 @@ Full pattern rules: [Supported Rust -> match](../guides/language/#match).
 ## Not the same as API unions
 
 Factorio literal unions (`GuiDirection`, ...) stay **Lua strings**. Your enums
-are tagged tables. Prefer `.into()` for Identification enums from the stubs -
+are tagged tables. Prefer Identification constructors such as
+`ForceID::Name("enemy")` (they lower to the Factorio payload) -
 see [API types](../guides/api-types/).

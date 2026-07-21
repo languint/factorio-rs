@@ -450,6 +450,13 @@ fn classify_simple_name(name: &str, optional: bool) -> Option<FieldKind> {
     if is_integer_name(name) {
         return Some(opt(FieldKind::I64, FieldKind::OptI64, optional));
     }
+    if matches!(
+        name,
+        "EntityPrototypeFlags" | "ItemPrototypeFlags" | "SpriteFlags"
+    ) {
+        // Data-stage flag lists are string arrays
+        return Some(opt(FieldKind::StrSlice, FieldKind::OptStrSlice, optional));
+    }
     if name == "Color" {
         return Some(opt(FieldKind::Color, FieldKind::OptColor, optional));
     }

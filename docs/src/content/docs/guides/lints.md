@@ -68,7 +68,7 @@ No Lua is written in that case.
 | `expect` | `E0002` | deny | `.expect(...)` |
 | `format_spec` | `E0003` | warn | Format specs other than `:?` / `#?` |
 | `variable_index` | `E0004` | deny | Non-literal `expr[index]` |
-| `identification_ctor` | `E0005` | deny | `ForceID::Name(...)`-style constructors |
+| `identification_ctor` | `E0005` | allow | Obsolete; Identification constructors lower to payloads |
 | `option_if` | `E0006` | deny | Plain `if` / `while` on an Option binding (Lua truthiness) |
 | `ambiguous_try` | `E0007` | deny | `?` on an untyped local |
 | `ambiguous_method` | `E0008` | deny | `.map` / overlapping helpers on an untyped local |
@@ -134,17 +134,16 @@ let item = inventory[i]; // only if `i` is already 1-based
 
 ### `identification_ctor` (`E0005`)
 
-Schema “identification” unions (`ForceID`, `EntityID`, ...) are stub enums in
-Rust. Writing `ForceID::Name("enemy")` does not lower to a real Lua value.
-Pass the payload with `.into()` instead:
+Obsolete. Identification constructors such as `ForceID::Name("enemy")` now
+lower to the Factorio payload. The lint id remains so older
+`[lints] identification_ctor = ...` keys still parse; the default level is
+`allow` and nothing emits it.
+
+Prefer exact constructors over payload `.into()`:
 
 ```rust
-// Bad
-force: Some(ForceID::Name("enemy")),
-
-// Good
-force: Some("enemy".into()),
-force: Some(source.force().into()),
+force: Some(ForceSet::One(ForceID::Name("enemy"))),
+force: Some(ForceSet::One(ForceID::Force(source.force()))),
 ```
 
 See [API types](api-types/) for Identification / `IndexOrName` details.
@@ -262,4 +261,4 @@ supported construct (see [Supported Rust](language/)).
 - [`[lints]` in Factorio.toml](../reference/factorio-toml/#lints) - config keys
 - [Supported Rust](language/) - what lowers, and the safety trap table
 - [Option and Result](option-and-result/) - nil / `{ ok }` / `{ err }` / `?`
-- [API types](api-types/) - Identification enums and `.into()`
+- [API types](api-types/) - Identification enums and exact constructors

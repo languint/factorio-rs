@@ -1120,7 +1120,6 @@ fn print_report(expected: &[factorio_frontend::FactorioTest], outcome: &SuiteOut
     if !failed_names.is_empty() {
         println!("\nfailures:\n");
         for (name, message) in &failed_names {
-            // Unstyled — Bacon matches `^---- (.+) stdout ----$` on plain lines.
             println!("---- {name} stdout ----");
             if let Some(message) = message {
                 println!("{message}");

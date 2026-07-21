@@ -134,7 +134,7 @@ Factorio APIs are full of missing values and fallible helpers. Prefer Rust
 tables.
 
 ```rust
-if let Some(player) = game.get_player(index.into()) {
+if let Some(player) = game.get_player(IndexOrName::Index(index)) {
     // ...
 }
 
@@ -325,7 +325,7 @@ still fails the build as unsupported syntax when known unsafe.
 | Inline `mod` without `#[export]` | Contents skipped; lint E0009 | Export the mod or use a file module |
 | `arr[i]` with variable `i` | Not +1 for Lua | Use a 1-based index, or literal indices |
 | `{:.2}` / other format specs | Ignored output | Use `{}` / `{:?}` only |
-| `ForceID::Name(...)` etc. | Not a real Lua ctor; lint E0005 | `"enemy".into()` / `force.into()` |
+| `ForceID::Name(...)` etc. | Lowers to the payload | Prefer constructors over `.into()` |
 | Trailing `None` args | Omitted from Lua calls | Prefer omit / `None` only for unused tails |
 | `if c { a } else { b }` when `a` is falsey | Was wrong with `and`/`or`; now safe IIFE | Prefer statement `if` for complex arms |
 | Optional table fields | Typed `Option<T>`; `None` omitted | Set `Some(...)` only for fields you need |

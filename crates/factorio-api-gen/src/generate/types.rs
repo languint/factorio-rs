@@ -22,6 +22,8 @@ pub struct KnownTypes<'a> {
     pub unions: &'a BTreeSet<String>,
     /// Registry used to resolve anonymous/named literal unions to enum names.
     pub union_registry: &'a UnionRegistry,
+    /// Flag-set concepts (`MouseButtonFlags`, ...) lowered as dict-of-true tables.
+    pub flag_sets: &'a BTreeSet<String>,
 }
 
 fn union_type_path(name: &str) -> TokenStream {
@@ -72,6 +74,7 @@ pub fn return_stub_for_type(api_type: &ApiType, known: &KnownTypes<'_>) -> Retur
             "boolean" => ReturnStub::Bool,
             "string" => ReturnStub::Str,
             "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => ReturnStub::Default,
+            "EventFilter" => ReturnStub::Vec(Box::new(ReturnStub::Default)),
             // Exact integer types - stub with `{ 0 }` (inferred by Rust to the return type).
             "uint8" | "uint16" | "uint32" | "uint64" | "uint" | "int8" | "int16" | "int32"
             | "int64" | "int" | "MapTick" | "Tick" | "ItemStackIndex" | "ItemCountType"
@@ -344,6 +347,7 @@ fn map_simple_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
         "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => {
             quote!(crate::LocalisedString)
         }
+        "EventFilter" => quote!(Vec<crate::EventFilterEntry>),
         "boolean" => quote!(bool),
         "nil" | "void" => quote!(()),
         n if is_integer_api_type(n) || matches!(n, "float" | "double" | "number") => {
@@ -652,6 +656,7 @@ fn map_simple_field_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
     match name {
         // Use owned String for struct fields - &str needs a lifetime parameter.
         "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => quote!(String),
+        "EventFilter" => quote!(Vec<crate::EventFilterEntry>),
         "boolean" => quote!(bool),
         "nil" | "void" => quote!(()),
         n if is_integer_api_type(n) || matches!(n, "float" | "double" | "number") => {
@@ -675,6 +680,7 @@ fn map_simple_field_type(name: &str, known: &KnownTypes<'_>) -> TokenStream {
 fn map_simple_field_type_unboxed(name: &str, known: &KnownTypes<'_>) -> TokenStream {
     match name {
         "string" | "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => quote!(String),
+        "EventFilter" => quote!(Vec<crate::EventFilterEntry>),
         "boolean" => quote!(bool),
         "nil" | "void" => quote!(()),
         n if is_integer_api_type(n) || matches!(n, "float" | "double" | "number") => {
@@ -700,6 +706,7 @@ pub fn map_simple_copy_field_type(name: &str, known: &KnownTypes<'_>) -> TokenSt
         "LocalisedString" | "LuaLazyLoadedValueLocalisedString" => {
             quote!(crate::LocalisedString)
         }
+        "EventFilter" => quote!(&'static [crate::EventFilterEntry]),
         "boolean" => quote!(bool),
         "nil" | "void" => quote!(()),
         n if is_integer_api_type(n) || matches!(n, "float" | "double" | "number") => {

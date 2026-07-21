@@ -32,7 +32,7 @@ use factorio_rs::prelude::*;
 use crate::settings::Settings;
 
 fn casual_mode() -> bool {
-    settings.startup.get::<bool>(Settings::CASUAL_MODE)
+    settings.startup.get_bool(Settings::CASUAL_MODE)
 }
 
 #[factorio_rs::event(OnSingleplayerInit)]

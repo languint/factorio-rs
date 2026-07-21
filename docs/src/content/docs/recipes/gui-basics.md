@@ -13,13 +13,13 @@ reads/writes: [API types](../guides/api-types/).
 
 ```rust
 use factorio_rs::{
-    factorio_api::classes::LuaGuiElementAddParams,
+    factorio_api::{classes::LuaGuiElementAddParams, IndexOrName},
     prelude::*,
 };
 
 #[factorio_rs::event(OnPlayerCreated)]
 pub fn on_player_created(event: OnPlayerCreatedEvent) {
-    if let Some(player) = game.get_player(event.player_index.into()) {
+    if let Some(player) = game.get_player(IndexOrName::Index(event.player_index)) {
         let frame = player.gui().screen().add(LuaGuiElementAddParams {
             r#type: GuiElementType::Frame,
             name: Some("my_mod_root".into()),
@@ -45,7 +45,8 @@ pub fn on_player_created(event: OnPlayerCreatedEvent) {
 
 `r#type` is Rust’s way of naming Factorio’s `type` field (`frame`, `label`, ...).
 `GuiElementType` lives in the prelude via generated unions.
-`player_index.into()` builds the `IndexOrName` Factorio accepts for `get_player`.
+`IndexOrName::Index(player_index)` is the typed form Factorio accepts for
+`get_player` (prefer constructors over `.into()`).
 
 ## 2. What lowers to Lua
 
@@ -76,8 +77,8 @@ Create a new player (or join a map). You should see a titled frame with a label.
   later (`frame["child_name"]` / `children`).
 - Prefer `style().set_*` for width/height/padding; use `set_style("name")` when
   you want a style **prototype**, not one property.
-- `Tags` and choose-elem filters still type as `LuaAny` - escape hatches for
-  richer widgets; stick to frame/label/button for starters.
+- `Tags` uses `Tags { pairs: &[TagPair { .. }] }` for string values; choose-elem
+  filters are still sparse - stick to frame/label/button for starters.
 
 ## See also
 

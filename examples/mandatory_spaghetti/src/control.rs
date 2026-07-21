@@ -1,18 +1,22 @@
 use factorio_rs::{
     factorio_api::{
+        IndexOrName,
         classes::{
             self, LuaEntityDestroyParams, LuaEntityMineParams, LuaRenderingDrawLineParams,
             LuaSurfaceSpillInventoryParams,
         },
-        concepts::{BoundingBox, Color, EntitySearchFilters, MapPosition, ScriptRenderTarget},
+        concepts::{
+            BoundingBox, Color, EntityID, EntitySearchFilters, EntityWithQualityID, ForceID,
+            ForceSet, MapPosition, ScriptRenderTarget, SurfaceIdentification,
+        },
     },
     prelude::*,
 };
 
 use crate::{adjacent_blacklist, pattern_blacklist, settings::Settings};
 
-const CASUAL_MODE: bool = settings.startup.get::<bool>(Settings::CASUAL_MODE);
-const ADJACENCY_ENABLED: bool = settings.startup.get::<bool>(Settings::ADJACENCY_ENABLED);
+const CASUAL_MODE: bool = settings.startup.get_bool(Settings::CASUAL_MODE);
+const ADJACENCY_ENABLED: bool = settings.startup.get_bool(Settings::ADJACENCY_ENABLED);
 
 fn die(source: classes::LuaEntity) {
     let surface = source.surface();
@@ -35,14 +39,14 @@ fn die(source: classes::LuaEntity) {
             enable_looted: Some(true),
             inventory,
             position,
-            force: Some(force.into()),
+            force: Some(ForceID::Force(force)),
             ..Default::default()
         });
     } else {
         source.die(None, None);
     }
 
-    if let Some(ghost) = surface.find_entity("entity-ghost".into(), position) {
+    if let Some(ghost) = surface.find_entity(EntityWithQualityID::Name("entity-ghost"), position) {
         ghost.destroy(LuaEntityDestroyParams::default());
     }
 }
@@ -53,7 +57,7 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
     }
 
     if player_index != 0
-        && let Some(player) = game.get_player(player_index.into())
+        && let Some(player) = game.get_player(IndexOrName::Index(player_index))
     {
         let cursor = player.cursor_stack();
         if cursor.valid_for_read() && cursor.r#type() == "rail-planner" {
@@ -76,7 +80,7 @@ fn adjacency(source: classes::LuaEntity, player_index: u32) {
     };
     let entities = surface.find_entities_filtered(EntitySearchFilters {
         area: Some(area),
-        force: Some(source.force().into()),
+        force: Some(ForceSet::One(ForceID::Force(source.force()))),
         ..Default::default()
     });
 
@@ -130,9 +134,9 @@ fn find_pattern(source: classes::LuaEntity, mut offset: MapPosition) -> Vec<clas
                 right_bottom: offset,
                 ..Default::default()
             }),
-            name: Some(source.name().into()),
+            name: Some(EntityID::Name(source.name())),
             direction,
-            force: Some(source.force().into()),
+            force: Some(ForceSet::One(ForceID::Force(source.force()))),
             ..Default::default()
         });
 
@@ -166,7 +170,7 @@ fn draw_line(
         },
         from,
         to,
-        surface: surface.into(),
+        surface: SurfaceIdentification::Surface(surface),
         dash_length: Some(0.5),
         gap_length: Some(0.5),
         time_to_live: Some(60),
@@ -222,7 +226,11 @@ fn pattern(source: classes::LuaEntity) {
             );
             if !third_entities.is_empty() {
                 let third = third_entities[0];
-                draw_line(surface, source.position().into(), third.into());
+                draw_line(
+                    surface,
+                    ScriptRenderTarget::Position(source.position()),
+                    ScriptRenderTarget::Entity(third),
+                );
                 die(source);
                 return;
             } else {
@@ -235,7 +243,11 @@ fn pattern(source: classes::LuaEntity) {
                 );
                 if !back_entities.is_empty() {
                     let third = back_entities[0];
-                    draw_line(surface, entity.into(), third.into());
+                    draw_line(
+                        surface,
+                        ScriptRenderTarget::Entity(entity),
+                        ScriptRenderTarget::Entity(third),
+                    );
                     die(source);
                     return;
                 }
@@ -277,14 +289,21 @@ pub fn on_robot_built_entity(event: OnRobotBuiltEntityEvent) {
 
 #[cfg(test)]
 mod tests {
-    use factorio_rs::{factorio_api::classes::LuaSurfaceCreateEntityParams, prelude::*};
+    use factorio_rs::{
+        factorio_api::{
+            IndexOrName,
+            classes::LuaSurfaceCreateEntityParams,
+            concepts::{EntityID, ForceID, MapPosition},
+        },
+        prelude::*,
+    };
 
     use crate::adjacent_blacklist;
     use crate::control;
     use crate::pattern_blacklist;
 
     fn nauvis() -> factorio_rs::factorio_api::classes::LuaSurface {
-        if let Some(surface) = game.get_surface(1.into()) {
+        if let Some(surface) = game.get_surface(IndexOrName::Index(1)) {
             return surface;
         }
         panic!("expected nauvis surface at index 1");
@@ -293,9 +312,9 @@ mod tests {
     fn place_chest(x: f64, y: f64) -> factorio_rs::factorio_api::classes::LuaEntity {
         let surface = nauvis();
         if let Some(entity) = surface.create_entity(LuaSurfaceCreateEntityParams {
-            name: "iron-chest".into(),
+            name: EntityID::Name("iron-chest"),
             position: MapPosition { x, y },
-            force: Some("player".into()),
+            force: Some(ForceID::Name("player")),
             raise_built: Some(false),
             create_build_effect_smoke: Some(false),
             ..Default::default()

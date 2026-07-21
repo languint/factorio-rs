@@ -170,7 +170,7 @@ pub fn f(items: LuaAny) -> LuaAny {
 }
 
 #[test]
-fn deny_identification_ctor_collects_diagnostic() {
+fn identification_ctor_lowers_to_payload() {
     let source = r#"
 pub fn f() {
     let _id = ForceID::Name("enemy");
@@ -178,15 +178,30 @@ pub fn f() {
 "#;
     let lints = LintConfig::default();
     let mut diagnostics = Vec::new();
-    parse_module_with_options(
+    let module = parse_module_with_options(
         source,
         "control",
         &ParseOptions::new(&lints),
         &mut diagnostics,
     )
-    .expect("deny lints should not abort lowering");
-    assert_eq!(diagnostics.len(), 1);
-    assert_eq!(diagnostics[0].id, LintId::IdentificationCtor);
+    .expect("identification constructors should lower");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| d.id != LintId::IdentificationCtor),
+        "identification_ctor lint should not fire, got {diagnostics:?}"
+    );
+    let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
+        panic!("expected function");
+    };
+    let Statement::VariableDecl { value, .. } = &function.body.statements[0] else {
+        panic!("expected let");
+    };
+    assert!(matches!(
+        value,
+        factorio_ir::expression::Expression::Literal(factorio_ir::literal::Literal::String(s))
+            if s == "enemy"
+    ));
 }
 
 #[test]
@@ -513,10 +528,10 @@ mod inner {
 }
 
 #[test]
-fn identification_ctor_does_not_emit_call() {
+fn identification_ctor_force_payload_lowers() {
     let source = r#"
-pub fn f() {
-    let _id = ForceID::Name("enemy");
+pub fn f(force: LuaForce) {
+    let _id = ForceID::Force(force);
 }
 "#;
     let mut diagnostics = Vec::new();
@@ -527,7 +542,7 @@ pub fn f() {
         &mut diagnostics,
     )
     .expect("should lower");
-    assert_eq!(diagnostics[0].id, LintId::IdentificationCtor);
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
@@ -536,7 +551,7 @@ pub fn f() {
     };
     assert!(matches!(
         value,
-        factorio_ir::expression::Expression::Literal(factorio_ir::literal::Literal::Nil)
+        factorio_ir::expression::Expression::Identifier(name) if name == "force"
     ));
 }
 
