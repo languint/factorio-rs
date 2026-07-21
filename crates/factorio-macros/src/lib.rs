@@ -448,10 +448,19 @@ fn wrap_stage_module(stage: &str, input: TokenStream) -> TokenStream {
         &format!("__factorio_{stage}"),
         proc_macro2::Span::call_site(),
     );
+    let stage_lit = LitStr::new(stage, proc_macro2::Span::call_site());
     let items = proc_macro2::TokenStream::from(input);
+    // Inject `__factorio_rs_stage` so `-Zunpretty=expanded` discovery can recover
+    // the stage (the wrapper name `__factorio_{stage}` is not a path-based module).
     TokenStream::from(quote::quote! {
         #[doc(hidden)]
-        mod #module_name { #items }
+        mod #module_name {
+            #[doc(hidden)]
+            #[allow(non_upper_case_globals)]
+            const __factorio_rs_stage: &str = #stage_lit;
+
+            #items
+        }
     })
 }
 

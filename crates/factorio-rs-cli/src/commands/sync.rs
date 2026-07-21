@@ -7,7 +7,10 @@ use crate::{
     commands::{
         build::{BuildOptions, build},
         deploy::{DeployMode, deploy_mod, mod_dest},
-        hot_reload::{inject_hot_reload, note_stage_restart_if_needed},
+        hot_reload::{
+            HotReloadOptions, ReloadProbeMode, inject_hot_reload_with, note_stage_restart_if_needed,
+            publish_reload_gen,
+        },
     },
     config::Config,
     error::CliResult,
@@ -41,8 +44,20 @@ pub fn sync(project_root: &Path, options: &SyncOptions) -> CliResult<PathBuf> {
     let config = Config::load(project_root)?;
     let output_dir = project_root.join(&config.output_dir);
 
+    let mut pending_gen = None;
     if options.hot_reload {
-        let injected = inject_hot_reload(project_root, &output_dir, &package.name)?;
+        let injected = inject_hot_reload_with(
+            project_root,
+            &output_dir,
+            &package.name,
+            HotReloadOptions {
+                // Live games often need a second reload_mods() pass; automate it.
+                probe: ReloadProbeMode::Twice,
+                // Publish after deploy so the probe cannot fire mid-copy / mid-symlink.
+                publish_gen: false,
+            },
+        )?;
+        pending_gen = Some(injected.generation);
         if injected.bumped {
             status::status(
                 Status::Note,
@@ -84,6 +99,14 @@ pub fn sync(project_root: &Path, options: &SyncOptions) -> CliResult<PathBuf> {
             Status::Note,
             "symlink unavailable; copied mod directory instead",
         );
+    }
+
+    if let Some(generation) = pending_gen {
+        publish_reload_gen(&output_dir, generation)?;
+        if used == DeployMode::Copy {
+            // Copy deploy already finished; mirror the gen file into the mods entry.
+            publish_reload_gen(&dest, generation)?;
+        }
     }
 
     Ok(dest)

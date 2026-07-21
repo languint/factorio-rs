@@ -16,15 +16,21 @@ pub enum DeployMode {
 /// Remove `dest` if it exists (file, directory, or symlink), then deploy `source` there.
 ///
 /// Returns the mode actually used (`Symlink` may fall back to `Copy`).
+///
+/// When `dest` is already a symlink to `source`, the existing link is left alone so
+/// Factorio does not briefly lose the mod during hot-reload syncs.
 pub fn deploy_mod(source: &Path, dest: &Path, mode: DeployMode) -> CliResult<DeployMode> {
-    remove_dest(dest)?;
-
     match mode {
         DeployMode::Copy => {
+            remove_dest(dest)?;
             copy_dir_recursive(source, dest)?;
             Ok(DeployMode::Copy)
         }
         DeployMode::Symlink => {
+            if symlink_already_points_at(source, dest)? {
+                return Ok(DeployMode::Symlink);
+            }
+            remove_dest(dest)?;
             if try_symlink(source, dest)? {
                 Ok(DeployMode::Symlink)
             } else {
@@ -32,6 +38,33 @@ pub fn deploy_mod(source: &Path, dest: &Path, mode: DeployMode) -> CliResult<Dep
                 Ok(DeployMode::Copy)
             }
         }
+    }
+}
+
+fn symlink_already_points_at(source: &Path, dest: &Path) -> CliResult<bool> {
+    #[cfg(unix)]
+    {
+        let meta = match std::fs::symlink_metadata(dest) {
+            Ok(meta) => meta,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(source) => {
+                return Err(CliError::ReadFile {
+                    path: dest.to_path_buf(),
+                    source,
+                });
+            }
+        };
+        if !meta.file_type().is_symlink() {
+            return Ok(false);
+        }
+        let abs_source = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+        let abs_dest = std::fs::canonicalize(dest).unwrap_or_else(|_| dest.to_path_buf());
+        Ok(abs_source == abs_dest)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (source, dest);
+        Ok(false)
     }
 }
 
@@ -165,5 +198,25 @@ mod tests {
         assert_eq!(mode, DeployMode::Symlink);
         assert!(dst.is_symlink());
         assert!(dst.join("info.json").is_file());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_skips_recreate_when_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        let dst = tmp.path().join("dst");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("info.json"), "{}").unwrap();
+
+        deploy_mod(&src, &dst, DeployMode::Symlink).unwrap();
+        let first_ino = std::fs::symlink_metadata(&dst).unwrap();
+        deploy_mod(&src, &dst, DeployMode::Symlink).unwrap();
+        let second_ino = std::fs::symlink_metadata(&dst).unwrap();
+        assert_eq!(
+            first_ino.modified().unwrap(),
+            second_ino.modified().unwrap()
+        );
+        assert!(dst.is_symlink());
     }
 }

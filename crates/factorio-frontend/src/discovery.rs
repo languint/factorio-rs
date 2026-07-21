@@ -164,7 +164,7 @@ fn walk_expanded_items(
         if name == "factorio_exports" {
             continue;
         }
-        let module_name = if prefix.is_empty() {
+        let raw_module_name = if prefix.is_empty() {
             name.clone()
         } else {
             format!("{prefix}.{name}")
@@ -181,8 +181,16 @@ fn walk_expanded_items(
                     .as_deref()
                     .and_then(stage_from_marker)
             })
-            .or_else(|| Stage::from_module_name(&module_name))
+            .or_else(|| stage_from_bang_wrapper(&name))
+            .or_else(|| Stage::from_module_name(&raw_module_name))
             .or(inherited_stage);
+
+        // `control_mod!` expands to `mod __factorio_control { ... }`; emit the
+        // canonical stage module name (`control`) for Lua paths / manifests.
+        let module_name = stage.map_or_else(
+            || raw_module_name.clone(),
+            |stage| canonicalize_bang_wrapper_name(&raw_module_name, stage),
+        );
 
         let has_nested_mods = content.iter().any(|nested| matches!(nested, Item::Mod(_)));
         let has_lowerable = content.iter().any(is_lowerable_item);
@@ -222,6 +230,26 @@ fn walk_expanded_items(
     }
 }
 
+/// `control_mod!` / `data_mod!` / … expand to `mod __factorio_{stage}`.
+fn stage_from_bang_wrapper(name: &str) -> Option<Stage> {
+    name.strip_prefix("__factorio_")
+        .and_then(stage_from_marker)
+}
+
+/// Map `__factorio_control` / `__factorio_control.nested` → `control` / `control.nested`.
+fn canonicalize_bang_wrapper_name(module_name: &str, stage: Stage) -> String {
+    let wrapper = format!("__factorio_{}", stage.default_module_name());
+    if module_name == wrapper {
+        return stage.default_module_name().to_string();
+    }
+    if let Some(rest) = module_name.strip_prefix(&wrapper)
+        && let Some(nested) = rest.strip_prefix('.')
+    {
+        return format!("{}.{nested}", stage.default_module_name());
+    }
+    module_name.to_string()
+}
+
 fn stage_from_marker(marker: &str) -> Option<Stage> {
     match marker {
         "settings" => Some(Stage::Settings),
@@ -245,7 +273,7 @@ fn parse_macro_items(tokens: proc_macro2::TokenStream) -> FrontendResult<Vec<Ite
 mod tests {
     use std::path::Path;
 
-    use super::discover_modules;
+    use super::{discover_modules, discover_modules_from_expanded};
 
     #[test]
     fn discovers_control_block_macro_in_lib_rs() {
@@ -259,6 +287,48 @@ mod tests {
         ";
 
         let modules = discover_modules(source_dir, &source_path, source).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].module_name, "control");
+        assert_eq!(modules[0].stage, factorio_ir::stage::Stage::Control);
+    }
+
+    #[test]
+    fn discovers_expanded_control_mod_bang_wrapper() {
+        // Shape produced by `control_mod!` after rustc `-Zunpretty=expanded`.
+        let expanded = r#"
+            #[doc(hidden)]
+            mod __factorio_control {
+                #[doc(hidden)]
+                #[allow(non_upper_case_globals)]
+                const __factorio_rs_stage: &str = "control";
+
+                #[allow(dead_code)]
+                pub fn on_singleplayer_init() {}
+
+                #[doc(hidden)]
+                #[allow(non_upper_case_globals)]
+                pub const __factorio_rs_event__on_singleplayer_init: &str = "";
+            }
+        "#;
+
+        let modules = discover_modules_from_expanded(expanded).unwrap();
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].module_name, "control");
+        assert_eq!(modules[0].stage, factorio_ir::stage::Stage::Control);
+    }
+
+    #[test]
+    fn discovers_expanded_control_mod_bang_wrapper_by_name_alone() {
+        // Even without the stage marker const, the `__factorio_{stage}` wrapper
+        // name is enough to recover the stage.
+        let expanded = r#"
+            #[doc(hidden)]
+            mod __factorio_control {
+                pub fn on_singleplayer_init() {}
+            }
+        "#;
+
+        let modules = discover_modules_from_expanded(expanded).unwrap();
         assert_eq!(modules.len(), 1);
         assert_eq!(modules[0].module_name, "control");
         assert_eq!(modules[0].stage, factorio_ir::stage::Stage::Control);

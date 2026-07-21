@@ -182,6 +182,41 @@ mod control {
 }
 
 #[test]
+fn build_discovers_control_mod_bang() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let project_root = temp_dir.path();
+    std::fs::write(project_root.join("Factorio.toml"), FACTORIO_TOML).unwrap();
+    std::fs::write(project_root.join("Cargo.toml"), cargo_toml()).unwrap();
+    std::fs::create_dir_all(project_root.join("src")).unwrap();
+    std::fs::write(
+        project_root.join("src/lib.rs"),
+        r#"
+factorio_rs::control_mod! {
+    #[factorio_rs::event(OnSingleplayerInit)]
+    pub fn on_singleplayer_init() {
+        println!("Initialized");
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
+        .arg("build")
+        .current_dir(project_root)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let lua = std::fs::read_to_string(project_root.join("dist/lua/control.lua")).unwrap();
+    assert!(
+        lua.contains("on_singleplayer_init"),
+        "expected control_mod! event in lua:\n{lua}"
+    );
+    assert!(project_root.join("dist/control.lua").is_file());
+}
+
+#[test]
 fn build_removes_stale_lua_files() {
     let temp_dir = tempfile::tempdir().unwrap();
     let project_root = temp_dir.path();

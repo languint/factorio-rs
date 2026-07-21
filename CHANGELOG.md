@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: [Authoring macros](docs/src/content/docs/guides/authoring-macros.md)
   (pipeline, limitations, `macro_rules!` / proc-macro examples).
 
+### Fixed
+
+- Control hot-reload no longer needs a manual follow-up `/c game.reload_mods()`:
+  `sync --hot-reload` publishes the generation marker only after deploy, keeps an
+  existing mods symlink in place, and the in-game probe performs a second
+  `game.reload_mods()` pass automatically.
 ## [0.3.0] - 2026-07-21
 
 ### Added

@@ -17,6 +17,17 @@ const STAGE_FILES: &[&str] = &[
     "settings-final-fixes.lua",
 ];
 
+/// How the in-Lua probe should call `game.reload_mods()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReloadProbeMode {
+    /// Single `game.reload_mods()` when the generation changes (test listen/rerun).
+    Once,
+    /// After the first reload, automatically call `game.reload_mods()` again on the
+    /// next probe tick. Factorio often needs that second pass for control-stage
+    /// changes to take effect when iterating in a live game.
+    Twice,
+}
+
 /// Result of [`inject_hot_reload`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HotReloadInject {
@@ -25,17 +36,50 @@ pub struct HotReloadInject {
     pub bumped: bool,
 }
 
-/// Ensure the control probe exists and write `lua/factorio_rs_reload_gen.lua`.
+/// Options for [`inject_hot_reload`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HotReloadOptions {
+    pub probe: ReloadProbeMode,
+    /// When `false`, update `.factorio-rs` state and the control probe but do not
+    /// write `lua/factorio_rs_reload_gen.lua` yet. Call [`publish_reload_gen`] after
+    /// deploy so Factorio only sees the bump once the mod tree is ready.
+    pub publish_gen: bool,
+}
+
+impl Default for HotReloadOptions {
+    fn default() -> Self {
+        Self {
+            probe: ReloadProbeMode::Twice,
+            publish_gen: true,
+        }
+    }
+}
+
+/// Ensure the control probe exists and advance the reload generation.
 ///
 /// Generation only advances when **project sources** change (`src/**/*.rs`,
 /// `Factorio.toml`, `Cargo.toml`). Rebuilding identical sources keeps the same
 /// generation so Bacon/Factorio are not spuriously reloaded.
+///
+/// Convenience wrapper around [`inject_hot_reload_with`] with
+/// [`HotReloadOptions::default`] (double-reload probe, publish gen immediately).
+#[allow(dead_code)] // kept as the simple API; CLI paths use `inject_hot_reload_with`
 pub fn inject_hot_reload(
     project_root: &Path,
     output_dir: &Path,
     mod_name: &str,
 ) -> CliResult<HotReloadInject> {
-    ensure_probe(output_dir, mod_name)?;
+    inject_hot_reload_with(project_root, output_dir, mod_name, HotReloadOptions::default())
+}
+
+/// Like [`inject_hot_reload`] with explicit probe / publish behaviour.
+pub fn inject_hot_reload_with(
+    project_root: &Path,
+    output_dir: &Path,
+    mod_name: &str,
+    options: HotReloadOptions,
+) -> CliResult<HotReloadInject> {
+    ensure_probe(output_dir, mod_name, options.probe)?;
 
     let fingerprint = source_fingerprint(project_root)?;
     let state_dir = project_root.join(".factorio-rs");
@@ -65,6 +109,18 @@ pub fn inject_hot_reload(
     write_if_changed(&fp_path, &format!("{fingerprint}\n"))?;
     write_if_changed(&gen_path, &format!("{generation}\n"))?;
 
+    if options.publish_gen {
+        publish_reload_gen(output_dir, generation)?;
+    }
+
+    Ok(HotReloadInject { generation, bumped })
+}
+
+/// Write `lua/factorio_rs_reload_gen.lua` so the in-game probe can observe `generation`.
+///
+/// Call this **after** deploy when using deferred publish, so the generation bump is
+/// not visible while `dist/` is mid-rebuild or the mods entry is being replaced.
+pub fn publish_reload_gen(output_dir: &Path, generation: u64) -> CliResult<()> {
     let lua_dir = output_dir.join("lua");
     std::fs::create_dir_all(&lua_dir).map_err(|source| CliError::CreateDir {
         path: lua_dir.clone(),
@@ -74,8 +130,7 @@ pub fn inject_hot_reload(
     let gen_body =
         format!("-- factorio-rs hot-reload generation\nreturn {{ gen = {generation} }}\n");
     write_if_changed(&gen_lua_path, &gen_body)?;
-
-    Ok(HotReloadInject { generation, bumped })
+    Ok(())
 }
 
 /// Compare data/settings stage fingerprints; note when a full Factorio restart is needed.
@@ -103,7 +158,7 @@ pub fn note_stage_restart_if_needed(project_root: &Path, output_dir: &Path) -> C
     Ok(())
 }
 
-fn ensure_probe(output_dir: &Path, mod_name: &str) -> CliResult<()> {
+fn ensure_probe(output_dir: &Path, mod_name: &str, mode: ReloadProbeMode) -> CliResult<()> {
     let control_path = output_dir.join("control.lua");
     let mut control =
         std::fs::read_to_string(&control_path).map_err(|source| CliError::ReadFile {
@@ -118,7 +173,7 @@ fn ensure_probe(output_dir: &Path, mod_name: &str) -> CliResult<()> {
         control.push('\n');
     }
     control.push('\n');
-    control.push_str(&generate_probe_lua(mod_name));
+    control.push_str(&generate_probe_lua(mod_name, mode));
     write_if_changed(&control_path, &control)?;
     Ok(())
 }
@@ -210,7 +265,23 @@ fn stage_fingerprint(output_dir: &Path) -> CliResult<String> {
     }
 }
 
-fn generate_probe_lua(mod_name: &str) -> String {
+fn generate_probe_lua(mod_name: &str, mode: ReloadProbeMode) -> String {
+    let second_reload = match mode {
+        ReloadProbeMode::Once => String::new(),
+        ReloadProbeMode::Twice => r#"
+    if storage.__frs_reload_again then
+      storage.__frs_reload_again = nil
+      game.reload_mods()
+      return
+    end
+"#
+        .to_string(),
+    };
+    let arm_second = match mode {
+        ReloadProbeMode::Once => String::new(),
+        ReloadProbeMode::Twice => "      storage.__frs_reload_again = true\n".to_string(),
+    };
+
     format!(
         r#"{PROBE_MARKER}
 do
@@ -219,7 +290,15 @@ do
     if not game or not game.reload_mods then
       return
     end
-    package.loaded[gen_path] = nil
+{second_reload}    local stale = {{ gen_path }}
+    for loaded_key in pairs(package.loaded) do
+      if type(loaded_key) == "string" and loaded_key:find("factorio_rs_reload_gen", 1, true) then
+        stale[#stale + 1] = loaded_key
+      end
+    end
+    for i = 1, #stale do
+      package.loaded[stale[i]] = nil
+    end
     local ok, mod = pcall(require, gen_path)
     if not ok or type(mod) ~= "table" or mod.gen == nil then
       return
@@ -231,7 +310,7 @@ do
     end
     if storage.__frs_reload_gen ~= gen then
       storage.__frs_reload_gen = gen
-      game.reload_mods()
+{arm_second}      game.reload_mods()
     end
   end)
 end
@@ -284,5 +363,83 @@ mod tests {
         let fourth = inject_hot_reload(root, &out, "demo").unwrap();
         assert_eq!(fourth.generation, 2);
         assert!(fourth.bumped);
+    }
+
+    #[test]
+    fn deferred_publish_writes_gen_only_when_requested() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let out = root.join("dist");
+        let src = root.join("src");
+        std::fs::create_dir_all(out.join("lua")).unwrap();
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            root.join("Factorio.toml"),
+            "source = \"src\"\noutput_dir = \"dist\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("lib.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(out.join("control.lua"), "-- base\n").unwrap();
+
+        let injected = inject_hot_reload_with(
+            root,
+            &out,
+            "demo",
+            HotReloadOptions {
+                probe: ReloadProbeMode::Twice,
+                publish_gen: false,
+            },
+        )
+        .unwrap();
+        assert!(!out.join("lua").join(GEN_LUA).exists());
+
+        publish_reload_gen(&out, injected.generation).unwrap();
+        let body = std::fs::read_to_string(out.join("lua").join(GEN_LUA)).unwrap();
+        assert!(body.contains(&format!("gen = {}", injected.generation)));
+
+        let control = std::fs::read_to_string(out.join("control.lua")).unwrap();
+        assert!(control.contains("storage.__frs_reload_again"));
+    }
+
+    #[test]
+    fn once_probe_omits_second_reload_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let out = root.join("dist");
+        let src = root.join("src");
+        std::fs::create_dir_all(out.join("lua")).unwrap();
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(
+            root.join("Factorio.toml"),
+            "source = \"src\"\noutput_dir = \"dist\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("lib.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(out.join("control.lua"), "-- base\n").unwrap();
+
+        inject_hot_reload_with(
+            root,
+            &out,
+            "demo",
+            HotReloadOptions {
+                probe: ReloadProbeMode::Once,
+                publish_gen: true,
+            },
+        )
+        .unwrap();
+
+        let control = std::fs::read_to_string(out.join("control.lua")).unwrap();
+        assert!(control.contains(PROBE_MARKER));
+        assert!(!control.contains("storage.__frs_reload_again"));
     }
 }

@@ -15,7 +15,9 @@ use crate::{
     cargo_manifest::CargoPackage,
     commands::build::{BuildOptions, build},
     commands::deploy::{DeployMode, deploy_mod, mod_dest},
-    commands::hot_reload::inject_hot_reload,
+    commands::hot_reload::{
+        HotReloadOptions, ReloadProbeMode, inject_hot_reload_with, publish_reload_gen,
+    },
     commands::typecheck,
     config::Config,
     error::{CliError, CliResult},
@@ -123,8 +125,19 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
     })?;
 
     let mut hot_reload_bumped = true;
+    let mut pending_gen = None;
     if listen {
-        let injected = inject_hot_reload(project_root, &output_dir, &package.name)?;
+        let injected = inject_hot_reload_with(
+            project_root,
+            &output_dir,
+            &package.name,
+            HotReloadOptions {
+                // Single reload: a second pass would race the harness suite_end.
+                probe: ReloadProbeMode::Once,
+                publish_gen: false,
+            },
+        )?;
+        pending_gen = Some(injected.generation);
         hot_reload_bumped = injected.bumped;
         if injected.bumped {
             status::status(
@@ -142,6 +155,21 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
     let work_dir = project_root.join(".factorio-rs").join("test-run");
     let prefer_symlink = listen;
     ensure_work_dir(&work_dir, &output_dir, &package, prefer_symlink)?;
+    if let Some(generation) = pending_gen {
+        publish_reload_gen(&output_dir, generation)?;
+        let mod_path = mod_dest(
+            &work_dir.join("mods"),
+            &package.name,
+            &package.version,
+        );
+        if !mod_path
+            .symlink_metadata()
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            publish_reload_gen(&mod_path, generation)?;
+        }
+    }
 
     status::status(
         Status::Running,

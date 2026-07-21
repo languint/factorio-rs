@@ -68,9 +68,9 @@ If Bacon still loops after a sync, check that jobs set `default_watch = false`
 
 1. Install once and open a save: `factorio-rs install --open` (or `sync --symlink --hot-reload`).
 2. In another terminal: `bacon -j factorio-reload` (or press `r` in Bacon).
-3. Edit control-stage Rust -> Bacon rebuilds -> Factorio picks up `reload_gen` and calls `game.reload_mods()`.
+3. Edit control-stage Rust -> Bacon rebuilds -> Factorio picks up `reload_gen` and calls `game.reload_mods()` (then a second pass automatically — the same extra `/c game.reload_mods()` you would otherwise run by hand).
 
-`sync --hot-reload` writes `lua/factorio_rs_reload_gen.lua` and a small probe on `control.lua`. Prefer `--symlink` so the mods entry points at `dist/` (Unix; falls back to copy).
+`sync --hot-reload` writes `lua/factorio_rs_reload_gen.lua` **after** deploy and a small probe on `control.lua`. Prefer `--symlink` so the mods entry points at `dist/` (Unix; falls back to copy). The generation marker is published last so the probe cannot fire while the mod tree is still being replaced.
 
 **Data / settings stage:** prototype and settings changes still need a full Factorio restart. `sync` prints a note when those stage files change.
 
