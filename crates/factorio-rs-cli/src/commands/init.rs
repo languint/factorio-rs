@@ -55,11 +55,56 @@ const GITIGNORE: &str = r"/target
 /.factorio-rs/exports.json
 # Isolated mods dir used by `factorio-rs test`
 /.factorio-rs/test-run/
+# Hot-reload generation counter
+/.factorio-rs/reload_gen
+/.factorio-rs/reload_content_fp
+/.factorio-rs/sync_stage_fp
 /*.zip
 ";
 
+const BACON_TOML: &str = r#"# factorio-rs + Bacon: https://dystroy.org/bacon/
+# Install: cargo install --locked bacon
+# Usage: bacon
+#   job keys (defaults): c = factorio-check, r = factorio-reload, t = factorio-test
+
+default_job = "factorio-check"
+# Force ANSI so factorio-rs status/test colors survive Bacon's pipe capture.
+env.CARGO_TERM_COLOR = "always"
+# Prefer directory names (not `dist/**`): Bacon expands `dist` to both `**/dist`
+# and `**/dist/**`. `dist/**` alone misses events on the `dist` directory itself.
+# Also ignore generated exports so writes cannot retrigger jobs.
+ignore = ["dist", ".factorio-rs", "target", "src/factorio_exports.rs"]
+
+[jobs.factorio-check]
+command = ["factorio-rs", "check"]
+need_stdout = true
+# Do not use Bacon's default watches (`examples`, workspace packages, …) —
+# in a Cargo workspace that watches `examples/` recursively and sees `dist/` writes.
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+
+[jobs.factorio-reload]
+command = ["factorio-rs", "sync", "--symlink", "--hot-reload"]
+need_stdout = true
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+show_command_error_code = true
+
+[jobs.factorio-test]
+command = ["factorio-rs", "test", "--rerun"]
+need_stdout = true
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+show_command_error_code = true
+
+[keybindings]
+c = "job:factorio-check"
+r = "job:factorio-reload"
+t = "job:factorio-test"
+"#;
+
 /// Initialize a new factorio-rs project in `project_root`.
-pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
+pub fn init(project_root: &Path, package_name: Option<&str>, with_bacon: bool) -> CliResult<()> {
     let cargo_manifest = project_root.join("Cargo.toml");
     if cargo_manifest.exists() {
         return Err(CliError::AlreadyExists {
@@ -87,6 +132,9 @@ pub fn init(project_root: &Path, package_name: Option<&str>) -> CliResult<()> {
     write_file(&config_path, FACTORIO_CONFIG)?;
     write_file(&lib_rs, LIB_RS)?;
     write_file(&project_root.join(".gitignore"), GITIGNORE)?;
+    if with_bacon {
+        write_file(&project_root.join("bacon.toml"), BACON_TOML)?;
+    }
 
     Ok(())
 }

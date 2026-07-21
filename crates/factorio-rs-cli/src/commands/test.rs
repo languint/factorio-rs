@@ -14,6 +14,8 @@ use factorio_frontend::{
 use crate::{
     cargo_manifest::CargoPackage,
     commands::build::{BuildOptions, build},
+    commands::deploy::{DeployMode, deploy_mod, mod_dest},
+    commands::hot_reload::inject_hot_reload,
     commands::typecheck,
     config::Config,
     error::{CliError, CliResult},
@@ -22,6 +24,18 @@ use crate::{
 };
 
 const PROTOCOL_PREFIX: &str = "FACTORIO_RS_TEST";
+const LISTEN_PID_FILE: &str = "factorio-rs-listen.pid";
+
+/// How [`run_tests`] should manage the Factorio process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestMode {
+    /// Run once and exit (kill Factorio when finished, unless `--gui`).
+    Once,
+    /// Run once, keep Factorio alive, write a listen pid for `--rerun`.
+    Listen,
+    /// Sync into the listen workdir (start Factorio if needed) and wait for the next suite.
+    Rerun,
+}
 
 /// Options for [`run_tests`].
 #[derive(Debug, Clone)]
@@ -31,11 +45,13 @@ pub struct TestOptions {
     pub timeout_secs: u64,
     /// Launch Factorio with a window (`--load-scenario`) instead of headless.
     pub gui: bool,
+    pub mode: TestMode,
 }
 
 /// Run discovered Factorio simulations and print a cargo-test-style report.
 ///
 /// Returns `Ok(())` only when every selected test passed.
+#[allow(clippy::too_many_lines)]
 pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
     let binary = require_factorio_binary()?;
 
@@ -92,6 +108,7 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
         source,
     })?;
 
+    let listen = matches!(options.mode, TestMode::Listen | TestMode::Rerun);
     let control_path = output_dir.join("control.lua");
     let mut control =
         std::fs::read_to_string(&control_path).map_err(|source| CliError::ReadFile {
@@ -99,14 +116,32 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
             source,
         })?;
     control.push('\n');
-    control.push_str(&generate_harness_lua(&package.name, &tests));
+    control.push_str(&generate_harness_lua(&package.name, &tests, listen));
     std::fs::write(&control_path, control).map_err(|source| CliError::WriteFile {
         path: control_path.clone(),
         source,
     })?;
 
+    let mut hot_reload_bumped = true;
+    if listen {
+        let injected = inject_hot_reload(project_root, &output_dir, &package.name)?;
+        hot_reload_bumped = injected.bumped;
+        if injected.bumped {
+            status::status(
+                Status::Note,
+                format!("hot-reload generation {}", injected.generation),
+            );
+        } else {
+            status::status(
+                Status::Note,
+                format!("hot-reload generation {} (unchanged)", injected.generation),
+            );
+        }
+    }
+
     let work_dir = project_root.join(".factorio-rs").join("test-run");
-    prepare_work_dir(&work_dir, &output_dir, &package)?;
+    let prefer_symlink = listen;
+    ensure_work_dir(&work_dir, &output_dir, &package, prefer_symlink)?;
 
     status::status(
         Status::Running,
@@ -116,25 +151,76 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
             if tests.len() == 1 { "" } else { "s" }
         ),
     );
-    if options.gui {
-        status::status(
-            Status::Note,
-            "gui mode: Factorio will stay open after the suite finishes",
-        );
-    }
-    let outcome = launch_and_collect(
-        &binary,
-        &work_dir,
-        &package,
-        options.timeout_secs,
-        options.gui,
-    )?;
-    print_report(&tests, &outcome);
 
+    match options.mode {
+        TestMode::Once => {
+            if options.gui {
+                status::status(
+                    Status::Note,
+                    "gui mode: Factorio will stay open after the suite finishes",
+                );
+            }
+            let outcome = launch_and_collect(
+                &binary,
+                &work_dir,
+                &package,
+                options.timeout_secs,
+                options.gui,
+                false,
+            )?;
+            print_report(&tests, &outcome);
+            finish_outcome(&outcome, options.timeout_secs)
+        }
+        TestMode::Listen => {
+            status::status(
+                Status::Note,
+                "listen mode: Factorio stays alive for `factorio-rs test --rerun`",
+            );
+            let outcome = launch_and_collect(
+                &binary,
+                &work_dir,
+                &package,
+                options.timeout_secs,
+                options.gui,
+                true,
+            )?;
+            print_report(&tests, &outcome);
+            finish_outcome(&outcome, options.timeout_secs)
+        }
+        TestMode::Rerun => {
+            let results_path = work_dir
+                .join("script-output")
+                .join("factorio-rs-test-results.txt");
+            let timeout = Duration::from_secs(options.timeout_secs);
+
+            if listen_process_alive(&work_dir) {
+                if hot_reload_bumped {
+                    let _ = std::fs::remove_file(&results_path);
+                    status::status(
+                        Status::Note,
+                        "reusing listen Factorio - waiting for reloaded suite",
+                    );
+                } else {
+                    status::status(
+                        Status::Note,
+                        "no mod changes - reusing previous suite results",
+                    );
+                }
+            } else {
+                status::status(Status::Note, "starting listen Factorio for --rerun");
+                let _ = std::fs::remove_file(&results_path);
+                spawn_listen_factorio(&binary, &work_dir, options.gui)?;
+            }
+            let outcome = wait_for_suite_file(&results_path, timeout)?;
+            print_report(&tests, &outcome);
+            finish_outcome(&outcome, options.timeout_secs)
+        }
+    }
+}
+
+const fn finish_outcome(outcome: &SuiteOutcome, timeout_secs: u64) -> CliResult<()> {
     if outcome.timed_out {
-        return Err(CliError::TestTimeout {
-            timeout_secs: options.timeout_secs,
-        });
+        return Err(CliError::TestTimeout { timeout_secs });
     }
     if outcome.failed > 0 || !outcome.suite_finished {
         return Err(CliError::TestsFailed);
@@ -247,10 +333,19 @@ fn collect_rust_paths(dir: &Path, out: &mut Vec<PathBuf>) -> CliResult<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn generate_harness_lua(mod_name: &str, tests: &[factorio_frontend::FactorioTest]) -> String {
+fn generate_harness_lua(
+    mod_name: &str,
+    tests: &[factorio_frontend::FactorioTest],
+    listen: bool,
+) -> String {
     let mut out = String::new();
     out.push_str("-- factorio-rs test harness\n");
     out.push_str("do\n");
+    let _ = writeln!(
+        out,
+        "  local __frs_listen = {}",
+        if listen { "true" } else { "false" }
+    );
     // Install before require so lowered tests can call `__frs_steps` at runtime.
     out.push_str(
         r#"  local function __frs_make_ctx()
@@ -461,6 +556,12 @@ fn generate_harness_lua(mod_name: &str, tests: &[factorio_frontend::FactorioTest
   script.on_init(function()
     __frs_on_tick()
   end)
+  -- After game.reload_mods() (listen/rerun), storage persists but scripts reload.
+  script.on_load(function()
+    if __frs_listen then
+      storage.__frs_runner = nil
+    end
+  end)
   script.on_nth_tick(1, function()
     __frs_on_tick()
   end)
@@ -477,7 +578,54 @@ fn escape_lua_string(value: &str) -> String {
         .replace('\n', "\\n")
 }
 
-fn prepare_work_dir(work_dir: &Path, output_dir: &Path, package: &CargoPackage) -> CliResult<()> {
+fn ensure_work_dir(
+    work_dir: &Path,
+    output_dir: &Path,
+    package: &CargoPackage,
+    prefer_symlink: bool,
+) -> CliResult<()> {
+    if work_dir.join("config.ini").is_file() {
+        update_mod_in_work_dir(work_dir, output_dir, package, prefer_symlink)?;
+        return Ok(());
+    }
+    prepare_work_dir(work_dir, output_dir, package, prefer_symlink)
+}
+
+fn update_mod_in_work_dir(
+    work_dir: &Path,
+    output_dir: &Path,
+    package: &CargoPackage,
+    prefer_symlink: bool,
+) -> CliResult<()> {
+    let mods_dir = work_dir.join("mods");
+    std::fs::create_dir_all(&mods_dir).map_err(|source| CliError::CreateDir {
+        path: mods_dir.clone(),
+        source,
+    })?;
+    let mod_dest = mod_dest(&mods_dir, &package.name, &package.version);
+    let mode = if prefer_symlink {
+        DeployMode::Symlink
+    } else {
+        DeployMode::Copy
+    };
+    deploy_mod(output_dir, &mod_dest, mode)?;
+
+    let mod_list = serde_json::json!({
+        "mods": [
+            { "name": "base", "enabled": true },
+            { "name": package.name, "enabled": true },
+        ]
+    });
+    write_json(&mods_dir.join("mod-list.json"), &mod_list)?;
+    Ok(())
+}
+
+fn prepare_work_dir(
+    work_dir: &Path,
+    output_dir: &Path,
+    package: &CargoPackage,
+    prefer_symlink: bool,
+) -> CliResult<()> {
     if work_dir.exists() {
         std::fs::remove_dir_all(work_dir).map_err(|source| CliError::RemoveDir {
             path: work_dir.to_path_buf(),
@@ -486,8 +634,13 @@ fn prepare_work_dir(work_dir: &Path, output_dir: &Path, package: &CargoPackage) 
     }
 
     let mods_dir = work_dir.join("mods");
-    let mod_dest = mods_dir.join(format!("{}_{}", package.name, package.version));
-    copy_dir_recursive(output_dir, &mod_dest)?;
+    let mod_path = mod_dest(&mods_dir, &package.name, &package.version);
+    let mode = if prefer_symlink {
+        DeployMode::Symlink
+    } else {
+        DeployMode::Copy
+    };
+    deploy_mod(output_dir, &mod_path, mode)?;
 
     let mod_list = serde_json::json!({
         "mods": [
@@ -568,49 +721,6 @@ fn write_json(path: &Path, value: &serde_json::Value) -> CliResult<()> {
     })
 }
 
-fn copy_dir_recursive(source: &Path, dest: &Path) -> CliResult<()> {
-    std::fs::create_dir_all(dest).map_err(|source| CliError::CreateDir {
-        path: dest.to_path_buf(),
-        source,
-    })?;
-
-    for entry in walkdir::WalkDir::new(source) {
-        let entry = entry.map_err(|err| CliError::ReadDir {
-            path: source.to_path_buf(),
-            source: std::io::Error::other(err),
-        })?;
-        let path = entry.path();
-        let relative = path
-            .strip_prefix(source)
-            .map_err(|_| CliError::InvalidProjectPath {
-                path: path.to_path_buf(),
-            })?;
-        let target = dest.join(relative);
-
-        if path.is_dir() {
-            std::fs::create_dir_all(&target).map_err(|source| CliError::CreateDir {
-                path: target,
-                source,
-            })?;
-            continue;
-        }
-
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(|source| CliError::CreateDir {
-                path: parent.to_path_buf(),
-                source,
-            })?;
-        }
-
-        std::fs::copy(path, &target).map_err(|source| CliError::WriteFile {
-            path: target,
-            source,
-        })?;
-    }
-
-    Ok(())
-}
-
 #[derive(Debug, Default)]
 struct SuiteOutcome {
     results: Vec<TestResult>,
@@ -639,28 +749,13 @@ fn launch_and_collect(
     package: &CargoPackage,
     timeout_secs: u64,
     gui: bool,
+    keep_alive: bool,
 ) -> CliResult<SuiteOutcome> {
     let mods_dir = work_dir.join("mods");
     let server_settings = work_dir.join("server-settings.json");
     let config_ini = work_dir.join("config.ini");
 
-    let mut command = match target {
-        FactorioLaunchTarget::Binary {
-            path,
-            steam_run: true,
-        } => {
-            let mut command = Command::new("steam-run");
-            command.arg(path);
-            command
-        }
-        FactorioLaunchTarget::Binary {
-            path,
-            steam_run: false,
-        } => Command::new(path),
-        FactorioLaunchTarget::Steam => {
-            return Err(CliError::FactorioBinaryRequired);
-        }
-    };
+    let mut command = factorio_command(target)?;
 
     command
         .arg("--config")
@@ -694,6 +789,7 @@ fn launch_and_collect(
         target: target.display(),
         source,
     })?;
+    write_listen_pid(work_dir, child.id())?;
     // Hold stdin so Factorio does not observe EOF until we drop it at the end.
     let stdin = child.stdin.take();
 
@@ -702,15 +798,160 @@ fn launch_and_collect(
         .join("factorio-rs-test-results.txt");
     let outcome = read_protocol(&mut child, &results_path, Duration::from_secs(timeout_secs))?;
 
-    if gui && outcome.suite_finished && !outcome.timed_out {
-        status::status_err(Status::Note, "suite finished - close Factorio to exit");
+    if (gui || keep_alive) && outcome.suite_finished && !outcome.timed_out {
+        if keep_alive {
+            status::status_err(
+                Status::Note,
+                "suite finished - Factorio kept alive for hot-reload re-runs",
+            );
+        } else {
+            status::status_err(Status::Note, "suite finished - close Factorio to exit");
+        }
+        if keep_alive && !gui {
+            // Keep stdin open so the dedicated server does not see EOF.
+            std::mem::forget(stdin);
+            std::mem::forget(child);
+            return Ok(outcome);
+        }
         drop(stdin);
+        let _ = child.wait();
     } else {
         drop(stdin);
         let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_file(work_dir.join(LISTEN_PID_FILE));
     }
-    let _ = child.wait();
     Ok(outcome)
+}
+
+fn factorio_command(target: &FactorioLaunchTarget) -> CliResult<Command> {
+    match target {
+        FactorioLaunchTarget::Binary {
+            path,
+            steam_run: true,
+        } => {
+            let mut command = Command::new("steam-run");
+            command.arg(path);
+            Ok(command)
+        }
+        FactorioLaunchTarget::Binary {
+            path,
+            steam_run: false,
+        } => Ok(Command::new(path)),
+        FactorioLaunchTarget::Steam => Err(CliError::FactorioBinaryRequired),
+    }
+}
+
+fn spawn_listen_factorio(
+    target: &FactorioLaunchTarget,
+    work_dir: &Path,
+    gui: bool,
+) -> CliResult<()> {
+    let mods_dir = work_dir.join("mods");
+    let server_settings = work_dir.join("server-settings.json");
+    let config_ini = work_dir.join("config.ini");
+    let log_path = work_dir.join("factorio-listen.log");
+
+    let log_file = std::fs::File::create(&log_path).map_err(|source| CliError::WriteFile {
+        path: log_path.clone(),
+        source,
+    })?;
+    let log_err = log_file.try_clone().map_err(|source| CliError::WriteFile {
+        path: log_path.clone(),
+        source,
+    })?;
+
+    let mut command = factorio_command(target)?;
+    command
+        .arg("--config")
+        .arg(&config_ini)
+        .arg("--mod-directory")
+        .arg(&mods_dir)
+        .arg("--map-gen-seed")
+        .arg("1")
+        .arg("--disable-audio");
+
+    if gui {
+        command.arg("--load-scenario").arg("factorio-rs-test");
+    } else {
+        command
+            .arg("--start-server-load-scenario")
+            .arg("factorio-rs-test")
+            .arg("--server-settings")
+            .arg(&server_settings);
+    }
+
+    command
+        .current_dir(work_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_err));
+
+    let child = command.spawn().map_err(|source| CliError::LaunchFactorio {
+        target: target.display(),
+        source,
+    })?;
+    write_listen_pid(work_dir, child.id())?;
+    std::mem::forget(child);
+    Ok(())
+}
+
+fn write_listen_pid(work_dir: &Path, pid: u32) -> CliResult<()> {
+    let path = work_dir.join(LISTEN_PID_FILE);
+    std::fs::write(&path, format!("{pid}\n")).map_err(|source| CliError::WriteFile { path, source })
+}
+
+fn listen_process_alive(work_dir: &Path) -> bool {
+    let path = work_dir.join(LISTEN_PID_FILE);
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(pid) = contents.trim().parse::<u32>() else {
+        return false;
+    };
+    process_alive(pid)
+}
+
+fn process_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+fn wait_for_suite_file(results_path: &Path, timeout: Duration) -> CliResult<SuiteOutcome> {
+    let deadline = Instant::now() + timeout;
+    let mut outcome = SuiteOutcome::default();
+
+    loop {
+        if let Ok(contents) = std::fs::read_to_string(results_path)
+            && contents.contains("FACTORIO_RS_TEST suite_end")
+        {
+            let mut from_file = SuiteOutcome::default();
+            for line in contents.lines() {
+                let _ = parse_protocol_line(line, &mut from_file);
+            }
+            if from_file.suite_finished {
+                return Ok(from_file);
+            }
+        }
+
+        if Instant::now() >= deadline {
+            outcome.timed_out = true;
+            return Ok(outcome);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 fn read_protocol(
@@ -837,8 +1078,16 @@ fn parse_protocol_line(line: &str, outcome: &mut SuiteOutcome) -> bool {
 
 fn print_report(expected: &[factorio_frontend::FactorioTest], outcome: &SuiteOutcome) {
     let color = status::color_stdout();
-    let ok_tag = status::paint_ok("ok", color);
-    let fail_tag = status::paint_fail("FAILED", color);
+
+    // Match cargo/libtest layout so Bacon's standard analyzer can attach failure
+    // details (it looks for `---- name stdout ----`, not bare `---- name ----`).
+    println!(
+        "\nrunning {} test{}",
+        expected.len(),
+        if expected.len() == 1 { "" } else { "s" }
+    );
+
+    let mut failed_names: Vec<(String, Option<String>)> = Vec::new();
 
     for test in expected {
         let result = outcome
@@ -849,33 +1098,34 @@ fn print_report(expected: &[factorio_frontend::FactorioTest], outcome: &SuiteOut
             Some(TestResult {
                 status: TestStatus::Ok,
                 ..
-            }) => println!("test {} ... {ok_tag}", test.name),
+            }) => print_cargo_style_result(&test.name, true, color),
             Some(TestResult {
                 status: TestStatus::Failed,
                 message,
                 ..
             }) => {
-                println!("test {} ... {fail_tag}", test.name);
-                if let Some(message) = message {
-                    println!("       {message}");
-                }
+                print_cargo_style_result(&test.name, false, color);
+                failed_names.push((test.name.clone(), message.clone()));
             }
-            None => println!("test {} ... {fail_tag} (no result)", test.name),
+            None => {
+                print_cargo_style_result(&test.name, false, color);
+                failed_names.push((
+                    test.name.clone(),
+                    Some("(no result from Factorio suite)".to_string()),
+                ));
+            }
         }
     }
 
-    let failures: Vec<_> = outcome
-        .results
-        .iter()
-        .filter(|result| result.status == TestStatus::Failed)
-        .collect();
-    if !failures.is_empty() {
-        println!("\n{}", status::paint_fail("failures:", color));
-        println!();
-        for failure in failures {
-            println!("---- {} ----", status::paint_fail(&failure.name, color));
-            if let Some(message) = &failure.message {
+    if !failed_names.is_empty() {
+        println!("\nfailures:\n");
+        for (name, message) in &failed_names {
+            // Unstyled — Bacon matches `^---- (.+) stdout ----$` on plain lines.
+            println!("---- {name} stdout ----");
+            if let Some(message) = message {
                 println!("{message}");
+            } else {
+                println!("(failed with no message)");
             }
             println!();
         }
@@ -905,6 +1155,27 @@ fn print_report(expected: &[factorio_frontend::FactorioTest], outcome: &SuiteOut
         status::paint_fail(format!("{failed} failed"), color)
     };
     println!("\ntest result: {status_word}. {passed_s}; {failed_s}; 0 ignored");
+}
+
+/// Emit a libtest-style result line with CSI codes Bacon's analyzer recognizes.
+///
+/// Styled branch expects `\x1b[32m` for `ok` and `\x1b[31m` for `FAILED` (not bold).
+fn print_cargo_style_result(name: &str, passed: bool, color: bool) {
+    const CSI_RESET: &str = "\u{1b}[0m";
+    const CSI_GREEN: &str = "\u{1b}[32m";
+    const CSI_RED: &str = "\u{1b}[31m";
+
+    if color {
+        if passed {
+            println!("test {name} ... {CSI_GREEN}ok{CSI_RESET}");
+        } else {
+            println!("test {name} ... {CSI_RED}FAILED{CSI_RESET}");
+        }
+    } else if passed {
+        println!("test {name} ... ok");
+    } else {
+        println!("test {name} ... FAILED");
+    }
 }
 
 #[cfg(test)]
@@ -954,7 +1225,7 @@ mod tests {
                 export: None,
             },
         }];
-        let lua = generate_harness_lua("hello_world", &tests);
+        let lua = generate_harness_lua("hello_world", &tests, false);
         assert!(lua.contains("tests::truth"));
         assert!(lua.contains("__frs_suite.truth"));
         assert!(lua.contains("FACTORIO_RS_TEST suite_end"));
@@ -962,5 +1233,32 @@ mod tests {
         assert!(lua.contains("factorio-rs-test-results.txt"));
         assert!(lua.contains("function __frs_steps()"));
         assert!(lua.contains("__frs_on_tick"));
+        assert!(lua.contains("local __frs_listen = false"));
+
+        let listen = generate_harness_lua("hello_world", &tests, true);
+        assert!(listen.contains("local __frs_listen = true"));
+        assert!(listen.contains("script.on_load"));
+    }
+
+    #[test]
+    fn cargo_style_result_uses_bacon_csi() {
+        // Capture via formatting the same codes print_cargo_style_result uses.
+        const CSI_RESET: &str = "\u{1b}[0m";
+        const CSI_GREEN: &str = "\u{1b}[32m";
+        const CSI_RED: &str = "\u{1b}[31m";
+        assert_eq!(
+            format!("test tests::foo ... {CSI_GREEN}ok{CSI_RESET}"),
+            "test tests::foo ... \u{1b}[32mok\u{1b}[0m"
+        );
+        assert_eq!(
+            format!("test tests::bar ... {CSI_RED}FAILED{CSI_RESET}"),
+            "test tests::bar ... \u{1b}[31mFAILED\u{1b}[0m"
+        );
+        // Bacon attaches failure bodies to this title shape.
+        assert!(regex_is_match_stdout_title("---- tests::bar stdout ----"));
+    }
+
+    fn regex_is_match_stdout_title(s: &str) -> bool {
+        s.starts_with("---- ") && s.ends_with(" stdout ----")
     }
 }

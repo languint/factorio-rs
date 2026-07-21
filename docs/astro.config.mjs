@@ -58,6 +58,10 @@ export default defineConfig({
           items: [
             { label: "Overview", slug: "recipes" },
             { label: "First hour", slug: "recipes/first-hour" },
+            {
+              label: "Hot reload with Bacon",
+              slug: "recipes/hot-reload-bacon",
+            },
             { label: "Persist with storage", slug: "recipes/persist-storage" },
             {
               label: "Settings that change gameplay",

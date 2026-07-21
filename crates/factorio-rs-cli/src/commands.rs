@@ -1,7 +1,10 @@
 pub mod add;
 pub mod build;
+pub mod deploy;
+pub mod hot_reload;
 pub mod init;
 pub mod install;
 pub mod package;
+pub mod sync;
 pub mod test;
 pub mod typecheck;

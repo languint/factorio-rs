@@ -113,6 +113,9 @@ pub enum CliError {
     #[error("failed to edit `{path}`: {message}")]
     TomlEdit { path: PathBuf, message: String },
 
+    #[error("{message}")]
+    InvalidArgs { message: String },
+
     #[error(transparent)]
     Frontend(#[from] factorio_frontend::FrontendError),
 

@@ -51,6 +51,9 @@ factorio-rs build
 
 `dist/` is a loadable Factorio mod. Use `factorio-rs install` / `open` when you
 have a Factorio install; use `factorio-rs test` to run in-game `#[test]`s.
+For edit-reload loops, install [Bacon](https://dystroy.org/bacon/) and use
+`factorio-rs init --bacon` / `bacon -j factorio-reload` (see
+[Hot reload with Bacon](https://languint.github.io/factorio-rs/recipes/hot-reload-bacon/)).
 
 ## Pipeline
 

@@ -9,6 +9,7 @@ Language / Concepts / Reference instead.
 | Recipe | Job |
 | --- | --- |
 | [First hour](first-hour/) | Init -> build -> install -> first `factorio-rs test` |
+| [Hot reload with Bacon](hot-reload-bacon/) | Bacon jobs for in-game control reload + test `--rerun` |
 | [Persist with storage](persist-storage/) | Mod-local state across events and saves |
 | [Settings that change gameplay](settings-gameplay/) | `mod_settings!` + control read + test |
 | [Filter entity lists](filter-entities/) | `Vec`, ranges, `.map` / `.filter` / `.collect` |

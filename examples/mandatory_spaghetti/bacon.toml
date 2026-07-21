@@ -1,0 +1,28 @@
+default_job = "factorio-check"
+env.CARGO_TERM_COLOR = "always"
+ignore = ["dist", ".factorio-rs", "target", "src/factorio_exports.rs"]
+
+[jobs.factorio-check]
+command = ["factorio-rs", "check"]
+need_stdout = true
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+
+[jobs.factorio-reload]
+command = ["factorio-rs", "sync", "--symlink", "--hot-reload"]
+need_stdout = true
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+show_command_error_code = true
+
+[jobs.factorio-test]
+command = ["factorio-rs", "test", "--rerun"]
+need_stdout = true
+default_watch = false
+watch = ["src", "Factorio.toml", "Cargo.toml"]
+show_command_error_code = true
+
+[keybindings]
+c = "job:factorio-check"
+r = "job:factorio-reload"
+t = "job:factorio-test"

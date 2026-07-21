@@ -44,8 +44,9 @@ See [Tracing](guides/tracing/) and [Serde / JSON](guides/serde/) for details.
 
 You only need a Factorio install for:
 
-- `factorio-rs install` - copies `dist/` into the mods directory
+- `factorio-rs install` / `sync` - copies or symlinks `dist/` into the mods directory
 - `factorio-rs open` / `install --open` - launches the game
+- `factorio-rs test` - runs in-game `#[test]` simulations
 
 | Purpose        | Resolution                                                                   |
 | -------------- | ---------------------------------------------------------------------------- |

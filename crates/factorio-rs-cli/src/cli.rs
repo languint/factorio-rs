@@ -14,6 +14,8 @@ pub enum Command {
     Package(PackageArgs),
     /// Build and copy the mod into the Factorio mods directory.
     Install(InstallArgs),
+    /// Build and deploy the mod for Bacon / hot-reload (symlink + reload gen).
+    Sync(SyncArgs),
     /// Add another factorio-rs library as a Cargo path dependency (+ Factorio.toml).
     Add(AddArgs),
     /// Open Factorio if it is installed on this system.
@@ -42,6 +44,10 @@ pub struct InitArgs {
     /// Path to the project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
+
+    /// Also write a `bacon.toml` with factorio-check / reload / test jobs.
+    #[arg(long)]
+    pub bacon: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -127,6 +133,40 @@ pub struct InstallArgs {
 }
 
 #[derive(Debug, Parser)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct SyncArgs {
+    /// Path to the project directory or `Factorio.toml` file.
+    #[arg(long, value_name = "PATH")]
+    pub manifest_path: Option<PathBuf>,
+
+    /// Transpile profile from `Factorio.toml`.
+    ///
+    /// Defaults to `debug`.
+    #[arg(long, value_name = "NAME", default_value = "debug")]
+    pub profile: String,
+
+    /// Override the profile's debug comment level in generated Lua.
+    #[arg(long, value_name = "LEVEL")]
+    pub debug_level: Option<u8>,
+
+    /// Skip `cargo check` before transpile (not recommended).
+    #[arg(long)]
+    pub skip_typecheck: bool,
+
+    /// Symlink the mods entry to `output_dir`
+    #[arg(long)]
+    pub symlink: bool,
+
+    /// Inject reload generation + control probe (`game.reload_mods()`).
+    #[arg(long)]
+    pub hot_reload: bool,
+
+    /// Deploy into `.factorio-rs/test-run/mods/` instead of the user mods dir.
+    #[arg(long)]
+    pub to_test_run: bool,
+}
+
+#[derive(Debug, Parser)]
 pub struct AddArgs {
     /// Path to another factorio-rs project (build it first so Cargo metadata exports exist).
     pub path: PathBuf,
@@ -137,6 +177,7 @@ pub struct AddArgs {
 }
 
 #[derive(Debug, Parser)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct TestArgs {
     /// Path to the project directory or `Factorio.toml` file.
     #[arg(long, value_name = "PATH")]
@@ -169,4 +210,14 @@ pub struct TestArgs {
     /// Kill Factorio if the suite does not finish within this many seconds.
     #[arg(long, value_name = "SECS", default_value_t = 120)]
     pub timeout: u64,
+
+    /// Keep Factorio alive after the suite (for Bacon hot-reload re-runs).
+    #[arg(long)]
+    pub listen: bool,
+
+    /// Rebuild, sync into the listen test-run, wait for the next suite report.
+    ///
+    /// Starts a listen Factorio process if none is running. Intended for Bacon.
+    #[arg(long)]
+    pub rerun: bool,
 }

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`factorio-rs sync`**: build + deploy to user mods or `.factorio-rs/test-run/`
+  with `--symlink` (Unix) and `--hot-reload` (reload generation +
+  `game.reload_mods()` probe). Notes when data/settings stage files change.
+- **`factorio-rs test --listen` / `--rerun`**: keep Factorio alive and re-run the
+  suite after hot-reload (Bacon-friendly).
+- **`factorio-rs init --bacon`**: write a `bacon.toml` with `factorio-check`,
+  `factorio-reload`, and `factorio-test` jobs.
+- Docs recipe: [Hot reload with Bacon](docs/src/content/docs/recipes/hot-reload-bacon.md).
+
+### Fixed
+
+- Test reports use cargo’s `---- name stdout ----` failure sections and
+  Bacon-recognized CSI for `ok` / `FAILED`, so Bacon shows assertion text
+  instead of italic “no output”.
+- CLI color honors `CARGO_TERM_COLOR=always` / `CLICOLOR_FORCE` when stdout is
+  piped (Bacon).
+- Hot-reload generation only bumps when project **sources** change; identical
+  syncs report `(unchanged)`. Generated `src/factorio_exports.rs` is not rewritten
+  when contents match.
+- Bacon template uses `default_watch = false` and watches only `src` /
+  `Factorio.toml` / `Cargo.toml`, and ignores `dist` (not only `dist/**`) so
+  workspace `examples/` rebuild loops cannot fire on every sync.
+
 ## [0.2.1] - 2026-07-20
 
 ### Fixed

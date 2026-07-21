@@ -209,14 +209,13 @@ test via Lua's `pcall` around each case.
 ## Running
 
 ```bash
-# Requires a Factorio binary
-export FACTORIO_PATH=/path/to/factorio   # or rely on PATH / Steam install paths
-
 factorio-rs test
 factorio-rs test smoke                   # name filter (substring)
 factorio-rs test --timeout 180
 factorio-rs test --gui                    # windowed; stays open after the suite
 factorio-rs test --skip-typecheck         # skip cargo check --tests (not recommended)
+factorio-rs test --listen                 # keep Factorio alive for hot-reload re-runs
+factorio-rs test --rerun                  # rebuild + wait for next suite (Bacon)
 ```
 
 `factorio-rs test` will:
@@ -227,6 +226,9 @@ factorio-rs test --skip-typecheck         # skip cargo check --tests (not recomm
    - default: headless dedicated server (`--start-server-load-scenario`)
    - `--gui`: singleplayer window (`--load-scenario`)
 4. Print a colored report and exit non-zero on failures
+
+`--listen` / `--rerun` keep a Factorio process warm and re-run the suite after
+`game.reload_mods()` - see [Hot reload with Bacon](../recipes/hot-reload-bacon/).
 
 Example output:
 
@@ -289,6 +291,7 @@ can inspect leftover entities. Close the window to finish the CLI. Increase
 ## See also
 
 - [CLI reference](../reference/cli/) - full `factorio-rs test` flags
+- [Hot reload with Bacon](../recipes/hot-reload-bacon/) - watch + `--rerun`
 - [hello_world](../examples/hello-world/) - minimal smoke tests
 - [mandatory_spaghetti](../examples/mandatory-spaghetti/) - adjacency
   simulations with `create_entity`

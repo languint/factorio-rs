@@ -87,6 +87,7 @@ and launches Factorio. Full details: [Testing](../guides/testing/).
 
 | Goal | Recipe |
 | --- | --- |
+| Iterate with Bacon (in-game + tests) | [Hot reload with Bacon](hot-reload-bacon/) |
 | Remember a counter across events / saves | [Persist with storage](persist-storage/) |
 | Toggle behavior from mod settings | [Settings that change gameplay](settings-gameplay/) |
 | Map / filter a list of entities | [Filter entity lists](filter-entities/) |

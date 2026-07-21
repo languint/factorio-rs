@@ -46,6 +46,27 @@ fn init_creates_cargo_project_files() {
 }
 
 #[test]
+fn init_with_bacon_writes_bacon_toml() {
+    let temp_dir = TempDir::new().unwrap();
+    let project_root = temp_dir.path();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_factorio-rs"))
+        .args(["init", "--name", "test-mod", "--bacon"])
+        .current_dir(project_root)
+        .status()
+        .unwrap();
+
+    assert!(status.success());
+    let bacon = std::fs::read_to_string(project_root.join("bacon.toml")).unwrap();
+    assert!(bacon.contains("factorio-reload"));
+    assert!(bacon.contains("\"sync\""));
+    assert!(bacon.contains("\"--rerun\""));
+    assert!(bacon.contains("CARGO_TERM_COLOR"));
+    assert!(bacon.contains("default_watch = false"));
+    assert!(bacon.contains("ignore = [\"dist\""));
+}
+
+#[test]
 fn build_generates_lua_from_sources() {
     let temp_dir = TempDir::new().unwrap();
     let project_root = temp_dir.path();

@@ -62,15 +62,33 @@ impl Status {
 }
 
 /// Whether ANSI color should be used on stdout.
+///
+/// Honors `NO_COLOR`, `CARGO_TERM_COLOR` (`always`/`never`), and `CLICOLOR_FORCE`
+/// so Bacon (which sets `CARGO_TERM_COLOR=always` and pipes output) still gets color.
 #[must_use]
 pub fn color_stdout() -> bool {
-    stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none()
+    color_for_stream(stdout().is_terminal())
 }
 
 /// Whether ANSI color should be used on stderr.
 #[must_use]
 pub fn color_stderr() -> bool {
-    stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none()
+    color_for_stream(stderr().is_terminal())
+}
+
+fn color_for_stream(is_tty: bool) -> bool {
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    match std::env::var("CARGO_TERM_COLOR").ok().as_deref() {
+        Some("always") => return true,
+        Some("never") => return false,
+        _ => {}
+    }
+    if std::env::var_os("CLICOLOR_FORCE").is_some() {
+        return true;
+    }
+    is_tty
 }
 
 /// Print a status line to stdout.

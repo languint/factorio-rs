@@ -14,14 +14,17 @@ mod open;
 mod paths;
 mod progress;
 mod status;
+mod write_if_changed;
 
 use std::process::ExitCode;
 use std::time::Instant;
 
 use cli::{
-    AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs, TestArgs,
+    AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs, SyncArgs,
+    TestArgs,
 };
 use commands::build::BuildOptions;
+use commands::sync::{SyncOptions, SyncTarget};
 use commands::test::TestOptions;
 use error::{CliError, project_root};
 use status::Status;
@@ -44,6 +47,7 @@ fn run(cli: Cli) -> Result<(), CliError> {
         Command::Build(args) => run_build(&args),
         Command::Package(args) => run_package(&args),
         Command::Install(args) => run_install(&args),
+        Command::Sync(args) => run_sync(&args),
         Command::Add(args) => run_add(&args),
         Command::Open => run_open(),
         Command::Test(args) => run_test(&args),
@@ -63,7 +67,7 @@ fn report_error(err: &CliError) {
 
 fn run_init(args: &InitArgs) -> Result<(), CliError> {
     let project_root = project_root(args.manifest_path.as_deref())?;
-    commands::init::init(&project_root, args.name.as_deref())?;
+    commands::init::init(&project_root, args.name.as_deref(), args.bacon)?;
     status::status(
         Status::Created,
         format!(
@@ -71,6 +75,12 @@ fn run_init(args: &InitArgs) -> Result<(), CliError> {
             status::display_path(&project_root)
         ),
     );
+    if args.bacon {
+        status::status(
+            Status::Note,
+            "bacon.toml written - try `bacon -j factorio-reload` with Factorio open",
+        );
+    }
     Ok(())
 }
 
@@ -143,6 +153,28 @@ fn run_install(args: &InstallArgs) -> Result<(), CliError> {
     Ok(())
 }
 
+fn run_sync(args: &SyncArgs) -> Result<(), CliError> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let options = SyncOptions {
+        build: BuildOptions::new(&args.profile)
+            .with_debug_level(args.debug_level)
+            .with_skip_typecheck(args.skip_typecheck),
+        symlink: args.symlink,
+        hot_reload: args.hot_reload,
+        target: if args.to_test_run {
+            SyncTarget::TestRun
+        } else {
+            SyncTarget::Mods
+        },
+    };
+    let dest = commands::sync::sync(&project_root, &options)?;
+    status::status(
+        Status::Installed,
+        format!("synced to {}", status::display_path(&dest)),
+    );
+    Ok(())
+}
+
 fn run_open() -> Result<(), CliError> {
     let target = open::open()?;
     status::status(Status::Opened, format!("Factorio ({})", target.display()));
@@ -151,6 +183,18 @@ fn run_open() -> Result<(), CliError> {
 
 fn run_test(args: &TestArgs) -> Result<(), CliError> {
     let project_root = project_root(args.manifest_path.as_deref())?;
+    if args.listen && args.rerun {
+        return Err(CliError::InvalidArgs {
+            message: "use either --listen or --rerun, not both".to_string(),
+        });
+    }
+    let mode = if args.rerun {
+        commands::test::TestMode::Rerun
+    } else if args.listen {
+        commands::test::TestMode::Listen
+    } else {
+        commands::test::TestMode::Once
+    };
     let options = TestOptions {
         build: BuildOptions::new(&args.profile)
             .with_debug_level(args.debug_level)
@@ -158,6 +202,7 @@ fn run_test(args: &TestArgs) -> Result<(), CliError> {
         filter: args.filter.clone(),
         timeout_secs: args.timeout,
         gui: args.gui,
+        mode,
     };
     commands::test::run_tests(&project_root, &options)?;
     Ok(())

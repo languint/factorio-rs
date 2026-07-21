@@ -14,6 +14,7 @@ use crate::{
     cargo_manifest::CargoPackage,
     error::{CliError, CliResult},
     manifest::{RemoteExport, SharedConst, SharedExport},
+    write_if_changed::write_if_changed,
 };
 
 /// Optional catalog kept next to the project (human-readable / tooling).
@@ -334,10 +335,7 @@ fn write_exports_json(project_root: &Path, manifest: &ExportsManifest) -> CliRes
         serde_json::to_string_pretty(manifest).map_err(|source| CliError::CargoMetadata {
             message: format!("failed to serialize exports manifest: {source}"),
         })?;
-    std::fs::write(&path, format!("{json}\n")).map_err(|source| CliError::WriteFile {
-        path: path.clone(),
-        source,
-    })?;
+    write_if_changed(&path, &format!("{json}\n"))?;
     Ok(path)
 }
 
@@ -409,8 +407,8 @@ fn write_cargo_factorio_metadata(project_root: &Path, manifest: &ExportsManifest
         factorio.insert("remote_fns", Item::Value(Value::Array(remote_fns)));
     }
 
-    std::fs::write(&path, doc.to_string())
-        .map_err(|source| CliError::WriteFile { path, source })?;
+    let rendered = doc.to_string();
+    write_if_changed(&path, &rendered)?;
     Ok(())
 }
 
@@ -434,10 +432,7 @@ fn write_api_reexports(project_root: &Path, remote_exports: &[RemoteExport]) -> 
         out.push_str("// (no control remotes)\n");
     }
 
-    std::fs::write(&path, out).map_err(|source| CliError::WriteFile {
-        path: path.clone(),
-        source,
-    })?;
+    write_if_changed(&path, &out)?;
     Ok(path)
 }
 

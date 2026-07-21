@@ -205,6 +205,7 @@ impl BuildProgress {
 const STATUS_DETAIL_INDENT: usize = 13; // aligns under status message column
 
 fn stdout_progress_enabled() -> bool {
+    // Progress bars need a real TTY; color-force env vars are not enough.
     std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none()
 }
 
