@@ -2,3 +2,5 @@
 **/dist/
 **/*.zip
 docs/public/playground/
+**/*.proptest-regressions
+**/*.snap.new

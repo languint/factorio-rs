@@ -1,6 +1,6 @@
 mod common;
 
-use common::must_ok;
+use common::{assert_lua_fragment_parses, must_ok};
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
     block::Block,
@@ -72,6 +72,7 @@ fn keeps_non_trailing_nil_args() {
         ],
     };
     let lua = LuaGenerator::new().generate_expression(&expr);
+    assert_lua_fragment_parses(&lua);
     assert_eq!(lua, "f(nil, 1)");
 }
 
@@ -86,6 +87,7 @@ fn storage_set_lowers_to_index_assignment() {
         ],
     };
     let lua = LuaGenerator::new().generate_expression(&expr);
+    assert_lua_fragment_parses(&lua);
     assert_eq!(lua, "storage[\"counter\"] = 1");
 }
 

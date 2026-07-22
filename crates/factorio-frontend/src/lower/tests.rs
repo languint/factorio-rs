@@ -722,7 +722,7 @@ mod unit_tests {
             "missing Point methods:\n{lua}"
         );
         assert!(
-            lua.contains("local function double"),
+            lua.contains("local double") && lua.contains("function double("),
             "missing double:\n{lua}"
         );
     }
