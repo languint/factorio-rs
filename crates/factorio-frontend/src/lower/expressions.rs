@@ -262,6 +262,21 @@ fn lower_call_expression(
         return lower_expression(arg, ctx, self_type);
     }
 
+    if is_numeric_from_constructor(&call.func) {
+        let mut args = call.args.iter();
+        let Some(arg) = args.next() else {
+            return Err(FrontendError::UnsupportedExpression {
+                location: location(call).with_note("From::from expects exactly one argument"),
+            });
+        };
+        if args.next().is_some() {
+            return Err(FrontendError::UnsupportedExpression {
+                location: location(call).with_note("From::from expects exactly one argument"),
+            });
+        }
+        return lower_expression(arg, ctx, self_type);
+    }
+
     // `Ok(x)` / `Result::Ok(x)` -> `{ ok = x }`; `Err(e)` / `Result::Err(e)` -> `{ err = e }`.
     if let Some(kind) = result_constructor_kind(&call.func) {
         return lower_result_constructor(call, kind, ctx, self_type);
@@ -487,6 +502,27 @@ fn is_option_some_constructor(func: &Expr) -> bool {
     match segments.as_slice() {
         [name] if name == "Some" => true,
         [.., option, name] if option == "Option" && name == "Some" => true,
+        _ => false,
+    }
+}
+
+fn is_numeric_from_constructor(func: &Expr) -> bool {
+    const NUMERIC: &[&str] = &[
+        "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize",
+        "f32", "f64",
+    ];
+    let Expr::Path(path) = func else {
+        return false;
+    };
+    let segments: Vec<_> = path
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect();
+    match segments.as_slice() {
+        [.., ty, name] if name == "from" && NUMERIC.contains(&ty.as_str()) => true,
+        [.., convert, name] if convert == "From" && name == "from" => true,
         _ => false,
     }
 }
@@ -1143,6 +1179,18 @@ fn lower_option_method(
                     condition: Box::new(ne_nil(r.clone())),
                     then_expr: Box::new(r),
                     else_expr: Box::new(default),
+                }
+            })))
+        }
+        "unwrap_or_default" if call.args.is_empty() => {
+            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
+            Ok(Some(with_receiver_once(receiver, |r| {
+                factorio_ir::expression::Expression::If {
+                    condition: Box::new(ne_nil(r.clone())),
+                    then_expr: Box::new(r),
+                    else_expr: Box::new(factorio_ir::expression::Expression::Array {
+                        elements: vec![],
+                    }),
                 }
             })))
         }

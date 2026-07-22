@@ -20,6 +20,7 @@ for item in list {
 | --- | --- |
 | `Vec::new()` | `{}` |
 | `push` / `len` / `is_empty` | `table.insert` / `#` / `# == 0` |
+| `vec![…]` | Prefer `Vec::new()` + `push`. Builds expand `vec!` through `alloc` helpers that are not lowered yet. |
 | `for x in v` | `ipairs(v)` when `v` is typed `Vec<_>`; else unordered `pairs(v)` |
 | `for x in v.iter()` / `v.into_iter()` | ordered `ipairs(v)` |
 | `for i in start..end` | numeric `for i = start, end - 1 do` |

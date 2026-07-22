@@ -19,6 +19,7 @@ impl LuaGenerator {
         }
 
         let prefix = match scope {
+            Scope::Private if self.forward_declared_locals.contains(&func.name) => "",
             Scope::Private => "local ",
             Scope::Public => "",
         };

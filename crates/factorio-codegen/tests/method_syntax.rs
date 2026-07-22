@@ -69,3 +69,43 @@ fn generates_method_with_self_using_colon_syntax() {
         )
     );
 }
+
+#[test]
+fn builder_setters_use_colon_on_method_chains() {
+    use factorio_ir::{
+        expression::Expression, literal::Literal, module::Module, statement::Statement,
+    };
+
+    let module = Module {
+        name: "gui".to_string(),
+        stage: Stage::Control,
+        body: Block {
+            statements: vec![Statement::Expr(Expression::MethodCall {
+                receiver: Box::new(Expression::MethodCall {
+                    receiver: Box::new(Expression::Call {
+                        func: Box::new(Expression::QualifiedPath {
+                            segments: vec!["ScrollPane".to_string(), "new".to_string()],
+                        }),
+                        args: vec![],
+                    }),
+                    method: "vertical_scroll_policy".to_string(),
+                    args: vec![Expression::Literal(Literal::String("auto".to_string()))],
+                }),
+                method: "child".to_string(),
+                args: vec![Expression::Identifier("rows".to_string())],
+            })],
+        },
+        imports: vec![],
+        submodules: vec![],
+        locales: vec![],
+        pending_locales: vec![],
+        vtables: vec![],
+        symbols: vec![],
+    };
+
+    let output = must_ok(LuaGenerator::new().generate_module(&module));
+    assert!(
+        output.contains("ScrollPane.new():vertical_scroll_policy(\"auto\"):child(rows)"),
+        "GUI builder setters must use colon so self is passed:\n{output}"
+    );
+}

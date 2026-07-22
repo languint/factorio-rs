@@ -42,8 +42,35 @@ const USER_COLON_METHODS: &[&str] = &[
     "from_frame",
     "from_text",
     "from_button",
+    "from_flow",
+    "from_line",
+    "from_scroll_pane",
     "into",
     "new",
+    "horizontal_scroll_policy",
+    "vertical_scroll_policy",
+    "text",
+    "numeric",
+    "allow_decimal",
+    "allow_negative",
+    "is_password",
+    "lose_focus_on_confirm",
+    "on_text_changed",
+    "on_confirmed",
+    "resize_to_sprite",
+    "clicked_sprite",
+    "hovered_sprite",
+    "number",
+    "selected_index",
+    "on_selection_changed",
+    "state",
+    "on_checked",
+    "minimum_value",
+    "maximum_value",
+    "value",
+    "value_step",
+    "discrete_values",
+    "on_value_changed",
 ];
 
 fn method_call_sep(method: &str) -> &'static str {
@@ -177,7 +204,7 @@ impl LuaGenerator {
         }
     }
 
-    /// Resolve a bare name: exported `pub fn`s become `module.name`, locals stay bare.
+    /// Resolve a bare name: exported `pub fn` / `pub const` become `module.name`.
     fn generate_identifier(&self, name: &str) -> String {
         if self.exported_functions.contains(name)
             && let Some(module_table) = &self.current_module_table

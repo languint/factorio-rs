@@ -265,6 +265,9 @@ impl LuaGenerator {
                 Statement::FunctionDecl(function) => {
                     self.exported_functions.insert(function.name.clone());
                 }
+                Statement::VariableDecl { name, .. } => {
+                    self.exported_functions.insert(name.clone());
+                }
                 Statement::StructDecl(struct_decl) => {
                     self.module_type_names.insert(struct_decl.name.clone());
                 }
@@ -305,6 +308,8 @@ impl LuaGenerator {
         // Forward-declare private concrete type locals so vtable closures capture
         // upvalues when structs are assigned later in the body.
         self.generate_vtables(&module.vtables, Some(&module_name), module);
+
+        self.forward_declare_private_functions(&module.body.statements);
 
         for statement in &module.body.statements {
             self.generate_statement(statement, Some(module), None, Scope::Private)?;
@@ -393,6 +398,22 @@ impl LuaGenerator {
         if !vtables.is_empty() {
             self.output.push('\n');
         }
+    }
+
+    fn forward_declare_private_functions(&mut self, statements: &[factorio_ir::statement::Statement]) {
+        let mut names = std::collections::BTreeSet::new();
+        for statement in statements {
+            if let Statement::FunctionDecl(function) = statement {
+                names.insert(function.name.clone());
+            }
+        }
+        if names.is_empty() {
+            return;
+        }
+        let list = names.iter().cloned().collect::<Vec<_>>().join(", ");
+        self.write_line(&format!("local {list}"));
+        self.forward_declared_locals.extend(names);
+        self.output.push('\n');
     }
 
     fn generate_submodules(&mut self, submodules: &[String]) {

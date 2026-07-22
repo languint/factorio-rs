@@ -678,6 +678,14 @@ fn lower_impl_item(
     enums: &mut BTreeMap<String, PendingEnum>,
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<()> {
+    if item_impl
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("automatically_derived"))
+    {
+        return Ok(());
+    }
+
     let trait_path = item_impl.trait_.as_ref().map(|(_, path, _)| path);
     if let Some(trait_path) = trait_path
         && convert::is_from_trait(trait_path)

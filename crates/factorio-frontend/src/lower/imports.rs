@@ -60,6 +60,13 @@ fn collect_use_bindings(
             Ok(())
         }
         UseTree::Name(UseName { ident, .. }) => {
+            if ident == "self" {
+                bindings.push(RawUseBinding {
+                    segments: prefix.clone(),
+                    rename: None,
+                });
+                return Ok(());
+            }
             prefix.push(ident.to_string());
             bindings.push(RawUseBinding {
                 segments: prefix.clone(),

@@ -30,7 +30,7 @@ tables (and dyn fat pointers); see [Traits](#traits).
 | `trait` + `impl Trait for T` | Same-crate traits (`use` across modules); methods merge onto the concrete type; see [Traits](#traits) |
 | `impl From<T> for U` / `impl Into<U>` | `From` becomes `T:into()`; `impl Into` in signatures is accepted; `.into()` calls that method when applicable (otherwise transparent) |
 | `enum` + inherent `impl`    | Unit, tuple, and named variants as tagged tables                 |
-| `const`                     | Becomes a local (or exported) binding                            |
+| `const`                     | Becomes a local (or exported) binding; same-module uses of `pub const` qualify as `module.NAME` |
 | `type Name = ...`           | Transparent; resolved then forgotten (no Lua emission)           |
 | `use crate::...`            | Binding crates with `[package.metadata.factorio]` also lower; see [Sharing code between mods](dependencies/). `crate::` paths become `require`s |
 | `#[factorio_rs::export]`      | Publishes a fn via remote (control) or require (shared); see [Sharing code between mods](dependencies/) |
@@ -74,8 +74,11 @@ walkthrough (cross-module `Alert`, defaults, overrides, static + dyn dispatch).
 
 | Rust | Lua definition | Name used as a value (`add_command(..., greet)`) |
 | --- | --- | --- |
-| `fn greet` | `local function greet` | `greet` |
+| `fn greet` | Forward-declared `local greet`, then `function greet` | `greet` |
 | `pub fn greet` | `function control.greet` | `control.greet` |
+
+Private functions are forward-declared at the top of the module so earlier locals
+can call later ones (plain `local function` would resolve those calls as globals).
 
 Either form is valid for callbacks. Prefer `fn` for handlers that only exist to
 pass to Factorio APIs; use `pub fn` when other modules need to call the function.

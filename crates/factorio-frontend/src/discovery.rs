@@ -183,19 +183,17 @@ fn walk_expanded_items(
             })
             .or_else(|| stage_from_bang_wrapper(&name))
             .or_else(|| Stage::from_module_name(&raw_module_name))
-            .or(inherited_stage);
+            .or(inherited_stage)
+            .unwrap_or(Stage::Shared);
 
         // `control_mod!` expands to `mod __factorio_control { ... }`; emit the
         // canonical stage module name (`control`) for Lua paths / manifests.
-        let module_name = stage.map_or_else(
-            || raw_module_name.clone(),
-            |stage| canonicalize_bang_wrapper_name(&raw_module_name, stage),
-        );
+        let module_name = canonicalize_bang_wrapper_name(&raw_module_name, stage);
 
         let has_nested_mods = content.iter().any(|nested| matches!(nested, Item::Mod(_)));
         let has_lowerable = content.iter().any(is_lowerable_item);
 
-        if has_lowerable && let Some(stage) = stage {
+        if has_lowerable {
             let items: Vec<Item> = content
                 .iter()
                 .map(|nested| match nested {
@@ -225,7 +223,7 @@ fn walk_expanded_items(
         }
 
         if has_nested_mods {
-            walk_expanded_items(content, &module_name, stage, discovered);
+            walk_expanded_items(content, &module_name, Some(stage), discovered);
         }
     }
 }
@@ -407,5 +405,41 @@ mod tests {
         assert_eq!(modules.len(), 1);
         assert_eq!(modules[0].module_name, "data_updates");
         assert_eq!(modules[0].stage, factorio_ir::stage::Stage::DataUpdates);
+    }
+
+    #[test]
+    fn discovers_expanded_helper_modules_as_shared() {
+        let expanded = r"
+            mod force_state {
+                pub struct Milestone {
+                    pub name: String,
+                }
+                pub fn load(force_name: &str) -> Vec<Milestone> {
+                    Vec::new()
+                }
+            }
+
+            mod control {
+                use crate::force_state::Milestone;
+                pub fn on_tick() {}
+            }
+        ";
+
+        let modules = discover_modules_from_expanded(expanded).unwrap();
+        let names: Vec<_> = modules.iter().map(|m| m.module_name.as_str()).collect();
+        assert!(names.contains(&"force_state"), "got {names:?}");
+        assert!(names.contains(&"control"), "got {names:?}");
+
+        let force_state = modules
+            .iter()
+            .find(|m| m.module_name == "force_state")
+            .expect("force_state");
+        assert_eq!(force_state.stage, factorio_ir::stage::Stage::Shared);
+
+        let control = modules
+            .iter()
+            .find(|m| m.module_name == "control")
+            .expect("control");
+        assert_eq!(control.stage, factorio_ir::stage::Stage::Control);
     }
 }

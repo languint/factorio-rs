@@ -492,9 +492,11 @@ fn wrap_stage_module(stage: &str, input: TokenStream) -> TokenStream {
 pub fn mod_settings(input: TokenStream) -> TokenStream {
     let ModSettingsInput { prefix, groups } = parse_macro_input!(input as ModSettingsInput);
 
-    // Collect all settings in order.
     let mut const_defs = Vec::<TokenStream2>::new();
-    let mut extend_items = Vec::<TokenStream2>::new();
+    let mut bool_items = Vec::<TokenStream2>::new();
+    let mut int_items = Vec::<TokenStream2>::new();
+    let mut double_items = Vec::<TokenStream2>::new();
+    let mut string_items = Vec::<TokenStream2>::new();
 
     for group in &groups {
         let setting_type_str = match group.stage {
@@ -549,8 +551,28 @@ pub fn mod_settings(input: TokenStream) -> TokenStream {
                     }
                 },
             };
-            extend_items.push(item_expr);
+            // Group by setting prototype type
+            match entry.setting_type {
+                SettingType::Bool => bool_items.push(item_expr),
+                SettingType::Int => int_items.push(item_expr),
+                SettingType::Double => double_items.push(item_expr),
+                SettingType::Str => string_items.push(item_expr),
+            }
         }
+    }
+
+    let mut extend_calls = Vec::new();
+    if !bool_items.is_empty() {
+        extend_calls.push(quote::quote! { data.extend([#( #bool_items, )*]); });
+    }
+    if !int_items.is_empty() {
+        extend_calls.push(quote::quote! { data.extend([#( #int_items, )*]); });
+    }
+    if !double_items.is_empty() {
+        extend_calls.push(quote::quote! { data.extend([#( #double_items, )*]); });
+    }
+    if !string_items.is_empty() {
+        extend_calls.push(quote::quote! { data.extend([#( #string_items, )*]); });
     }
 
     TokenStream::from(quote::quote! {
@@ -561,9 +583,7 @@ pub fn mod_settings(input: TokenStream) -> TokenStream {
         }
 
         pub fn register() {
-            data.extend([
-                #( #extend_items, )*
-            ]);
+            #( #extend_calls )*
         }
     })
 }
