@@ -2,7 +2,7 @@
 
 Reactive, builder-style GUI helpers for [factorio-rs](https://crates.io/crates/factorio-rs) mods.
 
-Docs: <https://languint.github.io/factorio-rs/> (recipe: Reactive GUI).
+Docs: <https://languint.github.io/factorio-rs/ecosystem/factorio-rs-gui/>
 
 ## Example
 

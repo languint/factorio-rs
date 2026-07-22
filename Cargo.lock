@@ -260,6 +260,7 @@ dependencies = [
  "factorio-api-gen",
  "factorio-ir",
  "heck",
+ "serde_json",
  "thiserror",
 ]
 
@@ -293,6 +294,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "factorio-playground"
+version = "0.3.0"
+dependencies = [
+ "factorio-codegen",
+ "factorio-frontend",
+ "factorio-ir",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]

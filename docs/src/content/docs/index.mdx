@@ -1,18 +1,18 @@
 ---
 title: factorio-rs
-description: Write Factorio mods in Rust with factorio-rs. Transpile Rust to loadable Lua mods with typed API bindings.
+description: Write Factorio mods in Rust with factorio-rs. Docs, playground, and ecosystem crates.
 template: splash
 hero:
-  tagline: Rust SDK for Factorio's modding API, transpile Rust into loadable Lua mods.
+  tagline: Rust SDK for Factorio's modding API - docs, live playground, and ecosystem crates.
   image:
     alt: factorio-rs
     file: ../../assets/logo.svg
   actions:
-    - text: Get started
-      link: guides/getting-started/
+    - text: factorio-rs docs
+      link: intro/
       icon: right-arrow
-    - text: First hour
-      link: recipes/first-hour/
+    - text: Playground
+      link: playground/
       icon: right-arrow
       variant: minimal
     - text: GitHub
@@ -21,13 +21,32 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, Badge } from "@astrojs/starlight/components";
+import { PROJECTS } from "../../projects";
 
 :::caution
 This project is in development. Expect breaking changes between releases.
 :::
 
-## What you get
+## Documentation roots
+
+Each root has its own sidebar. Add new ecosystem crates under
+`docs/src/content/docs/ecosystem/<crate>/` and register them in
+`docs/src/projects.ts`.
+
+<CardGrid>
+  {PROJECTS.map((project) => (
+    <Card title={project.title} icon={project.kind === "tool" ? "puzzle" : project.kind === "ecosystem" ? "seti:react" : "open-book"}>
+      {project.badge ? <Badge text={project.badge} variant="tip" /> : null}
+      <p>{project.description}</p>
+      <p>
+        <a href={project.href}>Open {project.title}</a>
+      </p>
+    </Card>
+  ))}
+</CardGrid>
+
+## What factorio-rs gives you
 
 <CardGrid>
   <Card title="Typed Factorio APIs" icon="pencil">
@@ -47,9 +66,3 @@ This project is in development. Expect breaking changes between releases.
     but nil-crash or miscompile in Lua.
   </Card>
 </CardGrid>
-
-## Where to go next
-
-1. [Installation](installation/) -> [Getting started](guides/getting-started/)
-2. [First hour](recipes/first-hour/) - build, install, first `factorio-rs test`
-3. More [recipes](recipes/) - [Supported Rust](guides/language/) - [CLI](reference/cli/)

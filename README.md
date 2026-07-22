@@ -67,6 +67,7 @@ For edit-reload loops, install [Bacon](https://dystroy.org/bacon/) and use
 
 - **Book:** https://languint.github.io/factorio-rs/
 - **Start:** [Getting started](https://languint.github.io/factorio-rs/guides/getting-started/) -
+  [Playground](https://languint.github.io/factorio-rs/playground/) -
   [First hour](https://languint.github.io/factorio-rs/recipes/first-hour/)
 - **Recipes / language:** [Testing](https://languint.github.io/factorio-rs/guides/testing/) -
   [Dependencies](https://languint.github.io/factorio-rs/guides/dependencies/) -
@@ -81,6 +82,9 @@ For edit-reload loops, install [Bacon](https://dystroy.org/bacon/) and use
 Preview the docs site locally:
 
 ```bash
+# Optional: browser playground (needs wasm-pack)
+./scripts/build-playground-wasm.sh
+
 cd docs
 pnpm install
 pnpm dev

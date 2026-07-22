@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docs playground**: browser transpile preview via WASM
+  (`crates/factorio-playground`) emitting a Factorio-like mod tree
+  (`control.lua`, stage entries, locale, `info.json`, `lua/**`). Dual-path
+  builtins only, no rustc expand or typecheck.
+- **Multi-root docs site**: splash index lists documentation roots
+  (`docs/src/projects.ts`); Playground is its own topic; ecosystem crate docs
+  live under `docs/src/content/docs/ecosystem/` (starting with
+  `factorio-rs-gui`).
 - **Arbitrary macros**: `factorio-rs check` / `build` expand the crate with rustc
   (`-Zunpretty=expanded`) before lowering, so same-crate `macro_rules!` and
   dependency proc macros (e.g. a future `gui!` DSL) work when their expansion is

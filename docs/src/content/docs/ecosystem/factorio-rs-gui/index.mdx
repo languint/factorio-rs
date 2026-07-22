@@ -1,0 +1,55 @@
+---
+title: factorio-rs-gui
+description: Reactive, builder-style GUI helpers for factorio-rs mods.
+---
+
+`factorio-rs-gui` is an **ecosystem** crate: reactive builders, `state!` hooks,
+and mount/restore helpers on top of factorio-rs.
+
+| | |
+| --- | --- |
+| Crate | [`ecosystem/factorio-rs-gui`](https://github.com/languint/factorio-rs/tree/main/ecosystem/factorio-rs-gui) |
+| Example | [`examples/gui_counter`](https://github.com/languint/factorio-rs/tree/main/examples/gui_counter) |
+| Core docs | [factorio-rs](../../intro/) |
+
+## Start here
+
+1. [Getting started](guides/getting-started/) - dependency, first window, events
+2. [Widgets](widgets/) - `Frame`, `Text`, `Button`
+3. Core [GUI basics](../../recipes/gui-basics/) - imperative UI without reactivity
+
+## Guides
+
+| Guide | Topic |
+| --- | --- |
+| [Getting started](guides/getting-started/) | First mount + events |
+| [State](guides/state/) | `state!` hooks and rebuilds |
+| [Lifecycle](guides/lifecycle/) | `mount` / `restore` / `dispatch_click` |
+| [Reactive GUI](guides/reactive/) | End-to-end counter pattern |
+| [Multiple windows](guides/multiple-windows/) | Unique `root_name`s |
+
+## Widgets
+
+| Widget | Role |
+| --- | --- |
+| [`Frame`](widgets/frame/) | Container, layout, caption |
+| [`Text`](widgets/text/) | Label |
+| [`Button`](widgets/button/) | Caption + `on_click` |
+| [`Widget`](widgets/widget/) | Enum + `Into` conversions |
+
+## Add the dependency
+
+```toml
+[dependencies]
+factorio-rs-gui = { git = "https://github.com/languint/factorio-rs", path = "ecosystem/factorio-rs-gui" }
+```
+
+Path/git pins match how the monorepo examples consume it today. Prefer the
+published crate once it is on crates.io.
+
+## Design notes
+
+- Builders (`Frame`, `Button`, `Text`, ...) produce a concrete `Widget` tree.
+- `state!(init)` allocates a hook slot that survives rebuilds (per root name).
+- `mount` / `restore` / `dispatch_click` own the Factorio lifecycle glue.
+- Prefer `factorio_rs_gui::shared::...` paths so Factorio `require`s resolve.

@@ -9,6 +9,7 @@ members = [
     "crates/factorio-codegen",
     "crates/factorio-frontend",
     "crates/factorio-ir",
+    "crates/factorio-playground",
     "examples/hello_world",
     "examples/gui_basics",
     "examples/gui_counter",
@@ -19,6 +20,9 @@ members = [
     "examples/provider",
     "examples/consumer",
 ]
+
+[profile.release.package.factorio-playground]
+opt-level = "z"
 
 [workspace.package]
 version = "0.3.0"

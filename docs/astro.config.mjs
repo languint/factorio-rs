@@ -1,6 +1,10 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import react from "@astrojs/react";
+import starlightSidebarTopics from "starlight-sidebar-topics";
+import { coreSidebar } from "./src/sidebars/core.mjs";
+import { guiSidebar } from "./src/sidebars/gui.mjs";
 
 const site = "https://languint.github.io";
 const base = "/factorio-rs";
@@ -10,6 +14,7 @@ export default defineConfig({
   site,
   base,
   integrations: [
+    react(),
     starlight({
       title: "factorio-rs",
       description:
@@ -39,123 +44,42 @@ export default defineConfig({
       editLink: {
         baseUrl: "https://github.com/languint/factorio-rs/edit/main/docs/",
       },
-      sidebar: [
-        {
-          label: "Start here",
-          items: [
-            { label: "Introduction", slug: "intro" },
-            { label: "Installation", slug: "installation" },
-            { label: "Getting started", slug: "guides/getting-started" },
+      components: {
+        SocialIcons: "./src/components/SocialIcons.astro",
+        PageTitle: "./src/components/PageTitle.astro",
+        Footer: "./src/components/Footer.astro",
+      },
+      plugins: [
+        starlightSidebarTopics(
+          [
             {
-              label: "Changelog",
-              link: "https://github.com/languint/factorio-rs/blob/main/CHANGELOG.md",
-              attrs: { target: "_blank" },
+              id: "core",
+              label: "factorio-rs",
+              link: "/intro/",
+              icon: "open-book",
+              items: coreSidebar,
+            },
+            {
+              id: "playground",
+              label: "Playground",
+              link: "/playground/",
+              icon: "puzzle",
+              items: [{ label: "Playground", slug: "playground" }],
+            },
+            {
+              id: "factorio-rs-gui",
+              label: "factorio-rs-gui",
+              link: "/ecosystem/factorio-rs-gui/",
+              icon: "seti:react",
+              badge: { text: "Ecosystem", variant: "tip" },
+              items: guiSidebar,
             },
           ],
-        },
-        {
-          label: "Recipes",
-          items: [
-            { label: "Overview", slug: "recipes" },
-            { label: "First hour", slug: "recipes/first-hour" },
-            {
-              label: "Hot reload with Bacon",
-              slug: "recipes/hot-reload-bacon",
-            },
-            { label: "Persist with storage", slug: "recipes/persist-storage" },
-            {
-              label: "Settings that change gameplay",
-              slug: "recipes/settings-gameplay",
-            },
-            {
-              label: "Filter entity lists",
-              slug: "recipes/filter-entities",
-            },
-            {
-              label: "State machines with enums",
-              slug: "recipes/state-machines",
-            },
-            {
-              label: "Package graphics",
-              slug: "recipes/package-graphics",
-            },
-            {
-              label: "GUI basics",
-              slug: "recipes/gui-basics",
-            },
-            {
-              label: "Share an API between mods",
-              slug: "recipes/share-api",
-            },
-          ],
-        },
-        {
-          label: "Language",
-          items: [
-            { label: "Supported Rust", slug: "guides/language" },
-            { label: "Authoring macros", slug: "guides/authoring-macros" },
-            { label: "Option and Result", slug: "guides/option-and-result" },
-            { label: "Enums", slug: "language/enums" },
-            {
-              label: "Collections and iterators",
-              slug: "language/collections",
-            },
-            { label: "Type aliases", slug: "language/type-aliases" },
-          ],
-        },
-        {
-          label: "Concepts",
-          items: [
-            { label: "Stages", slug: "guides/stages" },
-            { label: "API types", slug: "guides/api-types" },
-            { label: "Lints", slug: "guides/lints" },
-            { label: "Profiles", slug: "guides/profiles" },
-          ],
-        },
-        {
-          label: "Modding",
-          items: [
-            { label: "Events and filters", slug: "guides/events" },
-            { label: "Mod settings", slug: "guides/mod-settings" },
-            { label: "Prototypes", slug: "guides/prototypes" },
-            { label: "Locale", slug: "guides/locale" },
-            {
-              label: "Sharing code between mods",
-              slug: "guides/dependencies",
-            },
-            { label: "Testing", slug: "guides/testing" },
-          ],
-        },
-        {
-          label: "Optional features",
-          items: [
-            { label: "Tracing", slug: "guides/tracing" },
-            { label: "Serde / JSON", slug: "guides/serde" },
-          ],
-        },
-        {
-          label: "Reference",
-          items: [
-            { label: "CLI", slug: "reference/cli" },
-            { label: "Factorio.toml", slug: "reference/factorio-toml" },
-            { label: "Macros and attributes", slug: "reference/macros" },
-          ],
-        },
-        {
-          label: "Examples",
-          items: [
-            { label: "hello_world", slug: "examples/hello-world" },
-            { label: "gui_basics", slug: "examples/gui-basics" },
-            { label: "locale_test", slug: "examples/locale-test" },
-            {
-              label: "mandatory_spaghetti",
-              slug: "examples/mandatory-spaghetti",
-            },
-            { label: "tracing_test", slug: "examples/tracing-test" },
-            { label: "traits_demo", slug: "examples/traits-demo" },
-            { label: "provider / consumer", slug: "examples/dependencies" },
-          ],
-        },
+          {
+            // Site splash lists all roots; it is not part of any topic sidebar.
+            exclude: ["/", "/index"],
+          },
+        ),
       ],
     }),
   ],

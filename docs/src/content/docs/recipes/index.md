@@ -16,7 +16,7 @@ Language / Concepts / Reference instead.
 | [State machines with enums](state-machines/) | Tagged enums + `match` for phases |
 | [Package graphics](package-graphics/) | Assets + `item!` icons -> `__mod__/...` + `locale!` |
 | [GUI basics](gui-basics/) | Event -> frame -> caption -> `style().set_width` |
-| [Reactive GUI](reactive-gui/) | `factorio-rs-gui` builders + `state!` + rebuild |
+| [Reactive GUI](reactive-gui/) | Points to [factorio-rs-gui guides](../ecosystem/factorio-rs-gui/guides/reactive/) |
 | [Share an API between mods](share-api/) | `#[export]` + `factorio-rs add` |
 
 For data-stage `Item` / `Recipe` / `Technology` stubs and the `item!` /

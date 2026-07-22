@@ -17,6 +17,7 @@ factorio-ir.workspace = true
 
 thiserror.workspace = true
 heck = "0.5.0"
+serde_json = "1.0.149"
 
 [build-dependencies]
 factorio-api-gen = { workspace = true }

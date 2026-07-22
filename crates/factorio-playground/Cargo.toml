@@ -1,0 +1,30 @@
+[package]
+name = "factorio-playground"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories = ["game-development", "wasm", "development-tools"]
+description = "WASM bindings for browser transpile previews (Rust -> Lua)"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+factorio-codegen.workspace = true
+factorio-frontend.workspace = true
+factorio-ir.workspace = true
+serde_json = "1.0.149"
+wasm-bindgen = "0.2.100"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]
+
+[lints]
+workspace = true

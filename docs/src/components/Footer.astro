@@ -1,0 +1,9 @@
+---
+import Default from "@astrojs/starlight/components/Footer.astro";
+import { isPlaygroundEntryId } from "../projects";
+
+const id = Astro.locals.starlightRoute.entry.id;
+const isPlayground = isPlaygroundEntryId(id);
+---
+
+{isPlayground ? null : <Default><slot /></Default>}

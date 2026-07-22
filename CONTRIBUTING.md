@@ -44,10 +44,16 @@ cargo run -p factorio-rs-cli -- build --manifest-path examples/hello_world/Cargo
 Docs preview:
 
 ```bash
+./scripts/build-playground-wasm.sh
+
 cd docs
 pnpm install
 pnpm dev
 ```
+
+The playground WASM is built in CI for docs deploy; locally run
+`./scripts/build-playground-wasm.sh` first or the Playground page shows a
+missing-WASM message.
 
 ## Project layout
 
@@ -59,6 +65,7 @@ pnpm dev
 | `crates/factorio-frontend` | Rust -> IR lowering |
 | `crates/factorio-ir` | IR, lints, prune |
 | `crates/factorio-codegen` | IR -> Lua |
+| `crates/factorio-playground` | WASM bindings for the docs playground |
 | `crates/factorio-macros` | Proc macros (`item!`, `recipe!`, stages, ...) |
 | `docs/` | Starlight documentation site |
 | `examples/` | Sample mods |
@@ -90,8 +97,10 @@ surface expansions, architectural refactors).
   proc macro in `factorio-macros` **and** IR expand in `factorio-frontend`
   (see `item!` / `recipe!` / `mod_settings!`).
 - Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
-- Docs that teach a workflow belong under `docs/src/content/docs/` and in the
-  sidebar in `docs/astro.config.mjs`.
+- Docs that teach a workflow belong under `docs/src/content/docs/` (core) or
+  `docs/src/content/docs/ecosystem/<crate>/` (ecosystem crates). Register new
+  roots in `docs/src/projects.ts` and a matching sidebar topic in
+  `docs/astro.config.mjs` / `docs/src/sidebars/`.
 
 ## Tests
 

@@ -5,6 +5,15 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "crates/factorio-playground/**"
+      - "crates/factorio-frontend/**"
+      - "crates/factorio-codegen/**"
+      - "crates/factorio-ir/**"
+      - "crates/factorio-api/**"
+      - "crates/factorio-api-gen/**"
+      - "scripts/build-playground-wasm.sh"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
 
@@ -20,12 +29,20 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Build playground WASM
+        run: ./scripts/build-playground-wasm.sh
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -40,9 +57,11 @@ jobs:
           cache-dependency-path: docs/pnpm-lock.yaml
 
       - name: Install dependencies
+        working-directory: docs
         run: pnpm install --frozen-lockfile
 
-      - name: Build
+      - name: Build docs
+        working-directory: docs
         run: pnpm build
 
       - name: Upload artifact
