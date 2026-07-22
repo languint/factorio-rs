@@ -10,6 +10,20 @@ fn ok(label: &str, files: &serde_json::Value) -> serde_json::Map<String, serde_j
     serde_json::from_str(result.files_json.as_ref().expect("files")).expect("json")
 }
 
+fn fixture_files(entries: &[(&str, &str)]) -> serde_json::Value {
+    serde_json::Value::Object(
+        entries
+            .iter()
+            .map(|(path, source)| {
+                (
+                    (*path).to_owned(),
+                    serde_json::Value::String((*source).to_owned()),
+                )
+            })
+            .collect(),
+    )
+}
+
 #[test]
 fn screen_gui() {
     let map = ok(
@@ -134,8 +148,10 @@ pub fn on_singleplayer_init() {
 fn enum_phase() {
     ok(
         "enum-phase",
-        &serde_json::json!({
-                                                                            "shared/phase.rs": r"
+        &fixture_files(&[
+            (
+                "shared/phase.rs",
+                r"
 pub enum Phase {
     Idle,
     Mining { ticks: i64 },
@@ -153,7 +169,10 @@ impl Phase {
     }
 }
 ",
-                                                                            "control/tick.rs": r#"
+            ),
+            (
+                "control/tick.rs",
+                r#"
 use crate::shared::phase::Phase;
 
 #[factorio_rs::event(OnSingleplayerInit)]
@@ -168,7 +187,8 @@ pub fn on_singleplayer_init() {
     }
 }
 "#,
-                                                                        }),
+            ),
+        ]),
     );
 }
 
@@ -176,8 +196,10 @@ pub fn on_singleplayer_init() {
 fn traits_dyn() {
     let map = ok(
         "traits-dyn",
-        &serde_json::json!({
-            "shared/alert.rs": r#"
+        &fixture_files(&[
+            (
+                "shared/alert.rs",
+                r#"
 pub trait Alert {
     fn title(&self) -> &'static str;
     fn priority(&self) -> i64;
@@ -187,7 +209,10 @@ pub trait Alert {
     }
 }
 "#,
-            "control/alerts.rs": r#"
+            ),
+            (
+                "control/alerts.rs",
+                r#"
 use crate::shared::alert::Alert;
 
 struct BeltJam {
@@ -221,7 +246,8 @@ pub fn on_singleplayer_init() {
     shout(&jam);
 }
 "#,
-        }),
+            ),
+        ]),
     );
     let lua = map["lua/control/alerts.lua"].as_str().unwrap();
     assert!(lua.contains("__vt_Alert") || lua.contains("_vt"), "{lua}");
@@ -332,8 +358,10 @@ pub fn on_singleplayer_init() {
 fn settings() {
     let map = ok(
         "settings",
-        &serde_json::json!({
-            "settings/mod.rs": r#"
+        &fixture_files(&[
+            (
+                "settings/mod.rs",
+                r#"
 mod_settings! {
     prefix = "pg",
     startup {
@@ -356,7 +384,10 @@ locale! {
     }
 }
 "#,
-            "control/boot.rs": r#"
+            ),
+            (
+                "control/boot.rs",
+                r#"
 use crate::settings::Settings;
 
 #[factorio_rs::event(OnSingleplayerInit)]
@@ -367,7 +398,8 @@ pub fn on_singleplayer_init() {
     }
 }
 "#,
-        }),
+            ),
+        ]),
     );
     assert!(map.contains_key("settings.lua"));
     assert!(map.contains_key("locale/en/settings.cfg"));
@@ -377,8 +409,10 @@ pub fn on_singleplayer_init() {
 fn full_mod() {
     let map = ok(
         "full-mod",
-        &serde_json::json!({
-                                                                            "settings/mod.rs": r#"
+        &fixture_files(&[
+            (
+                "settings/mod.rs",
+                r#"
 mod_settings! {
     prefix = "pg",
     startup {
@@ -386,7 +420,10 @@ mod_settings! {
     }
 }
 "#,
-                                                                            "data/prototypes.rs": r#"
+            ),
+            (
+                "data/prototypes.rs",
+                r#"
 item! {
     widget {
         name = "playground-widget",
@@ -405,7 +442,10 @@ locale! {
     }
 }
 "#,
-                                                                            "shared/phase.rs": r"
+            ),
+            (
+                "shared/phase.rs",
+                r"
 pub enum Phase {
     Idle,
     Running { ticks: i64 },
@@ -420,7 +460,10 @@ impl Phase {
     }
 }
 ",
-                                                                            "control/boot.rs": r#"
+            ),
+            (
+                "control/boot.rs",
+                r#"
 use crate::shared::phase::Phase;
 
 #[factorio_rs::event(OnSingleplayerInit)]
@@ -437,14 +480,18 @@ pub fn on_singleplayer_init() {
     );
 }
 "#,
-                                                                            "control/api.rs": r#"
+            ),
+            (
+                "control/api.rs",
+                r#"
 #[factorio_rs::export]
 pub fn status() -> String {
     let boots = storage.get::<u32>("boots").unwrap_or(0);
     format!("boots={boots}")
 }
 "#,
-                                                                        }),
+            ),
+        ]),
     );
     assert!(map.contains_key("control.lua"));
     assert!(map.contains_key("data.lua"));

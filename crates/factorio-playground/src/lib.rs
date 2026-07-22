@@ -147,6 +147,20 @@ mod tests {
 
     use super::transpile_files;
 
+    fn fixture_files(entries: &[(&str, &str)]) -> serde_json::Value {
+        serde_json::Value::Object(
+            entries
+                .iter()
+                .map(|(path, source)| {
+                    (
+                        (*path).to_owned(),
+                        serde_json::Value::String((*source).to_owned()),
+                    )
+                })
+                .collect(),
+        )
+    }
+
     #[test]
     fn transpile_files_emits_mod_packaging() {
         let files = serde_json::json!({
@@ -173,8 +187,10 @@ pub fn on_singleplayer_init() {
 
     #[test]
     fn transpile_files_nested_modules() {
-        let files = serde_json::json!({
-                                                                    "shared/player.rs": r"
+        let files = fixture_files(&[
+            (
+                "shared/player.rs",
+                r"
 mod health;
 
 pub struct MyPlayer {
@@ -189,7 +205,10 @@ impl MyPlayer {
     }
 }
 ",
-                                                                    "shared/player/health.rs": r"
+            ),
+            (
+                "shared/player/health.rs",
+                r"
 use crate::shared::player::MyPlayer;
 
 impl MyPlayer {
@@ -204,13 +223,19 @@ impl MyPlayer {
     }
 }
 ",
-                                                                    "control/on_init.rs": r"
+            ),
+            (
+                "control/on_init.rs",
+                r"
 pub fn on_init() {
     let mut player = crate::shared::player::MyPlayer::new();
     player.set_health(player.get_health() - 1);
 }
 ",
-                                                                    "data/items.rs": r#"
+            ),
+            (
+                "data/items.rs",
+                r#"
 item! {
     widget {
         name = "playground-widget",
@@ -229,7 +254,8 @@ locale! {
     }
 }
 "#,
-                                                                });
+            ),
+        ]);
         let result = transpile_files(&files.to_string());
         assert!(result.ok, "{:?}", result.message);
         let map: serde_json::Map<String, serde_json::Value> =
