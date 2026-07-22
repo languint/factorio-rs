@@ -4,11 +4,14 @@ description: Reactive, builder-style GUI helpers for factorio-rs mods.
 ---
 
 `factorio-rs-gui` is an **ecosystem** crate: reactive builders, `state!` hooks,
-and mount/install helpers on top of factorio-rs.
+and mount/install helpers on top of factorio-rs. It ships as both a **Cargo
+crate** (authoring) and a **Factorio library mod** (runtime `require`).
 
 | | |
 | --- | --- |
-| Crate | [`ecosystem/factorio-rs-gui`](https://github.com/languint/factorio-rs/tree/main/ecosystem/factorio-rs-gui) |
+| crates.io | [`factorio-rs-gui`](https://crates.io/crates/factorio-rs-gui) |
+| Factorio mod | [`factorio-rs-gui`](https://mods.factorio.com/mod/factorio-rs-gui) |
+| Source | [`ecosystem/factorio-rs-gui`](https://github.com/languint/factorio-rs/tree/main/ecosystem/factorio-rs-gui) |
 | Example | [`examples/gui_counter`](https://github.com/languint/factorio-rs/tree/main/examples/gui_counter), [`examples/gui_widgets`](https://github.com/languint/factorio-rs/tree/main/examples/gui_widgets) |
 | Core docs | [factorio-rs](../../intro/) |
 
@@ -43,13 +46,20 @@ and mount/install helpers on top of factorio-rs.
 
 ## Add the dependency
 
+**Cargo** (typecheck + transpile):
+
 ```toml
 [dependencies]
-factorio-rs-gui = { git = "https://github.com/languint/factorio-rs", path = "ecosystem/factorio-rs-gui" }
+factorio-rs-gui = "0.1"
 ```
 
-Path/git pins match how the monorepo examples consume it today. Prefer the
-published crate once it is on crates.io.
+**Factorio** (runtime): install
+[`factorio-rs-gui`](https://mods.factorio.com/mod/factorio-rs-gui) from the mod
+portal and keep it enabled next to your mod. Building with the Cargo
+dependency merges `factorio-rs-gui >= …` into your `info.json` via
+`[package.metadata.factorio]` ([Sharing code between mods](../../guides/dependencies/)).
+
+Monorepo examples still use a path dependency; for apps, prefer crates.io.
 
 ## Design notes
 
@@ -57,4 +67,5 @@ published crate once it is on crates.io.
 - `state!(init)` allocates a hook slot that survives rebuilds (per root name).
 - `mount` / `install` own the Factorio lifecycle glue and wire GUI events via
   `script.on_event` (no manual GUI event stubs).
-- Prefer `factorio_rs_gui::shared::...` paths so Factorio `require`s resolve.
+- Prefer `factorio_rs_gui::shared::...` paths so Factorio `require`s resolve
+  against `__factorio-rs-gui__/lua/...`.

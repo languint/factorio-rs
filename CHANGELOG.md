@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: `factorio-rs-gui` install path is crates.io + the Factorio mod portal
+  library mod (not git/path-only).
+
 ## [0.3.1] - 2026-07-22
 
 ### Added

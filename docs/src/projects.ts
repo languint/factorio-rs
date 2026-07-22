@@ -30,7 +30,8 @@ export const PROJECTS: readonly DocProject[] = [
   {
     id: "factorio-rs-gui",
     title: "factorio-rs-gui",
-    description: "Reactive, builder-style GUI helpers for factorio-rs mods.",
+    description:
+      "Reactive GUI helpers (crates.io + Factorio mod portal library mod).",
     href: "ecosystem/factorio-rs-gui/",
     kind: "ecosystem",
     badge: "Ecosystem",

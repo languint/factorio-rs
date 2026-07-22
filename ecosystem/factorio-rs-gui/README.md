@@ -2,7 +2,20 @@
 
 Reactive, builder-style GUI helpers for [factorio-rs](https://crates.io/crates/factorio-rs) mods.
 
-Docs: <https://languint.github.io/factorio-rs/ecosystem/factorio-rs-gui/>
+| | |
+| --- | --- |
+| Docs | <https://languint.github.io/factorio-rs/ecosystem/factorio-rs-gui/> |
+| crates.io | [`factorio-rs-gui`](https://crates.io/crates/factorio-rs-gui) |
+| Factorio mod | [`factorio-rs-gui`](https://mods.factorio.com/mod/factorio-rs-gui) |
+
+Add the Cargo crate for authoring; install the Factorio library mod so runtime
+`require("__factorio-rs-gui__/…")` resolves. Players need **both** your mod and
+`factorio-rs-gui` enabled.
+
+```toml
+[dependencies]
+factorio-rs-gui = "0.1"
+```
 
 ## Example
 
@@ -46,6 +59,7 @@ manual `dispatch_*` stubs. Do not also define competing `#[factorio_rs::event(On
 handlers; use `runtime::on_click` for extra click logic.
 
 ```bash
+# From this monorepo
 cd ecosystem/factorio-rs-gui && factorio-rs build
 cd examples/gui_counter && factorio-rs build
 cd examples/gui_widgets && factorio-rs build

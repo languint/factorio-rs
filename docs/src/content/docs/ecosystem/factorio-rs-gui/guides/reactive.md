@@ -79,11 +79,18 @@ directly (backed by `impl From<...> for Widget`). Prefer
 
 ## Try it
 
+From this repository:
+
 ```bash
-cd ecosystem/factorio-rs-gui && factorio-rs build
+cd ecosystem/factorio-rs-gui && factorio-rs build && factorio-rs install
 cd examples/gui_counter
 factorio-rs build && factorio-rs install --open
 ```
+
+Apps outside the monorepo: depend on
+[`factorio-rs-gui` on crates.io](https://crates.io/crates/factorio-rs-gui) and
+enable the
+[library mod on the Factorio mod portal](https://mods.factorio.com/mod/factorio-rs-gui).
 
 Working tree:
 [`examples/gui_counter`](https://github.com/languint/factorio-rs/tree/main/examples/gui_counter).

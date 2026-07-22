@@ -7,11 +7,20 @@ description: Add factorio-rs-gui and mount your first reactive window.
 
 ```toml
 [dependencies]
-factorio-rs-gui = { git = "https://github.com/languint/factorio-rs", path = "ecosystem/factorio-rs-gui" }
+factorio-rs-gui = "0.1"
 ```
 
-Path/git pins match the monorepo examples. Prefer the published crate once it
-is on crates.io.
+Also install the
+[`factorio-rs-gui`](https://mods.factorio.com/mod/factorio-rs-gui) **library mod**
+from the [Factorio mod portal](https://mods.factorio.com/mod/factorio-rs-gui)
+and enable it with your mod. Your build emits `require("__factorio-rs-gui__/…")`
+and lists `factorio-rs-gui` in `info.json` dependencies.
+
+For local monorepo work (examples in this repo):
+
+```toml
+factorio-rs-gui = { path = "../../ecosystem/factorio-rs-gui" }
+```
 
 ## 2. Build an `app`
 
@@ -68,10 +77,15 @@ handler). Extra click logic: [`runtime::on_click`](../lifecycle/).
 
 ## 4. Try the example
 
+From this repository (builds the library mod + the counter):
+
 ```bash
-cd ecosystem/factorio-rs-gui && factorio-rs build
+cd ecosystem/factorio-rs-gui && factorio-rs build && factorio-rs install
 cd examples/gui_counter
 factorio-rs build && factorio-rs install --open
 ```
+
+Or depend on crates.io, enable the portal mod, and `factorio-rs build` /
+`install` your own project.
 
 Next: [State](../state/), [Lifecycle](../lifecycle/), [Widgets](../../widgets/).

@@ -74,7 +74,10 @@ For edit-reload loops, install [Bacon](https://dystroy.org/bacon/) and use
   [Supported Rust](https://languint.github.io/factorio-rs/guides/language/) -
   [Lints](https://languint.github.io/factorio-rs/guides/lints/)
 - **crates.io:** [factorio-rs](https://crates.io/crates/factorio-rs) -
-  [factorio-rs-cli](https://crates.io/crates/factorio-rs-cli)
+  [factorio-rs-cli](https://crates.io/crates/factorio-rs-cli) -
+  [factorio-rs-gui](https://crates.io/crates/factorio-rs-gui)
+- **Factorio mod portal:** [factorio-rs-gui](https://mods.factorio.com/mod/factorio-rs-gui)
+  (library mod for GUI apps)
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Discord:** https://discord.gg/Tq8243rqmn
@@ -96,6 +99,7 @@ pnpm dev
 | ----------------------------------------------------------------- | --------------------------------- |
 | [`hello_world`](examples/hello_world)                             | Minimal control-stage event       |
 | [`gui_basics`](examples/gui_basics)                               | Framed GUI + `LuaStyle`           |
+| [`gui_counter`](examples/gui_counter) / [`gui_widgets`](examples/gui_widgets) | Reactive GUI via [factorio-rs-gui](https://crates.io/crates/factorio-rs-gui) |
 | [`locale_test`](examples/locale_test)                             | `locale!` and mod settings        |
 | [`provider`](examples/provider) / [`consumer`](examples/consumer) | Cross-mod exports via Cargo       |
 | [`tracing_test`](examples/tracing_test)                           | Optional `tracing` -> `game.print` |
