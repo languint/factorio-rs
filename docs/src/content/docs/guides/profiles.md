@@ -41,6 +41,7 @@ Reachability starts from:
 
 - `#[factorio_rs::event]` handlers
 - `#[factorio_rs::export]` functions (cross-mod API must survive even if unused in-mod)
+- public structs and enums in **shared** stage modules (library `require()` surface)
 - public functions and structs (and enums) in settings/data stage modules
   (load-time entry points)
 

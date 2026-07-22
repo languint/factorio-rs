@@ -13,7 +13,7 @@ In your mod `Cargo.toml`:
 
 ```toml
 [dependencies]
-factorio-rs = { version = "0.3.0", features = ["tracing"] }
+factorio-rs = { version = "0.3.1", features = ["tracing"] }
 ```
 
 That pulls in the `tracing` crate so macros type-check under `cargo check`.

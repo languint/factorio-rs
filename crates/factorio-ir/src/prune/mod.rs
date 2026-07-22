@@ -216,4 +216,56 @@ mod tests {
 
         assert_eq!(modules[0].symbols.len(), 1);
     }
+
+    #[test]
+    fn keeps_public_shared_structs_as_library_api() {
+        use crate::structure::{Struct, StructField};
+        use crate::r#type::Type;
+
+        let mut modules = vec![Module {
+            name: "shared.frame".to_string(),
+            stage: Stage::Shared,
+            body: Block { statements: vec![] },
+            imports: vec![],
+            submodules: vec![],
+            locales: vec![],
+            pending_locales: vec![],
+            vtables: vec![],
+            symbols: vec![Symbol {
+                scope: Scope::Public,
+                statement: Statement::StructDecl(Struct {
+                    name: "Frame".to_string(),
+                    fields: vec![StructField {
+                        name: "caption".to_string(),
+                        ty: Type::Str,
+                        source_type: None,
+                    }],
+                    constants: vec![],
+                    methods: vec![Function {
+                        name: "new".to_string(),
+                        params: vec![],
+                        body: Block { statements: vec![] },
+                        doc: None,
+                        debug: None,
+                        event: None,
+                        event_filter: None,
+                        export: None,
+                        inline: false,
+                    }],
+                    doc: None,
+                    debug: None,
+                }),
+            }],
+        }];
+
+        prune_modules(&mut modules);
+
+        assert_eq!(modules[0].symbols.len(), 1);
+        let Statement::StructDecl(frame) = &modules[0].symbols[0].statement else {
+            panic!("expected Frame struct to remain");
+        };
+        assert_eq!(frame.name, "Frame");
+        assert_eq!(frame.methods.len(), 1);
+        assert_eq!(frame.methods[0].name, "new");
+    }
 }

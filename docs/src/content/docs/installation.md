@@ -19,20 +19,20 @@ In your mod’s `Cargo.toml`:
 
 ```toml
 [dependencies]
-factorio-rs = "0.3.0"
+factorio-rs = "0.3.1"
 ```
 
 Optional features:
 
 ```toml
 # Type-check `tracing::info!` etc.; CLI lowers them to colored game.print
-factorio-rs = { version = "0.3.0", features = ["tracing"] }
+factorio-rs = { version = "0.3.1", features = ["tracing"] }
 
 # Type-check serde / serde_json; CLI lowers to helpers.table_to_json / string.pack
-factorio-rs = { version = "0.3.0", features = ["serde"] }
+factorio-rs = { version = "0.3.1", features = ["serde"] }
 
 # Both
-factorio-rs = { version = "0.3.0", features = ["tracing", "serde"] }
+factorio-rs = { version = "0.3.1", features = ["tracing", "serde"] }
 ```
 
 See [Tracing](guides/tracing/) and [Serde / JSON](guides/serde/) for details.

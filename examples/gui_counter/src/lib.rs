@@ -29,7 +29,7 @@ mod control {
             .align_vertical(LuaStyleVerticalAlign::Top)
             .direction(GuiDirection::Vertical)
             .child(Text::new(&label))
-            .child(Button::new("Decrement counter").on_click(increment))
+            .child(Button::new("Increment counter").on_click(increment))
     }
 
     #[factorio_rs::event(OnPlayerCreated)]

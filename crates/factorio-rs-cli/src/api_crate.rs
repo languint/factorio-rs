@@ -526,12 +526,12 @@ mod tests {
             provider.join("Cargo.toml"),
             r#"[package]
 name = "provider"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 
 [package.metadata.factorio]
 mod_name = "provider"
-dependencies = ["provider >= 0.3.0"]
+dependencies = ["provider >= 0.3.1"]
 module_root = "lua"
 interface = "provider"
 remote_fns = ["greet"]
@@ -561,7 +561,7 @@ path = "src/lib.rs"
             provider.join("Cargo.toml"),
             r#"[package]
 name = "provider"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 
 [lib]
@@ -573,7 +573,7 @@ path = "src/lib.rs"
 
         let package = CargoPackage {
             name: "provider".to_string(),
-            version: "0.3.0".to_string(),
+            version: "0.3.1".to_string(),
             authors: None,
         };
         let remotes = vec![RemoteExport {

@@ -9,6 +9,7 @@ use crate::{
         references::{collect_references_from_expression, collect_references_from_function},
         struct_utils,
     },
+    stage::Stage,
     statement::Statement,
     structure::Struct,
 };
@@ -47,6 +48,22 @@ pub fn compute_reachability(graph: &ModuleGraph<'_>) -> HashMap<String, ModuleRe
                         &mut pending,
                         &module.name,
                         ItemKey::Function(function.name.clone()),
+                    );
+                }
+                Statement::StructDecl(struct_decl) if module.stage == Stage::Shared => {
+                    enqueue_item(
+                        &mut reachability,
+                        &mut pending,
+                        &module.name,
+                        ItemKey::Struct(struct_decl.name.clone()),
+                    );
+                }
+                Statement::EnumDecl(enum_decl) if module.stage == Stage::Shared => {
+                    enqueue_item(
+                        &mut reachability,
+                        &mut pending,
+                        &module.name,
+                        ItemKey::Struct(enum_decl.name.clone()),
                     );
                 }
                 // Public functions and structs in settings/data modules are stage
