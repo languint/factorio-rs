@@ -180,13 +180,7 @@ pub fn write_frontend_error(
     }
 
     let message = error.report_message();
-    write_cargo_header(
-        &mut writer,
-        "error",
-        Color::Red,
-        error.code(),
-        &message,
-    )?;
+    write_cargo_header(&mut writer, "error", Color::Red, error.code(), &message)?;
 
     let span_range = error.location().map_or(0..0, |loc| loc.span.range());
     let span = file_span(filename, span_range);

@@ -10,8 +10,7 @@ use crate::error::{FrontendError, FrontendResult};
 
 /// Expand `fluid! { ... }` into `Fluids` + `pub fn register_fluids()`.
 pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec<syn::Item>> {
-    let input: FluidsMacroInput =
-        syn::parse2(tokens).map_err(FrontendError::from)?;
+    let input: FluidsMacroInput = syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();

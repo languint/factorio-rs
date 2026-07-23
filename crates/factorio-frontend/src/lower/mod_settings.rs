@@ -9,8 +9,7 @@ use syn::{
 use crate::error::{FrontendError, FrontendResult};
 
 pub fn expand(tokens: TokenStream) -> FrontendResult<Vec<syn::Item>> {
-    let input: ModSettingsInput =
-        syn::parse2(tokens).map_err(FrontendError::from)?;
+    let input: ModSettingsInput = syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();

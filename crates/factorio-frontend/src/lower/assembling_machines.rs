@@ -10,8 +10,7 @@ use crate::error::{FrontendError, FrontendResult};
 
 /// Expand `assembling_machine! { ... }` into `AssemblingMachines` + register fn.
 pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec<syn::Item>> {
-    let input: AssemblingMachinesMacroInput =
-        syn::parse2(tokens).map_err(FrontendError::from)?;
+    let input: AssemblingMachinesMacroInput = syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();

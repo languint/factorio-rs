@@ -30,9 +30,10 @@ variable_index = "deny"  # print, build fails
 | `deny` | Print an error; build fails after all diagnostics are shown |
 
 Unset lints use their **defaults** (see the table below). Most default to
-`deny` because they can produce wrong or unsafe Lua. `format_spec` and
-`integer_div` default to `warn` (formatting is dropped; Factorio math is often
-float and operand types are not fully tracked).
+`deny` because they can produce wrong or unsafe Lua. `format_spec`,
+`integer_div`, `numeric_cast`, and `storage_index` default to `warn`
+(formatting is dropped; Factorio math is often float; numeric `as` is a no-op;
+`storage["…"]` is opaque `LuaAny`).
 
 ## Diagnostics
 
@@ -250,12 +251,13 @@ use `panic!("...")` (or finish the code). Defaults to **deny**.
 
 ### `storage_index` (`E0017`)
 
-`storage["key"]` returns opaque [`LuaAny`](/guides/api-types/). Prefer typed
-helpers:
+`storage["key"]` reads **and** writes return / store opaque
+[`LuaAny`](/guides/api-types/). Prefer typed helpers:
 
 ```rust
 // Warns
 let v = storage["counter"];
+storage["counter"] = 1;
 
 // Prefer
 let n = storage.get::<u32>("counter").unwrap_or(0);

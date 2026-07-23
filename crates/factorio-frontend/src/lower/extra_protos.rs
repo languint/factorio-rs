@@ -20,8 +20,7 @@ macro_rules! expand_proto {
             tokens: TokenStream,
             mod_name: Option<&str>,
         ) -> FrontendResult<Vec<syn::Item>> {
-            let input: $input =
-                syn::parse2(tokens).map_err(FrontendError::from)?;
+            let input: $input = syn::parse2(tokens).map_err(FrontendError::from)?;
             let mut const_defs = String::new();
             let mut extend_items = String::new();
             for entry in &input.$entries {

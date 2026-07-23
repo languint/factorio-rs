@@ -38,7 +38,7 @@ for i in 0..=n {
 
 ## map / filter / collect
 
-Supported chain: range or `Vec` + `.map` and/or `.filter` + `.collect`
+Supported chain: range or `Vec` + `.map` / `.filter` / `.take` + `.collect`
 (including `.collect::<Vec<_>>()`). Other adapters (`enumerate`, `zip`, ...)
 are rejected.
 
@@ -75,7 +75,7 @@ Aliases are transparent - see [Type aliases](/language/type-aliases/).
 | Supported | Not yet |
 | --- | --- |
 | `for` on `Vec` / `.iter()` / ranges | `enumerate`, `zip`, `flat_map` |
-| `.map` / `.filter` / `.collect` on that subset | Standing `.iter()` without collect |
+| `.map` / `.filter` / `.take` / `.collect` on that subset | Standing `.iter()` without collect |
 | `type Name = Vec<_>` for ipairs detection | Arbitrary `Iterator` trait objects |
 
 Full table: [Collections and iterators](/language/collections/).

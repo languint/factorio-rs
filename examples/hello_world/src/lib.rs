@@ -66,5 +66,48 @@ mod control {
                     assert!(game.tick() >= ctx.fetch_u32("t0") + 5);
                 });
         }
+
+        #[test]
+        #[ignore = "requires Factorio (run with factorio-rs test)"]
+        fn parity_mod_vs_band_bench() {
+            // Keep limits as literals so peephole does not mutate a shared `n_iters`
+            // when lowering `0..n_iters` → `for i = 0, n_iters - 1`.
+            let two = 2_u32;
+
+            let mut sink = 0_u32;
+            for n in 0..1_000 {
+                if n % two == 1 {
+                    sink += 1;
+                }
+                if n % 2 == 1 {
+                    sink += 1;
+                }
+            }
+            assert!(sink > 0);
+
+            let p_opaque = helpers.create_profiler(None);
+            sink = 0;
+            for n in 0..20_000_000 {
+                if n % two == 1 {
+                    sink += 1;
+                }
+            }
+            p_opaque.stop();
+            assert_eq!(sink, 10_000_000);
+
+            let p_literal = helpers.create_profiler(None);
+            sink = 0;
+            for n in 0..20_000_000 {
+                if n % 2 == 1 {
+                    sink += 1;
+                }
+            }
+            p_literal.stop();
+            assert_eq!(sink, 10_000_000);
+
+            println!("parity_bench N=20000000 (next two log lines: opaque_%_two, literal_%_2)");
+            log(p_opaque);
+            log(p_literal);
+        }
     }
 }

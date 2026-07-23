@@ -95,7 +95,7 @@ Transpile-time safety checks. See [Lints](/guides/lints/).
 
 Each key is a lint **identifier**; the value is `allow`, `warn`, or `deny`.
 Unspecified lints use their defaults (`deny`, except `format_spec` /
-`integer_div` -> `warn`).
+`integer_div` / `numeric_cast` / `storage_index` -> `warn`).
 
 | Identifier | Code | Default | Meaning |
 | --- | --- | --- | --- |
@@ -113,6 +113,9 @@ Unspecified lints use their defaults (`deny`, except `format_spec` /
 | `option_try` | `E0012` | deny | `?` on a call/method assumes Result; Option APIs need a typed binding |
 | `integer_div` | `E0013` | warn | `/` or `/=` without a float operand (Lua `/` is always float) |
 | `struct_rest` | `E0014` | deny | Struct update `..rest` other than `Default::default()` |
+| `numeric_cast` | `E0015` | warn | Numeric `as` cast is a no-op in Lua (no truncation/clamping) |
+| `todo_macro` | `E0016` | deny | `todo!` / `unimplemented!` (prefer `panic!` or finish the path) |
+| `storage_index` | `E0017` | warn | `storage["key"]` read/write returns opaque `LuaAny`; prefer `.get` / `.set` |
 
 ```toml
 [lints]

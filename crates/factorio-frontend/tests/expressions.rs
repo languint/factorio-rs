@@ -702,15 +702,75 @@ pub fn keep(x: Option<i32>) -> Option<i32> {
         panic!("expected function");
     };
     let body = &function.body.statements;
+    let Some(Statement::Conditional {
+        condition,
+        then_block,
+        else_block,
+        ..
+    }) = body
+        .iter()
+        .find(|s| matches!(s, Statement::Conditional { .. }))
+    else {
+        panic!("filter should hoist a conditional, got {body:?}");
+    };
     assert!(
-        body.iter()
-            .any(|s| matches!(s, Statement::Conditional { .. })),
-        "filter should hoist nested conditionals, got {body:?}"
+        matches!(
+            condition,
+            Expression::BinaryOp {
+                op: Operator::And,
+                ..
+            }
+        ),
+        "filter should use `~= nil and pred`, got {condition:?}"
+    );
+    assert!(
+        matches!(
+            then_block.as_slice(),
+            [Statement::Assignment {
+                value: Expression::Identifier(name),
+                ..
+            }] if name == "x"
+        ),
+        "then should keep x, got {then_block:?}"
+    );
+    assert!(
+        else_block.is_empty(),
+        "else should be empty (result starts nil), got {else_block:?}"
     );
     assert!(matches!(
         body.last(),
         Some(Statement::Return(Some(Expression::Identifier(_))))
     ));
+}
+
+#[test]
+fn rejects_unwrap_or_default() {
+    let source = r"
+pub fn f(x: Option<i32>) -> i32 {
+    x.unwrap_or_default()
+}
+";
+    let err = parse_module(source, "control.option_default").expect_err("unwrap_or_default");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("unwrap_or_default") || msg.contains("Unsupported"),
+        "expected unwrap_or_default error, got {msg}"
+    );
+}
+
+#[test]
+fn rejects_unsupported_result_method() {
+    let source = r#"
+pub fn f(r: Result<i32, String>) -> i32 {
+    r.unwrap_err()
+}
+"#;
+    let err = parse_module(source, "control.result_unsupported").expect_err("unwrap_err");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("unwrap_err") || msg.contains("not supported"),
+        "expected unsupported method error, got {msg}"
+    );
 }
 
 #[test]

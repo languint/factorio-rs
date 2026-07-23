@@ -12,7 +12,7 @@ learning a feature:
 | --- | --- |
 | `Option` / `Result` / `?` | [Option and Result](/guides/option-and-result/) |
 | User `enum` + `match` | [Enums](/language/enums/) - [State machines](/recipes/state-machines/) |
-| `Vec`, ranges, `.map`/`.filter`/`.collect` | [Collections](/language/collections/) - [Filter entities](/recipes/filter-entities/) |
+| `Vec`, ranges, `.map`/`.filter`/`.take`/`.collect` | [Collections](/language/collections/) - [Filter entities](/recipes/filter-entities/) |
 | `type` aliases | [Type aliases](/language/type-aliases/) |
 | Writing `macro_rules!` / proc-macro DSLs | [Authoring macros](/guides/authoring-macros/) |
 
@@ -251,7 +251,7 @@ purpose so optional Factorio parameter tables stay sparse. Do not expect Rust de
 
 ## Collections
 
-`Vec`, ranges, `ipairs` / `pairs`, and the `.map` / `.filter` / `.collect`
+`Vec`, ranges, `ipairs` / `pairs`, and the `.map` / `.filter` / `.take` / `.collect`
 subset: [Collections and iterators](/language/collections/).
 
 ## Types

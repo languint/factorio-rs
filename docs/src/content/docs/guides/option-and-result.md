@@ -95,6 +95,12 @@ twice.
 | `x.ok_or(e)` | `{ ok = x }` if present, else `{ err = e }` |
 | `x.ok_or_else(f)` | `{ ok = x }` if present, else `{ err = f() }` |
 
+**Not supported:** `.unwrap_or_default()` (Default is not typed in Lua — use
+`.unwrap_or(...)` / `.unwrap_or_else(...)`), and other std helpers such as
+`.unwrap_err()`, `.flatten()`, `.transpose()`, `.inspect()`, `.copied()` /
+`.cloned()`, `.map_or` / `.map_or_else`, `.ok()` / `.err()`. Those hard-error
+instead of emitting a Lua method call.
+
 ```rust
 let entity = surface
     .create_entity(params)

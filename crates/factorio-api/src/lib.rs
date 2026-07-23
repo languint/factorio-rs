@@ -469,6 +469,14 @@ impl LuaAny {
 
 include!(concat!(env!("OUT_DIR"), "/mod.rs"));
 
+/// [`classes::LuaProfiler`] may appear anywhere a [`LocalisedString`] is accepted;
+/// Factorio renders the elapsed time (plain `tostring` does not).
+impl From<classes::LuaProfiler> for LocalisedString {
+    fn from(_: classes::LuaProfiler) -> Self {
+        Self
+    }
+}
+
 /// Stub for [`std::ops::Index`] on [`classes::LuaGuiElement`] (children by name).
 const LUA_GUI_ELEMENT: classes::LuaGuiElement = classes::LuaGuiElement;
 

@@ -10,6 +10,7 @@ use factorio_codegen::LuaGenerator;
 use factorio_frontend::{
     ParseOptions, discover_tests, display_filename, eprint_diagnostic, eprint_frontend_error,
 };
+use factorio_ir::opt::optimize_modules;
 
 use crate::{
     cargo_manifest::CargoPackage,
@@ -81,10 +82,14 @@ pub fn run_tests(project_root: &Path, options: &TestOptions) -> CliResult<()> {
 
     let mut filtered_suite = suite;
     filtered_suite.tests.clone_from(&tests);
-    let module = filtered_suite.to_module();
+    let mut module = filtered_suite.to_module();
 
     let lua_module_prefix = config.emit.lua_module_prefix.as_deref().unwrap_or("");
     let profile = config.resolve_profile(&options.build.profile);
+    // Match `factorio-rs build`: apply IR opts to the synthetic test module too.
+    if profile.optimize_ir {
+        optimize_modules(std::slice::from_mut(&mut module));
+    }
     let mut generator = options
         .build
         .debug_level

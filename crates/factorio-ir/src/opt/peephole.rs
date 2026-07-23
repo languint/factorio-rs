@@ -66,7 +66,7 @@ fn fold_one_repeat(stmts: &mut Vec<Statement>, counter: &mut usize) -> bool {
     let mut counts: Vec<(Expression, usize)> = Vec::new();
     for statement in stmts.iter() {
         for_each_expr_in_statement(statement, &mut |expr| {
-            if is_arith_candidate(expr) {
+            if is_cse_candidate(expr) {
                 bump_count(&mut counts, expr);
             }
         });
@@ -93,8 +93,13 @@ fn bump_count(counts: &mut Vec<(Expression, usize)>, expr: &Expression) {
 fn expr_weight(expr: &Expression) -> usize {
     match expr {
         Expression::BinaryOp { lhs, rhs, .. } => 1 + expr_weight(lhs) + expr_weight(rhs),
+        Expression::FieldAccess { base, .. } => 1 + expr_weight(base),
         _ => 1,
     }
+}
+
+fn is_cse_candidate(expr: &Expression) -> bool {
+    is_arith_candidate(expr) || is_field_load_candidate(expr)
 }
 
 fn is_arith_candidate(expr: &Expression) -> bool {
@@ -111,6 +116,17 @@ fn is_arith_candidate(expr: &Expression) -> bool {
         && is_atom(rhs)
         && (matches!(lhs.as_ref(), Expression::Identifier(_))
             || matches!(rhs.as_ref(), Expression::Identifier(_)))
+}
+
+/// `ident.field` - pure load; CSE to `__a_N` (never mutate-local).
+fn is_field_load_candidate(expr: &Expression) -> bool {
+    matches!(
+        expr,
+        Expression::FieldAccess {
+            base,
+            ..
+        } if matches!(base.as_ref(), Expression::Identifier(_))
+    )
 }
 
 fn is_atom(expr: &Expression) -> bool {
@@ -138,7 +154,9 @@ fn try_fold_expr(stmts: &mut Vec<Statement>, expr: &Expression, counter: &mut us
     let Some((first, last)) = occurrence_span(stmts, expr) else {
         return false;
     };
-    if let Some(local) = mutate_local_name(expr)
+    // Mutate-local only for arithmetic; field loads always bind a temp.
+    if is_arith_candidate(expr)
+        && let Some(local) = mutate_local_name(expr)
         && !is_written_in_range(stmts, local, first, last)
         && bare_ident_reads_in_range(stmts, local, expr, first, last) == 0
     {
@@ -158,6 +176,9 @@ fn try_fold_expr(stmts: &mut Vec<Statement>, expr: &Expression, counter: &mut us
     if free_idents_written_in_range(stmts, expr, first, last) {
         return false;
     }
+    if is_field_load_candidate(expr) && field_written_in_range(stmts, expr, first, last) {
+        return false;
+    }
     *counter += 1;
     let tmp = format!("__a_{counter}");
     let decl = Statement::VariableDecl {
@@ -173,6 +194,58 @@ fn try_fold_expr(stmts: &mut Vec<Statement>, expr: &Expression, counter: &mut us
         replace_expr_in_statement(statement, expr, &replacement);
     }
     true
+}
+
+fn field_written_in_range(
+    stmts: &[Statement],
+    field: &Expression,
+    first: usize,
+    last: usize,
+) -> bool {
+    let Expression::FieldAccess { base, field: name } = field else {
+        return false;
+    };
+    let Expression::Identifier(base_name) = base.as_ref() else {
+        return false;
+    };
+    stmts[first..=last]
+        .iter()
+        .any(|s| statement_writes_field(s, base_name, name))
+}
+
+fn statement_writes_field(statement: &Statement, base: &str, field: &str) -> bool {
+    match statement {
+        Statement::Assignment {
+            target:
+                Expression::FieldAccess {
+                    base: tbase,
+                    field: tfield,
+                },
+            ..
+        } => matches!(tbase.as_ref(), Expression::Identifier(n) if n == base) && tfield == field,
+        Statement::Assignment {
+            target: Expression::Identifier(n),
+            ..
+        } => n == base,
+        Statement::Conditional {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_writes_field(s, base, field))
+                || else_block
+                    .iter()
+                    .any(|s| statement_writes_field(s, base, field))
+        }
+        Statement::ForIn { body, .. }
+        | Statement::ForNumeric { body, .. }
+        | Statement::While { body, .. } => {
+            body.iter().any(|s| statement_writes_field(s, base, field))
+        }
+        _ => false,
+    }
 }
 
 fn occurrence_span(stmts: &[Statement], expr: &Expression) -> Option<(usize, usize)> {

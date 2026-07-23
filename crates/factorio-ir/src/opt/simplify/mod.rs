@@ -71,7 +71,9 @@ fn optimize_statement(statement: &mut Statement) {
         }
         Statement::VariableDecl { value, .. }
         | Statement::Return(Some(value))
-        | Statement::Expr(value) => fold_bool_if_expr(value),
+        | Statement::Expr(value) => {
+            fold_bool_if_expr(value);
+        }
         Statement::Assignment { target, value } => {
             fold_bool_if_expr(target);
             fold_bool_if_expr(value);

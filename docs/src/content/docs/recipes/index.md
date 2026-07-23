@@ -12,7 +12,7 @@ Language / Concepts / Reference instead.
 | [Hot reload with Bacon](/recipes/hot-reload-bacon/) | Bacon jobs for in-game control reload + test `--rerun` |
 | [Persist with storage](/recipes/persist-storage/) | Mod-local state across events and saves |
 | [Settings that change gameplay](/recipes/settings-gameplay/) | `mod_settings!` + control read + test |
-| [Filter entity lists](/recipes/filter-entities/) | `Vec`, ranges, `.map` / `.filter` / `.collect` |
+| [Filter entity lists](/recipes/filter-entities/) | `Vec`, ranges, `.map` / `.filter` / `.take` / `.collect` |
 | [State machines with enums](/recipes/state-machines/) | Tagged enums + `match` for phases |
 | [Package graphics](/recipes/package-graphics/) | Assets + `item!` icons -> `__mod__/...` + `locale!` |
 | [GUI basics](/recipes/gui-basics/) | Event -> frame -> caption -> `style().set_width` |

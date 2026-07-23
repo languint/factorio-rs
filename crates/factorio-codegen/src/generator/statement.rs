@@ -43,6 +43,19 @@ impl LuaGenerator {
                 source_type,
                 ..
             } => {
+                // `v.push(x)` lowers to an assignment statement, not an expression.
+                if let Some(assign) = self.generate_push_assign_stmt(value) {
+                    self.write_line(&assign);
+                    let type_comment = self.variable_type_comment(source_type.as_deref());
+                    let line = match (scope, module_name) {
+                        (Scope::Public, Some(module_name)) => {
+                            format!("{module_name}.{name}{type_comment} = nil")
+                        }
+                        _ => format!("local {name}{type_comment} = nil"),
+                    };
+                    self.write_line(&line);
+                    return Ok(());
+                }
                 let value = self.generate_expression(value);
                 let type_comment = self.variable_type_comment(source_type.as_deref());
                 let line = match (scope, module_name) {
@@ -85,6 +98,14 @@ impl LuaGenerator {
                 )?;
             }
             Statement::Return(value) => {
+                if let Some(value) = value.as_ref()
+                    && let Some(assign) = self.generate_push_assign_stmt(value)
+                {
+                    // Unit-returning `v.push(x)` as a tail expr: assign, then return.
+                    self.write_line(&assign);
+                    self.write_line("return");
+                    return Ok(());
+                }
                 let line = value.as_ref().map_or_else(
                     || "return".to_string(),
                     |value| format!("return {}", self.generate_expression(value)),
@@ -92,7 +113,11 @@ impl LuaGenerator {
                 self.write_line(&line);
             }
             Statement::Expr(expression) => {
-                self.write_line(&self.generate_expression(expression));
+                if let Some(assign) = self.generate_push_assign_stmt(expression) {
+                    self.write_line(&assign);
+                } else {
+                    self.write_line(&self.generate_expression(expression));
+                }
             }
             Statement::ForIn {
                 var,

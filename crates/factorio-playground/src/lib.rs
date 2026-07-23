@@ -274,6 +274,33 @@ pub fn on_singleplayer_init() {
     }
 
     #[test]
+    fn transpile_files_release_option_map_no_iife() {
+        let files = fixture_files(&[(
+            "control/map.rs",
+            r#"
+#[factorio_rs::event(OnSingleplayerInit)]
+pub fn on_singleplayer_init() {
+    let opt = storage.get::<u32>("n");
+    let _ = opt.map(|n| n + 1);
+}
+"#,
+        )]);
+        let release = transpile_files(&files.to_string(), "release");
+        assert!(release.ok, "{:?}", release.message);
+        let map: BTreeMap<String, String> =
+            serde_json::from_str(&release.files_json.expect("files")).expect("json");
+        let lua = map.get("lua/control/map.lua").expect("lua");
+        assert!(
+            !lua.contains("(function"),
+            "trivial Option::map should inline without IIFE:\n{lua}"
+        );
+        assert!(
+            lua.contains("~= nil") || lua.contains("== nil"),
+            "expected a single nil check path:\n{lua}"
+        );
+    }
+
+    #[test]
     fn transpile_files_release_hoists_unwrap_or_in_binop() {
         let files = fixture_files(&[(
             "control/counter.rs",

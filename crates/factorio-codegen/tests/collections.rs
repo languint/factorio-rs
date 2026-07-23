@@ -67,7 +67,7 @@ fn generates_numeric_ipairs_and_collect_iife() {
     assert!(output.contains("for i = 0, n do"));
     assert!(output.contains("for _, value in ipairs(values) do"));
     assert!(output.contains("local __out = {}"));
-    assert!(output.contains("table.insert(__out, __iter_value)"));
+    assert!(output.contains("__out[#__out + 1] = __iter_value"));
 }
 
 fn collect_iife() -> Expression {

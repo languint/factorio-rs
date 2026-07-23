@@ -913,9 +913,7 @@ pub fn lower_match_expression(
             name: result.clone(),
             ty: factorio_ir::r#type::Type::Void,
             source_type: None,
-            value: factorio_ir::expression::Expression::Literal(
-                factorio_ir::literal::Literal::Nil,
-            ),
+            value: factorio_ir::expression::Expression::Literal(factorio_ir::literal::Literal::Nil),
         });
     let arms = fold_match_arms(
         &tmp,
@@ -1666,15 +1664,11 @@ fn literal_from_pat_lit(
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let literal = match &lit.lit {
         Lit::Int(value) => {
-            let parsed = value
-                .base10_parse::<i64>()
-                .map_err(FrontendError::from)?;
+            let parsed = value.base10_parse::<i64>().map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Int(parsed)
         }
         Lit::Float(value) => {
-            let parsed = value
-                .base10_parse::<f64>()
-                .map_err(FrontendError::from)?;
+            let parsed = value.base10_parse::<f64>().map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Float(parsed)
         }
         Lit::Str(value) => factorio_ir::literal::Literal::String(value.value()),

@@ -28,6 +28,26 @@ fn method_call_sep(method: &str, receiver: &Expression, dispatch: MethodDispatch
 }
 
 impl LuaGenerator {
+    /// `v.push(x)` -> `v[#v + 1] = x` (statement form; not a Lua expression).
+    #[must_use]
+    pub(crate) fn generate_push_assign_stmt(&self, expression: &Expression) -> Option<String> {
+        let Expression::MethodCall {
+            receiver,
+            method,
+            args,
+            ..
+        } = expression
+        else {
+            return None;
+        };
+        if method != "push" || args.len() != 1 {
+            return None;
+        }
+        let receiver = self.generate_expression(receiver);
+        let item = self.generate_expression(&args[0]);
+        Some(format!("{receiver}[#{receiver} + 1] = {item}"))
+    }
+
     #[must_use]
     pub fn generate_call(&self, func: &Expression, args: &[Expression]) -> String {
         if let Expression::QualifiedPath { segments } = func
@@ -118,6 +138,8 @@ impl LuaGenerator {
             return format!("#{receiver}");
         }
 
+        // Expression context: `table.insert` is a valid call expression.
+        // Statement context uses `generate_push_assign_stmt` (`t[#t+1] = x`).
         if method == "push" && args.len() == 1 {
             let receiver = self.generate_expression(receiver);
             let item = self.generate_expression(&args[0]);

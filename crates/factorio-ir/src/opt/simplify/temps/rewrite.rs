@@ -75,7 +75,7 @@ pub(super) fn replace_ident_in_statement(statement: &mut Statement, name: &str, 
     }
 }
 
-fn replace_ident_in_expr(expr: &mut Expression, name: &str, with: &Expression) {
+pub(super) fn replace_ident_in_expr(expr: &mut Expression, name: &str, with: &Expression) {
     match expr {
         Expression::Identifier(id) if id == name => *expr = with.clone(),
         Expression::FieldAccess { base, .. }

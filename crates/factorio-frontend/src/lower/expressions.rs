@@ -785,6 +785,19 @@ fn lower_method_call(
         return Ok(expr);
     }
 
+    // Typed Option/Result receivers: reject known std helpers we do not lower
+    // instead of emitting a Lua method call that would nil-crash at runtime.
+    if let Some(surface) = expr_type_key(&call.receiver, ctx)
+        && matches!(surface, "Option" | "Result")
+        && is_known_unsupported_option_result_method(&method)
+    {
+        return Err(FrontendError::UnsupportedExpression {
+            location: location(call).with_note(format!(
+                "`.{method}()` is not supported on `{surface}` yet; use supported helpers from the Option/Result guide"
+            )),
+        });
+    }
+
     // Dyn fat-pointer method dispatch.
     if dyn_receiver_local(&call.receiver, ctx).is_some() {
         let receiver = lower_expression(&call.receiver, ctx, self_type)?;
@@ -1202,6 +1215,32 @@ fn receiver_is_result(receiver: &Expr, ctx: &LowerContext<'_>) -> bool {
     expr_type_key(receiver, ctx).is_some_and(|key| key == "Result")
 }
 
+/// Std Option/Result methods that type-check via stubs but are not lowered.
+fn is_known_unsupported_option_result_method(method: &str) -> bool {
+    matches!(
+        method,
+        "unwrap_err"
+            | "expect_err"
+            | "unwrap_or_default"
+            | "flatten"
+            | "transpose"
+            | "inspect"
+            | "inspect_err"
+            | "copied"
+            | "cloned"
+            | "as_deref_mut"
+            | "unzip"
+            | "ok"
+            | "err"
+            | "map_or"
+            | "map_or_else"
+            | "is_ok_and"
+            | "is_err_and"
+            | "is_some_and"
+            | "is_none_or"
+    )
+}
+
 fn result_ok_field(
     receiver: factorio_ir::expression::Expression,
 ) -> factorio_ir::expression::Expression {
@@ -1289,9 +1328,7 @@ fn hoist_safe_if(
             name: result.clone(),
             ty: factorio_ir::r#type::Type::Void,
             source_type: None,
-            value: factorio_ir::expression::Expression::Literal(
-                factorio_ir::literal::Literal::Nil,
-            ),
+            value: factorio_ir::expression::Expression::Literal(factorio_ir::literal::Literal::Nil),
         });
     ctx.try_hoists
         .push(factorio_ir::statement::Statement::Conditional {
@@ -1434,16 +1471,11 @@ fn lower_option_method(
             let r = bind_receiver_once(ctx, receiver);
             Ok(Some(hoist_safe_if(ctx, ne_nil(r.clone()), r, default)))
         }
-        "unwrap_or_default" if call.args.is_empty() => {
-            let receiver = lower_expression(&call.receiver, ctx, self_type)?;
-            let r = bind_receiver_once(ctx, receiver);
-            Ok(Some(hoist_safe_if(
-                ctx,
-                ne_nil(r.clone()),
-                r,
-                factorio_ir::expression::Expression::Array { elements: vec![] },
-            )))
-        }
+        "unwrap_or_default" => Err(FrontendError::UnsupportedExpression {
+            location: location(call).with_note(
+                "`.unwrap_or_default()` is not supported (Default is not typed in Lua); use `.unwrap_or(...)` or `.unwrap_or_else(...)`",
+            ),
+        }),
         "and" if call.args.len() == 1 => {
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let other = lower_expression(&call.args[0], ctx, self_type)?;
@@ -1483,6 +1515,8 @@ fn lower_option_method(
             )))
         }
         "filter" if call.args.len() == 1 => {
+            // `if r ~= nil and pred(r) then h = r` - `and` is safe here (bool pred),
+            // unlike value-position if-exprs where falsey Ok/Some payloads matter.
             let receiver = lower_expression(&call.receiver, ctx, self_type)?;
             let pred = lower_expression(&call.args[0], ctx, self_type)?;
             let r = bind_receiver_once(ctx, receiver);
@@ -1496,34 +1530,22 @@ fn lower_option_method(
                         factorio_ir::literal::Literal::Nil,
                     ),
                 });
-            let nil = factorio_ir::expression::Expression::Literal(
-                factorio_ir::literal::Literal::Nil,
-            );
+            let pred_call = factorio_ir::expression::Expression::Call {
+                func: Box::new(pred),
+                args: vec![r.clone()],
+            };
             ctx.try_hoists
                 .push(factorio_ir::statement::Statement::Conditional {
-                    condition: ne_nil(r.clone()),
-                    then_block: vec![factorio_ir::statement::Statement::Conditional {
-                        condition: factorio_ir::expression::Expression::Call {
-                            func: Box::new(pred),
-                            args: vec![r.clone()],
-                        },
-                        then_block: vec![factorio_ir::statement::Statement::Assignment {
-                            target: factorio_ir::expression::Expression::Identifier(
-                                result.clone(),
-                            ),
-                            value: r,
-                        }],
-                        else_block: vec![factorio_ir::statement::Statement::Assignment {
-                            target: factorio_ir::expression::Expression::Identifier(
-                                result.clone(),
-                            ),
-                            value: nil.clone(),
-                        }],
-                    }],
-                    else_block: vec![factorio_ir::statement::Statement::Assignment {
+                    condition: factorio_ir::expression::Expression::BinaryOp {
+                        lhs: Box::new(ne_nil(r.clone())),
+                        op: factorio_ir::operator::Operator::And,
+                        rhs: Box::new(pred_call),
+                    },
+                    then_block: vec![factorio_ir::statement::Statement::Assignment {
                         target: factorio_ir::expression::Expression::Identifier(result.clone()),
-                        value: nil,
+                        value: r,
                     }],
+                    else_block: vec![],
                 });
             Ok(Some(factorio_ir::expression::Expression::Identifier(result)))
         }
@@ -1683,6 +1705,13 @@ pub fn lower_assignment_target(
         Expr::Path(path) => lower_path_expression(path, ctx, self_type),
         Expr::Field(field) => lower_field_expression(field, ctx, self_type),
         Expr::Index(index) => {
+            if syn_is_storage_receiver(&index.expr) {
+                ctx.emit_lint(
+                    factorio_ir::lint::LintId::StorageIndex,
+                    "`storage[\"...\"] = ...` bypasses typed `storage.set`; prefer `storage.get` / `storage.set`",
+                    location(index),
+                )?;
+            }
             let base = lower_expression(&index.expr, ctx, self_type)?;
             let key = lower_expression(&index.index, ctx, self_type)?;
             if !matches!(
@@ -1900,15 +1929,11 @@ fn lower_literal_expression(
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let literal = match &literal.lit {
         Lit::Int(value) => {
-            let parsed = value
-                .base10_parse::<i64>()
-                .map_err(FrontendError::from)?;
+            let parsed = value.base10_parse::<i64>().map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Int(parsed)
         }
         Lit::Float(value) => {
-            let parsed = value
-                .base10_parse::<f64>()
-                .map_err(FrontendError::from)?;
+            let parsed = value.base10_parse::<f64>().map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Float(parsed)
         }
         Lit::Str(value) => factorio_ir::literal::Literal::String(value.value()),

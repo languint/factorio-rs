@@ -93,7 +93,7 @@ impl FrontendError {
     /// Rustc-style diagnostic code shown in reports (`E0100`, ...).
     ///
     /// Hard frontend errors use the `E01xx` series so they do not collide with
-    /// transpile lint codes (`E0001`-`E0014`).
+    /// transpile lint codes (`E0001`-`E0017`).
     #[must_use]
     pub const fn code(&self) -> Option<&'static str> {
         match self {

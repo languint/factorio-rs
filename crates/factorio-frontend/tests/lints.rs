@@ -620,6 +620,28 @@ pub fn f() {
 }
 
 #[test]
+fn warn_storage_index_on_assign() {
+    let source = r#"
+pub fn f() {
+    storage["counter"] = 1;
+}
+"#;
+    let lints = LintConfig::default();
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )
+    .expect("warn should not fail");
+    assert!(
+        diagnostics.iter().any(|d| d.id == LintId::StorageIndex),
+        "expected storage_index lint on write, got {diagnostics:?}"
+    );
+}
+
+#[test]
 fn closure_try_hoists_stay_inside_closure() {
     let source = r#"
 pub fn outer(r: Result<i32, String>) {

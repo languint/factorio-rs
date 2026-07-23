@@ -440,6 +440,130 @@ fn folds_match_tag_bool_through_temp() {
 }
 
 #[test]
+fn folds_temp_init_overwrite_into_decl() {
+    // `local __t = x; __t = __t + 1; return __t` → `return x + 1`
+    let mut module = module_with_fn(vec![
+        Statement::VariableDecl {
+            name: "__t".to_string(),
+            ty: Type::Int,
+            source_type: None,
+            value: Expression::Identifier("x".to_string()),
+        },
+        Statement::Assignment {
+            target: Expression::Identifier("__t".to_string()),
+            value: Expression::BinaryOp {
+                lhs: Box::new(Expression::Identifier("__t".to_string())),
+                op: Operator::Add,
+                rhs: Box::new(Expression::Literal(Literal::Int(1))),
+            },
+        },
+        Statement::Return(Some(Expression::Identifier("__t".to_string()))),
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert_eq!(
+        body,
+        &[Statement::Return(Some(Expression::BinaryOp {
+            lhs: Box::new(Expression::Identifier("x".to_string())),
+            op: Operator::Add,
+            rhs: Box::new(Expression::Literal(Literal::Int(1))),
+        }))],
+        "expected overwrite folded into rematerialized return, got {body:?}"
+    );
+}
+
+#[test]
+fn folds_nil_decl_collect_temp_into_user_binding() {
+    // Hoisted collect shape: `local scores = nil; local __out = {}; ...; scores = __out`
+    let mut module = module_with_fn(vec![
+        Statement::VariableDecl {
+            name: "scores".to_string(),
+            ty: Type::Void,
+            source_type: None,
+            value: Expression::Literal(Literal::Nil),
+        },
+        Statement::VariableDecl {
+            name: "__out".to_string(),
+            ty: Type::Void,
+            source_type: None,
+            value: Expression::Array {
+                elements: Vec::new(),
+            },
+        },
+        Statement::ForNumeric {
+            var: "i".to_string(),
+            start: Expression::Literal(Literal::Int(0)),
+            limit: Expression::Literal(Literal::Int(4)),
+            body: vec![Statement::Expr(Expression::MethodCall {
+                receiver: Box::new(Expression::Identifier("__out".to_string())),
+                method: "push".to_string(),
+                args: vec![Expression::Identifier("i".to_string())],
+                dispatch: crate::expression::MethodDispatch::Infer,
+            })],
+        },
+        Statement::Assignment {
+            target: Expression::Identifier("scores".to_string()),
+            value: Expression::Identifier("__out".to_string()),
+        },
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert!(
+        matches!(
+            &body[0],
+            Statement::VariableDecl {
+                name,
+                value: Expression::Array { elements },
+                ..
+            } if name == "scores" && elements.is_empty()
+        ),
+        "expected scores = {{}}, got {body:?}"
+    );
+    assert!(
+        !body.iter().any(|s| matches!(
+            s,
+            Statement::VariableDecl { name, .. } if name == "__out"
+        )),
+        "__out should be renamed away, got {body:?}"
+    );
+    assert!(
+        !body.iter().any(|s| matches!(
+            s,
+            Statement::Assignment {
+                target: Expression::Identifier(n),
+                ..
+            } if n == "scores"
+        )),
+        "trailing scores = __out should be gone, got {body:?}"
+    );
+}
+
+#[test]
+fn optimize_preserves_mod2_parity() {
+    let mod2_eq = |name: &str, parity: i64| {
+        Statement::Return(Some(Expression::BinaryOp {
+            lhs: Box::new(Expression::BinaryOp {
+                lhs: Box::new(Expression::Identifier(name.to_string())),
+                op: Operator::Mod,
+                rhs: Box::new(Expression::Literal(Literal::Int(2))),
+            }),
+            op: Operator::Eq,
+            rhs: Box::new(Expression::Literal(Literal::Int(parity))),
+        }))
+    };
+    for (name, parity) in [("n", 1), ("x", 0)] {
+        let mut module = module_with_fn(vec![mod2_eq(name, parity)]);
+        optimize_modules(std::slice::from_mut(&mut module));
+        let body = fn_body(&module);
+        assert_eq!(
+            &body[0],
+            &mod2_eq(name, parity),
+            "parity `% 2` must stay as Mod (not bit32.band) until re-benchmarked"
+        );
+    }
+}
+
+#[test]
 fn peephole_mutates_local_for_repeated_add() {
     let boots_plus = Expression::BinaryOp {
         lhs: Box::new(Expression::Identifier("boots".to_string())),
@@ -497,6 +621,87 @@ fn peephole_mutates_local_for_repeated_add() {
                     && !parts.iter().any(|p| matches!(p, Expression::BinaryOp { .. }))
         ),
         "print should reuse boots, got {body:?}"
+    );
+}
+
+#[test]
+fn peephole_cse_repeated_field_load() {
+    let field = Expression::FieldAccess {
+        base: Box::new(Expression::Identifier("self".to_string())),
+        field: "hp".to_string(),
+    };
+    let mut module = module_with_fn(vec![
+        Statement::Assignment {
+            target: Expression::Identifier("a".to_string()),
+            value: field.clone(),
+        },
+        Statement::Assignment {
+            target: Expression::Identifier("b".to_string()),
+            value: field,
+        },
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert!(
+        matches!(
+            &body[0],
+            Statement::VariableDecl {
+                name,
+                value: Expression::FieldAccess { field, .. },
+                ..
+            } if name.starts_with("__a_") && field == "hp"
+        ),
+        "expected field CSE temp, got {body:?}"
+    );
+    assert!(
+        body[1..].iter().all(|s| matches!(
+            s,
+            Statement::Assignment {
+                value: Expression::Identifier(name),
+                ..
+            } if name.starts_with("__a_")
+        )),
+        "uses should reuse CSE temp, got {body:?}"
+    );
+}
+
+#[test]
+fn peephole_does_not_cse_field_across_write() {
+    let field = Expression::FieldAccess {
+        base: Box::new(Expression::Identifier("self".to_string())),
+        field: "hp".to_string(),
+    };
+    let mut module = module_with_fn(vec![
+        Statement::Assignment {
+            target: Expression::Identifier("a".to_string()),
+            value: field.clone(),
+        },
+        Statement::Assignment {
+            target: field.clone(),
+            value: Expression::Literal(Literal::Int(0)),
+        },
+        Statement::Assignment {
+            target: Expression::Identifier("b".to_string()),
+            value: field,
+        },
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    let field_loads = body
+        .iter()
+        .filter(|s| {
+            matches!(
+                s,
+                Statement::Assignment {
+                    value: Expression::FieldAccess { field: f, .. },
+                    ..
+                } if f == "hp"
+            )
+        })
+        .count();
+    assert_eq!(
+        field_loads, 2,
+        "must not CSE field load across write, got {body:?}"
     );
 }
 

@@ -1,6 +1,6 @@
 ---
 title: Collections and iterators
-description: Vec, ranges, ipairs/pairs loops, and the supported map/filter/collect subset.
+description: Vec, ranges, ipairs/pairs loops, and the supported map/filter/take/collect subset.
 ---
 
 Language reference for collections. Recipe-style walkthrough:
@@ -26,13 +26,15 @@ for item in list {
 | `for i in start..end` | numeric `for i = start, end - 1 do` |
 | `for i in start..=end` | numeric `for i = start, end do` |
 
-## map / filter / collect
+## map / filter / take / collect
 
-Supported: range or `Vec` iteration, then `.map(|x| ...)` and/or
-`.filter(|x| ...)`, ending in `.collect()` / `.collect::<Vec<_>>()`.
+Supported: range or `Vec` iteration, then `.map(|x| ...)`, `.filter(|x| ...)`,
+and/or `.take(n)`, ending in `.collect()` / `.collect::<Vec<_>>()`.
 
 ```rust
 let mapped = (0..n).map(|i| i + 1).collect::<Vec<_>>();
+let odds = (0..=n).iter().filter(|i| *i % 2 == 1).collect::<Vec<_>>();
+let first_odds = (0..=n).filter(|i| *i % 2 == 1).take(5).collect::<Vec<_>>();
 let both = values
     .iter()
     .map(|i| i + 1)
@@ -40,7 +42,10 @@ let both = values
     .collect::<Vec<_>>();
 ```
 
-Lowers to an immediately invoked Lua function that builds a table.
+`.iter()` / `.into_iter()` on a range is optional (same as `(0..=n).filter(...).collect()`).
+`.take(n)` respects adapter order (e.g. `.filter(...).take(5)` keeps five
+passing elements). Lowers to an immediately invoked Lua function that builds a
+table.
 
 **Not supported:** `enumerate`, `flat_map`, `zip`, standing `.iter()` without
 collect, and arbitrary `Iterator` trait objects.

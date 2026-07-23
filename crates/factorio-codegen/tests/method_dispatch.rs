@@ -8,11 +8,17 @@
 
 mod common;
 
-use common::assert_lua_fragment_parses;
+use common::{assert_lua_fragment_parses, must_ok};
 use factorio_codegen::LuaGenerator;
 use factorio_ir::{
+    block::Block,
     expression::{Expression, MethodDispatch},
+    function::Function,
     literal::Literal,
+    module::{Module, Symbol},
+    scope::Scope,
+    stage::Stage,
+    statement::Statement,
 };
 
 fn id(name: &str) -> Expression {
@@ -114,6 +120,49 @@ fn collection_helpers() {
         "table.insert(xs, 1)"
     );
     assert_eq!(emit(&method(id("xs"), "is_empty", vec![])), "#xs == 0");
+}
+
+#[test]
+fn push_as_statement_uses_append_assign() {
+    let module = Module {
+        name: "m".to_string(),
+        stage: Stage::Control,
+        body: Block { statements: vec![] },
+        imports: vec![],
+        submodules: vec![],
+        locales: vec![],
+        pending_locales: vec![],
+        vtables: vec![],
+        symbols: vec![Symbol {
+            scope: Scope::Public,
+            statement: Statement::FunctionDecl(Function {
+                name: "f".to_string(),
+                params: vec![],
+                body: Block {
+                    statements: vec![Statement::Expr(Expression::method_call(
+                        id("xs"),
+                        "push",
+                        vec![lit_int(1)],
+                    ))],
+                },
+                doc: None,
+                debug: None,
+                event: None,
+                event_filter: None,
+                export: None,
+                inline: false,
+            }),
+        }],
+    };
+    let output = must_ok(LuaGenerator::new().generate_module(&module));
+    assert!(
+        output.contains("xs[#xs + 1] = 1"),
+        "statement push should append, got:\n{output}"
+    );
+    assert!(
+        !output.contains("table.insert"),
+        "statement push should not use table.insert:\n{output}"
+    );
 }
 
 #[test]

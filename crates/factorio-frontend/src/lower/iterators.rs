@@ -19,6 +19,7 @@ enum IteratorRoot<'a> {
 enum Adapter<'a> {
     Map(&'a ExprClosure),
     Filter(&'a ExprClosure),
+    Take(&'a Expr),
 }
 
 /// Lower supported iterator chains ending in `.collect()` to a Lua IIFE.
@@ -72,14 +73,27 @@ pub fn try_lower_iterator_chain(
         ),
     };
 
+    let mut take_inits = Vec::new();
     let adapters = adapters
         .into_iter()
-        .map(|adapter| match adapter {
+        .enumerate()
+        .map(|(i, adapter)| match adapter {
             Adapter::Map(closure) => {
                 lower_closure(closure, ctx, self_type).map(LoweredAdapter::Map)
             }
             Adapter::Filter(closure) => {
                 lower_closure(closure, ctx, self_type).map(LoweredAdapter::Filter)
+            }
+            Adapter::Take(limit_expr) => {
+                let limit = lower_expression(limit_expr, ctx, self_type)?;
+                let counter = format!("__take_{}", i + 1);
+                take_inits.push(Statement::VariableDecl {
+                    name: counter.clone(),
+                    ty: Type::Void,
+                    source_type: None,
+                    value: Expression::Literal(Literal::Int(0)),
+                });
+                Ok(LoweredAdapter::Take { limit, counter })
             }
         })
         .collect::<FrontendResult<Vec<_>>>()?;
@@ -109,25 +123,27 @@ pub fn try_lower_iterator_chain(
         },
     };
 
+    let mut iife_body = Vec::with_capacity(take_inits.len() + 3);
+    iife_body.push(Statement::VariableDecl {
+        name: output.clone(),
+        ty: Type::Void,
+        source_type: None,
+        value: Expression::Call {
+            func: Box::new(Expression::QualifiedPath {
+                segments: vec!["Vec".to_string(), "new".to_string()],
+            }),
+            args: vec![],
+        },
+    });
+    iife_body.extend(take_inits);
+    iife_body.push(loop_statement);
+    iife_body.push(Statement::Return(Some(Expression::Identifier(output))));
+
     Ok(Some(Expression::Call {
         func: Box::new(Expression::Closure {
             params: vec![],
             body: Block {
-                statements: vec![
-                    Statement::VariableDecl {
-                        name: output.clone(),
-                        ty: Type::Void,
-                        source_type: None,
-                        value: Expression::Call {
-                            func: Box::new(Expression::QualifiedPath {
-                                segments: vec!["Vec".to_string(), "new".to_string()],
-                            }),
-                            args: vec![],
-                        },
-                    },
-                    loop_statement,
-                    Statement::Return(Some(Expression::Identifier(output))),
-                ],
+                statements: iife_body,
             },
         }),
         args: vec![],
@@ -147,6 +163,7 @@ enum IteratorLoop {
 enum LoweredAdapter {
     Map(Expression),
     Filter(Expression),
+    Take { limit: Expression, counter: String },
 }
 
 fn lower_adapter_body(
@@ -185,6 +202,26 @@ fn lower_adapter_body(
             then_block: lower_adapter_body(adapters, index + 1, current, output),
             else_block: vec![],
         }],
+        LoweredAdapter::Take { limit, counter } => {
+            let mut then = vec![Statement::Assignment {
+                target: Expression::Identifier(counter.clone()),
+                value: Expression::BinaryOp {
+                    lhs: Box::new(Expression::Identifier(counter.clone())),
+                    op: Operator::Add,
+                    rhs: Box::new(Expression::Literal(Literal::Int(1))),
+                },
+            }];
+            then.extend(lower_adapter_body(adapters, index + 1, current, output));
+            vec![Statement::Conditional {
+                condition: Expression::BinaryOp {
+                    lhs: Box::new(Expression::Identifier(counter.clone())),
+                    op: Operator::Lt,
+                    rhs: Box::new(limit.clone()),
+                },
+                then_block: then,
+                else_block: vec![Statement::Break],
+            }]
+        }
     }
 }
 
@@ -204,43 +241,56 @@ fn peel_chain<'a>(
             }
             Ok(root)
         }
+        Expr::MethodCall(call) if call.method == "take" => {
+            let limit = exactly_one_arg(call, "take")?;
+            let root = peel_chain(&call.receiver, adapters)?;
+            adapters.push(Adapter::Take(limit));
+            Ok(root)
+        }
         Expr::MethodCall(call)
             if matches!(call.method.to_string().as_str(), "iter" | "into_iter")
                 && call.args.is_empty() =>
         {
-            Ok(IteratorRoot::Iter(&call.receiver))
+            // `(0..=n).iter()` is redundant but idiomatic; treat as a numeric range
+            // instead of lowering the bare Range (which is otherwise unsupported).
+            match strip_parens(&call.receiver) {
+                Expr::Range(range) => Ok(IteratorRoot::Range(range)),
+                _ => Ok(IteratorRoot::Iter(&call.receiver)),
+            }
         }
         Expr::MethodCall(call) => Err(unsupported(
             call,
             format!(
-                "unsupported iterator adapter `.{}`; supported adapters are `.map(...)` and `.filter(...)` before `.collect()`",
+                "unsupported iterator adapter `.{}`; supported adapters are `.map(...)`, `.filter(...)`, and `.take(...)` before `.collect()`",
                 call.method
             ),
         )),
         other => Err(unsupported(
             other,
-            "`.collect()` is only supported on a range or `v.iter()`/`v.into_iter()` map/filter chain",
+            "`.collect()` is only supported on a range or `v.iter()`/`v.into_iter()` map/filter/take chain",
         )),
     }
 }
 
 fn exactly_one_closure(call: &ExprMethodCall) -> FrontendResult<&ExprClosure> {
-    if call.args.len() != 1 {
-        return Err(unsupported(
-            call,
-            format!(
-                "`.{}(...)` requires exactly one closure argument",
-                call.method
-            ),
-        ));
-    }
-    match &call.args[0] {
+    let arg = exactly_one_arg(call, &call.method.to_string())?;
+    match arg {
         Expr::Closure(closure) => Ok(closure),
         _ => Err(unsupported(
             call,
             format!("`.{}(...)` requires a closure argument", call.method),
         )),
     }
+}
+
+fn exactly_one_arg<'a>(call: &'a ExprMethodCall, method: &str) -> FrontendResult<&'a Expr> {
+    if call.args.len() != 1 {
+        return Err(unsupported(
+            call,
+            format!("`.{method}(...)` requires exactly one argument"),
+        ));
+    }
+    Ok(&call.args[0])
 }
 
 fn strip_parens(expr: &Expr) -> &Expr {
