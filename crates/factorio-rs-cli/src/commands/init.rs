@@ -23,7 +23,7 @@ output_dir = "dist"
 title = "Factorio Mod"
 factorio_version = "2.0"
 
-# Transpile safety lints (defaults: deny, except format_spec / integer_div = warn). Levels: allow | warn | deny
+# Transpile safety lints (defaults: deny, except format_spec / integer_div / numeric_cast / storage_index = warn). Levels: allow | warn | deny
 # [lints]
 # unwrap = "allow"
 # expect = "allow"
@@ -39,6 +39,9 @@ factorio_version = "2.0"
 # option_try = "deny"
 # integer_div = "warn"
 # struct_rest = "deny"
+# numeric_cast = "warn"
+# todo_macro = "deny"
+# storage_index = "warn"
 
 [profiles.debug]
 debug_level = 1

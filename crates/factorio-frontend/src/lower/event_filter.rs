@@ -84,10 +84,14 @@ pub fn lower_filter_builder_call(call: &ExprCall) -> FrontendResult<Expression> 
                 location: location(call),
             });
         };
-        fields.push((
-            value_field.to_string(),
-            Expression::Literal(Literal::String(string_literal(arg, location(call))?)),
-        ));
+        if value_field == "elem_filters" {
+            fields.push((value_field.to_string(), lower_event_filter_list(arg)?));
+        } else {
+            fields.push((
+                value_field.to_string(),
+                Expression::Literal(Literal::String(string_literal(arg, location(call))?)),
+            ));
+        }
     } else if spec.arg_count == 2 {
         if call.args.len() != 2 {
             return Err(FrontendError::InvalidEventFilter {
@@ -227,5 +231,31 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn lowers_nested_elem_filters() {
+        let expr = parse_str::<Expr>(
+            r#"[ItemPrototypeFilter::place_result(&[EntityPrototypeFilter::name("furnace")])]"#,
+        )
+        .expect("filter expr");
+
+        let lowered = lower_event_filter_list(&expr).expect("lower filter");
+        let Expression::Array { elements } = lowered else {
+            panic!("expected array");
+        };
+        let Expression::StructLiteral { fields, .. } = &elements[0] else {
+            panic!("expected struct literal");
+        };
+        assert_eq!(fields[0].0, "filter");
+        assert_eq!(
+            fields[0].1,
+            Expression::Literal(Literal::String("place-result".to_string()))
+        );
+        assert_eq!(fields[1].0, "elem_filters");
+        let Expression::Array { elements: nested } = &fields[1].1 else {
+            panic!("expected nested elem_filters array");
+        };
+        assert_eq!(nested.len(), 1);
     }
 }

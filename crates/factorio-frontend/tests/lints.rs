@@ -556,6 +556,70 @@ pub fn f(force: LuaForce) {
 }
 
 #[test]
+fn warn_numeric_cast() {
+    let source = r"
+pub fn f(n: i32) -> u8 {
+    n as u8
+}
+";
+    let lints = LintConfig::default();
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )
+    .expect("warn should not fail");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::NumericCast);
+    assert_eq!(diagnostics[0].level, LintLevel::Warn);
+}
+
+#[test]
+fn deny_todo_macro() {
+    let source = r"
+pub fn f() {
+    todo!()
+}
+";
+    let lints = LintConfig::default();
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )
+    .expect("deny lints should not abort lowering");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].id, LintId::TodoMacro);
+    assert_eq!(diagnostics[0].level, LintLevel::Deny);
+}
+
+#[test]
+fn warn_storage_index() {
+    let source = r#"
+pub fn f() {
+    let _ = storage["counter"];
+}
+"#;
+    let lints = LintConfig::default();
+    let mut diagnostics = Vec::new();
+    parse_module_with_options(
+        source,
+        "control",
+        &ParseOptions::new(&lints),
+        &mut diagnostics,
+    )
+    .expect("warn should not fail");
+    assert!(
+        diagnostics.iter().any(|d| d.id == LintId::StorageIndex),
+        "expected storage_index lint, got {diagnostics:?}"
+    );
+}
+
+#[test]
 fn closure_try_hoists_stay_inside_closure() {
     let source = r#"
 pub fn outer(r: Result<i32, String>) {

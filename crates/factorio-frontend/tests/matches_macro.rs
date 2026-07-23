@@ -39,18 +39,31 @@ fn lowers_matches_macro_for_enum_and_option() {
         })
         .expect("expected check function");
 
-    assert!(check.body.statements.len() >= 3);
-    for statement in check.body.statements.iter().take(3) {
-        let Statement::VariableDecl { value, .. } = statement else {
-            panic!("expected matches! binding, got {statement:?}");
-        };
+    let conditionals = check
+        .body
+        .statements
+        .iter()
+        .filter(|s| matches!(s, Statement::Conditional { .. }))
+        .count();
+    assert!(
+        conditionals >= 3,
+        "matches! should emit statement conditionals, got {:?}",
+        check.body.statements
+    );
+
+    let bindings = ["a", "b", "c"];
+    for name in bindings {
         assert!(
-            matches!(
-                value,
-                Expression::Call { func, args }
-                    if args.is_empty() && matches!(func.as_ref(), Expression::Closure { .. })
-            ),
-            "matches! should desugar to match IIFE, got {value:?}"
+            check.body.statements.iter().any(|s| matches!(
+                s,
+                Statement::VariableDecl {
+                    name: n,
+                    value: Expression::Identifier(tmp),
+                    ..
+                } if n == name && tmp.starts_with("__match_")
+            )),
+            "expected `{name}` bound to a match result temp, got {:?}",
+            check.body.statements
         );
     }
 }

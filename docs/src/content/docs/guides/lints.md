@@ -78,6 +78,9 @@ No Lua is written in that case.
 | `option_try` | `E0012` | deny | `?` on a call/method (assumes Result; Option APIs need a typed binding) |
 | `integer_div` | `E0013` | warn | `/` or `/=` without a float operand (Lua `/` is always float) |
 | `struct_rest` | `E0014` | deny | Struct update `..rest` other than `Default::default()` |
+| `numeric_cast` | `E0015` | warn | Numeric `as` cast is a no-op in Lua (no truncation/clamping) |
+| `todo_macro` | `E0016` | deny | `todo!` / `unimplemented!` (prefer `panic!("...")`) |
+| `storage_index` | `E0017` | warn | `storage["key"]` returns opaque `LuaAny`; prefer `.get` / `.set` |
 
 ### `unwrap` (`E0001`) / `expect` (`E0002`)
 
@@ -224,6 +227,39 @@ LuaEntityMineParams {
     force: true,
     ..Default::default()
 }
+```
+
+### `numeric_cast` (`E0015`)
+
+`n as u8` / `x as f64` (and other numeric primitives) are **transparent** when
+lowering - Lua has a single number type and no clamp/truncation. Defaults to
+**warn**.
+
+```rust
+// Warns: no-op in Lua
+let b = n as u8;
+
+// Prefer explicit intent, or drop the cast
+let b = n;
+```
+
+### `todo_macro` (`E0016`)
+
+`todo!` / `unimplemented!` lower to `error(...)`, but unfinished paths should
+use `panic!("...")` (or finish the code). Defaults to **deny**.
+
+### `storage_index` (`E0017`)
+
+`storage["key"]` returns opaque [`LuaAny`](/guides/api-types/). Prefer typed
+helpers:
+
+```rust
+// Warns
+let v = storage["counter"];
+
+// Prefer
+let n = storage.get::<u32>("counter").unwrap_or(0);
+storage.set("counter", n + 1);
 ```
 
 ## Configuring defaults

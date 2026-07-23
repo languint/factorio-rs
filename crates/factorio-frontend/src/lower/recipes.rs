@@ -12,7 +12,7 @@ use crate::error::{FrontendError, FrontendResult};
 /// Expand `recipe! { ... }` into `Recipes` constants + `pub fn register_recipes()`.
 pub fn expand(tokens: TokenStream) -> FrontendResult<Vec<syn::Item>> {
     let input: RecipesMacroInput =
-        syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
+        syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();
@@ -71,7 +71,7 @@ pub fn expand(tokens: TokenStream) -> FrontendResult<Vec<syn::Item>> {
          pub fn register_recipes() {{ data.extend([ {extend_items} ]); }}"
     );
 
-    let file: syn::File = syn::parse_str(&code).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let file: syn::File = syn::parse_str(&code).map_err(FrontendError::from)?;
     Ok(file.items)
 }
 

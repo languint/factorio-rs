@@ -413,6 +413,12 @@ fn elem_value_and_filters_are_typed() {
             || filters.contains("pub struct EntityPrototypeFilter"),
         "should emit EntityPrototypeFilter builders"
     );
+    assert!(
+        filters.contains("fn place_result")
+            && filters.contains("elem_filters")
+            && (filters.contains("fn burnt_result") || filters.contains("burnt_result")),
+        "nested choose-elem elem_filters builders should be emitted, got snippet missing place_result/burnt_result"
+    );
 }
 
 #[test]

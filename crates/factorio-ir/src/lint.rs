@@ -38,6 +38,12 @@ pub enum LintId {
     IntegerDiv,
     /// Struct update `..rest` other than `Default::default()` drops fields silently.
     StructRest,
+    /// Numeric `as` casts are transparent in Lua (no clamp/truncation).
+    NumericCast,
+    /// `todo!` / `unimplemented!` should be `panic!("...")` / `error(...)` in Factorio mods.
+    TodoMacro,
+    /// `storage["key"]` returns opaque `LuaAny`; prefer `.get` / `.set`.
+    StorageIndex,
 }
 
 impl LintId {
@@ -59,6 +65,9 @@ impl LintId {
             Self::OptionTry => "option_try",
             Self::IntegerDiv => "integer_div",
             Self::StructRest => "struct_rest",
+            Self::NumericCast => "numeric_cast",
+            Self::TodoMacro => "todo_macro",
+            Self::StorageIndex => "storage_index",
         }
     }
 
@@ -80,6 +89,9 @@ impl LintId {
             Self::OptionTry => "E0012",
             Self::IntegerDiv => "E0013",
             Self::StructRest => "E0014",
+            Self::NumericCast => "E0015",
+            Self::TodoMacro => "E0016",
+            Self::StorageIndex => "E0017",
         }
     }
 
@@ -92,7 +104,9 @@ impl LintId {
     #[must_use]
     pub const fn default_level(self) -> LintLevel {
         match self {
-            Self::FormatSpec | Self::IntegerDiv => LintLevel::Warn,
+            Self::FormatSpec | Self::IntegerDiv | Self::NumericCast | Self::StorageIndex => {
+                LintLevel::Warn
+            }
             Self::Unwrap
             | Self::Expect
             | Self::VariableIndex
@@ -103,7 +117,8 @@ impl LintId {
             | Self::ResultIf
             | Self::ErrNil
             | Self::OptionTry
-            | Self::StructRest => LintLevel::Deny,
+            | Self::StructRest
+            | Self::TodoMacro => LintLevel::Deny,
             // Constructors lower to payloads; keep the id for config compatibility only.
             Self::IdentificationCtor => LintLevel::Allow,
         }
@@ -150,6 +165,15 @@ impl LintId {
             Self::StructRest => {
                 "only `..Default::default()` is ignored on purpose; copy fields explicitly or use that form"
             }
+            Self::NumericCast => {
+                "Lua has no integer cast; remove `as` or use explicit math if you need clamping"
+            }
+            Self::TodoMacro => {
+                "use `panic!(\"...\")` (lowers to `error(...)`) or finish the code path"
+            }
+            Self::StorageIndex => {
+                "use `storage.get::<T>(\"key\")` / `storage.set(\"key\", value)` for typed access"
+            }
         }
     }
 
@@ -171,6 +195,9 @@ impl LintId {
             Self::OptionTry,
             Self::IntegerDiv,
             Self::StructRest,
+            Self::NumericCast,
+            Self::TodoMacro,
+            Self::StorageIndex,
         ]
     }
 
@@ -360,6 +387,9 @@ mod tests {
         assert_eq!(config.level(LintId::OptionTry), LintLevel::Deny);
         assert_eq!(config.level(LintId::IntegerDiv), LintLevel::Warn);
         assert_eq!(config.level(LintId::StructRest), LintLevel::Deny);
+        assert_eq!(config.level(LintId::NumericCast), LintLevel::Warn);
+        assert_eq!(config.level(LintId::TodoMacro), LintLevel::Deny);
+        assert_eq!(config.level(LintId::StorageIndex), LintLevel::Warn);
         assert_eq!(config.level(LintId::IdentificationCtor), LintLevel::Allow);
     }
 
@@ -396,5 +426,8 @@ mod tests {
         assert_eq!(LintId::OptionTry.code(), "E0012");
         assert_eq!(LintId::IntegerDiv.code(), "E0013");
         assert_eq!(LintId::StructRest.code(), "E0014");
+        assert_eq!(LintId::NumericCast.code(), "E0015");
+        assert_eq!(LintId::TodoMacro.code(), "E0016");
+        assert_eq!(LintId::StorageIndex.code(), "E0017");
     }
 }

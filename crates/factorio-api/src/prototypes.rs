@@ -31,6 +31,26 @@ pub struct EnergySource {
     pub usage_priority: Option<&'static str>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IconData {
+    /// Packaged icon path (`__mod__/graphics/...png`).
+    pub icon: &'static str,
+    /// Icon pixel size (commonly `64`).
+    pub icon_size: Option<i64>,
+}
+
+/// Thin fluid box (`volume` + optional filter / production type). Connection
+/// points and pipe covers remain sparse / hand-filled when needed.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct FluidBox {
+    /// Fluid capacity.
+    pub volume: f64,
+    /// Optional fluid id filter.
+    pub filter: Option<&'static str>,
+    /// `"input"`, `"output"`, `"input-output"`, or `"none"`.
+    pub production_type: Option<&'static str>,
+}
+
 /// Simplified minable properties for placeable entities.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct MinableProperties {

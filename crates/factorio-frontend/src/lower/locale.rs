@@ -65,7 +65,7 @@ pub fn collect_locales_from_sources(
 /// Returns [`FrontendError::Syn`] when the macro tokens are not valid `locale!`
 /// syntax, or [`FrontendError::InvalidLocale`] when a value is not a single line.
 pub fn parse_pending(tokens: TokenStream) -> FrontendResult<Vec<PendingLocaleFile>> {
-    let input: LocaleInput = syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let input: LocaleInput = syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let file = input.file.unwrap_or_else(|| "locale".to_string());
     let mut files = Vec::new();

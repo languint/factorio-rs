@@ -113,8 +113,15 @@ fn collect_filter_methods(concept: &Concept) -> Vec<FilterMethodSpec> {
             .and_then(|value| value.as_array())
             .cloned()
             .unwrap_or_default();
-        // Nested choose-elem `elem_filters` - leave for a later pass.
+        // Nested choose-elem groups: `{ filter = "...", elem_filters = { ... } }`.
         if parameters.iter().any(is_nested_elem_filters_param) {
+            if parameters.len() == 1 && is_nested_elem_filters_param(&parameters[0]) {
+                methods.push(FilterMethodSpec {
+                    filter: group_name.to_string(),
+                    value_field: Some("elem_filters".to_string()),
+                    arg_count: 1,
+                });
+            }
             continue;
         }
         let arg_count = parameters.len().max(1);
@@ -219,6 +226,12 @@ fn emit_filter_type_builders(
             if method.arg_count == 0 {
                 quote! {
                     pub const fn #method_ident() -> #entry_ident { #entry_ident }
+                }
+            } else if method.value_field.as_deref() == Some("elem_filters") {
+                quote! {
+                    pub const fn #method_ident(_elem_filters: &[#entry_ident]) -> #entry_ident {
+                        #entry_ident
+                    }
                 }
             } else if method.arg_count == 1 {
                 quote! {

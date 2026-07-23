@@ -82,7 +82,16 @@ enum FieldKind {
     EnergySource,
     OptEnergySource,
     Minable,
+    IconData,
+    OptIconData,
+    IconDataSlice,
+    OptIconDataSlice,
+    FluidBox,
+    OptFluidBox,
+    FluidBoxSlice,
+    OptFluidBoxSlice,
     LuaAny,
+    #[allow(dead_code)] // kept for optional pack escape hatches
     OptLuaAny,
 }
 
@@ -290,6 +299,14 @@ fn rust_type_tokens(kind: FieldKind) -> TokenStream {
         FieldKind::EnergySource => quote! { crate::prototypes::EnergySource },
         FieldKind::OptEnergySource => quote! { Option<crate::prototypes::EnergySource> },
         FieldKind::Minable => quote! { Option<crate::prototypes::MinableProperties> },
+        FieldKind::IconData => quote! { crate::prototypes::IconData },
+        FieldKind::OptIconData => quote! { Option<crate::prototypes::IconData> },
+        FieldKind::IconDataSlice => quote! { &'static [crate::prototypes::IconData] },
+        FieldKind::OptIconDataSlice => quote! { Option<&'static [crate::prototypes::IconData]> },
+        FieldKind::FluidBox => quote! { crate::prototypes::FluidBox },
+        FieldKind::OptFluidBox => quote! { Option<crate::prototypes::FluidBox> },
+        FieldKind::FluidBoxSlice => quote! { &'static [crate::prototypes::FluidBox] },
+        FieldKind::OptFluidBoxSlice => quote! { Option<&'static [crate::prototypes::FluidBox]> },
         FieldKind::LuaAny => quote! { crate::LuaAny },
         FieldKind::OptLuaAny => quote! { Option<crate::LuaAny> },
     }
@@ -307,6 +324,10 @@ fn needs_eq(kind: FieldKind) -> bool {
             | FieldKind::EnergySource
             | FieldKind::OptEnergySource
             | FieldKind::Minable
+            | FieldKind::FluidBox
+            | FieldKind::OptFluidBox
+            | FieldKind::FluidBoxSlice
+            | FieldKind::OptFluidBoxSlice
             | FieldKind::RecipeIngredients
             | FieldKind::RecipeProducts
             | FieldKind::TechEffects
@@ -346,8 +367,6 @@ fn is_skip_type_name(name: &str) -> bool {
         name,
         "Sprite"
             | "Sound"
-            | "IconData"
-            | "FluidBox"
             | "Vector"
             | "TriggerEffect"
             | "AttackParameters"
@@ -411,6 +430,20 @@ fn classify_array_elem(
         if is_stringish_name(name) {
             return Some(opt(FieldKind::StrSlice, FieldKind::OptStrSlice, optional));
         }
+        if name == "IconData" {
+            return Some(opt(
+                FieldKind::IconDataSlice,
+                FieldKind::OptIconDataSlice,
+                optional,
+            ));
+        }
+        if name == "FluidBox" {
+            return Some(opt(
+                FieldKind::FluidBoxSlice,
+                FieldKind::OptFluidBoxSlice,
+                optional,
+            ));
+        }
         if is_skip_type_name(name) {
             return None;
         }
@@ -465,6 +498,12 @@ fn classify_simple_name(name: &str, optional: bool) -> Option<FieldKind> {
     }
     if name == "MinableProperties" {
         return Some(FieldKind::Minable);
+    }
+    if name == "IconData" {
+        return Some(opt(FieldKind::IconData, FieldKind::OptIconData, optional));
+    }
+    if name == "FluidBox" {
+        return Some(opt(FieldKind::FluidBox, FieldKind::OptFluidBox, optional));
     }
     if matches!(
         name,
@@ -602,16 +641,13 @@ fn auto_fields_for(
         let classified = classify_property(prop, aliases);
 
         if prop.optional {
-            let kind = match classified {
-                Some(k) => k,
-                None if pack && name == "fluid_boxes" => FieldKind::OptLuaAny,
-                None => continue, // skip complex optionals
+            let Some(kind) = classified else {
+                continue; // skip complex optionals
             };
             // Prefer skipping OptLuaAny outside packs.
             if matches!(kind, FieldKind::OptLuaAny | FieldKind::LuaAny) && !pack {
                 continue;
             }
-            // icons: only if classifiable (IconData arrays are skipped).
             let spec = FieldSpec {
                 name: name.clone(),
                 kind,

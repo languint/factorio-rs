@@ -593,40 +593,25 @@ pub fn check(x: Option<i32>, y: Option<i32>) -> i32 {
         panic!("expected function");
     };
 
-    let Statement::VariableDecl { value: a, .. } = &function.body.statements[0] else {
-        panic!("expected unwrap_or binding");
-    };
-    assert_eq!(
-        a,
-        &Expression::If {
-            condition: Box::new(ne_nil_ident("x")),
-            then_expr: Box::new(Expression::Identifier("x".to_string())),
-            else_expr: Box::new(Expression::Literal(Literal::Int(0))),
-        }
+    let body = &function.body.statements;
+    let conditionals = body
+        .iter()
+        .filter(|s| matches!(s, Statement::Conditional { .. }))
+        .count();
+    assert!(
+        conditionals >= 3,
+        "expected hoisted unwrap_or/or/and conditionals, got {body:?}"
     );
-
-    let Statement::VariableDecl { value: b, .. } = &function.body.statements[1] else {
-        panic!("expected or binding");
-    };
-    assert_eq!(
-        b,
-        &Expression::If {
-            condition: Box::new(ne_nil_ident("x")),
-            then_expr: Box::new(Expression::Identifier("x".to_string())),
-            else_expr: Box::new(Expression::Identifier("y".to_string())),
-        }
-    );
-
-    let Statement::Return(Some(and_expr)) = &function.body.statements[2] else {
-        panic!("expected and return");
-    };
-    assert_eq!(
-        and_expr,
-        &Expression::If {
-            condition: Box::new(ne_nil_ident("x")),
-            then_expr: Box::new(Expression::Identifier("y".to_string())),
-            else_expr: Box::new(Expression::Literal(Literal::Nil)),
-        }
+    assert!(
+        body.iter().any(|s| matches!(
+            s,
+            Statement::VariableDecl {
+                name,
+                value: Expression::Identifier(tmp),
+                ..
+            } if name == "a" && tmp.starts_with("__h_")
+        )),
+        "unwrap_or should bind a hoist temp, got {body:?}"
     );
 }
 
@@ -641,20 +626,33 @@ pub fn mapped(x: Option<i32>) -> Option<i32> {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
-        panic!("expected return");
-    };
-    let Expression::If {
+    let body = &function.body.statements;
+    let Some(Statement::Conditional {
         condition,
-        then_expr,
-        else_expr,
-    } = expr
+        then_block,
+        else_block,
+        ..
+    }) = body
+        .iter()
+        .find(|s| matches!(s, Statement::Conditional { .. }))
     else {
-        panic!("expected If, got {expr:?}");
+        panic!("expected hoisted map conditional, got {body:?}");
     };
-    assert_eq!(condition.as_ref(), &ne_nil_ident("x"));
-    assert!(matches!(then_expr.as_ref(), Expression::Call { .. }));
-    assert_eq!(else_expr.as_ref(), &Expression::Literal(Literal::Nil));
+    assert_eq!(condition, &ne_nil_ident("x"));
+    assert!(matches!(
+        then_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::Call { .. },
+            ..
+        }]
+    ));
+    assert!(matches!(
+        else_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::Literal(Literal::Nil),
+            ..
+        }]
+    ));
 
     let source = r"
 pub fn or_else(x: Option<i32>) -> i32 {
@@ -665,21 +663,30 @@ pub fn or_else(x: Option<i32>) -> i32 {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
-        panic!("expected return");
-    };
-    let Expression::If {
-        then_expr,
-        else_expr,
+    let body = &function.body.statements;
+    let Some(Statement::Conditional {
+        then_block,
+        else_block,
         ..
-    } = expr
+    }) = body
+        .iter()
+        .find(|s| matches!(s, Statement::Conditional { .. }))
     else {
-        panic!("expected If");
+        panic!("expected hoisted unwrap_or_else, got {body:?}");
     };
-    assert_eq!(then_expr.as_ref(), &Expression::Identifier("x".to_string()));
     assert!(matches!(
-        else_expr.as_ref(),
-        Expression::Call { args, .. } if args.is_empty()
+        then_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::Identifier(name),
+            ..
+        }] if name == "x"
+    ));
+    assert!(matches!(
+        else_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::Call { args, .. },
+            ..
+        }] if args.is_empty()
     ));
 }
 
@@ -694,10 +701,16 @@ pub fn keep(x: Option<i32>) -> Option<i32> {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    let Statement::Return(Some(expr)) = &function.body.statements[0] else {
-        panic!("expected return");
-    };
-    assert!(matches!(expr, Expression::If { .. }));
+    let body = &function.body.statements;
+    assert!(
+        body.iter()
+            .any(|s| matches!(s, Statement::Conditional { .. })),
+        "filter should hoist nested conditionals, got {body:?}"
+    );
+    assert!(matches!(
+        body.last(),
+        Some(Statement::Return(Some(Expression::Identifier(_))))
+    ));
 }
 
 #[test]

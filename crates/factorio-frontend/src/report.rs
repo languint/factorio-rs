@@ -180,7 +180,13 @@ pub fn write_frontend_error(
     }
 
     let message = error.report_message();
-    write_cargo_header(&mut writer, "error", Color::Red, None, &message)?;
+    write_cargo_header(
+        &mut writer,
+        "error",
+        Color::Red,
+        error.code(),
+        &message,
+    )?;
 
     let span_range = error.location().map_or(0..0, |loc| loc.span.range());
     let span = file_span(filename, span_range);
@@ -202,8 +208,12 @@ pub fn write_frontend_error(
 
     builder.finish().write(
         (filename.to_string(), Source::from(source)),
-        SkipFirstLine::new(writer),
-    )
+        SkipFirstLine::new(&mut writer),
+    )?;
+    if let Some(help) = error.help() {
+        write_cargo_footer(&mut writer, "help", help, Color::Red)?;
+    }
+    Ok(())
 }
 
 /// Print a transpile lint diagnostic to stderr.
@@ -267,6 +277,43 @@ mod tests {
             !plain.contains('╰') && !plain.contains('─'),
             "expected ascii carets, not unicode box drawing:\n{plain}"
         );
+    }
+
+    #[test]
+    fn formats_hard_frontend_error_with_code_and_help() {
+        let source = "fn f() {\n    async { 1 }\n}\n";
+        let start = source.find("async").expect("snippet");
+        let error = FrontendError::UnsupportedExpression {
+            location: SourceLoc::new(SourceSpan::new(start, start + "async".len()))
+                .with_note("Async"),
+        };
+        let mut buf = Vec::new();
+        write_frontend_error(&mut buf, "control.rs", source, &error).expect("write");
+        let plain = strip_ansi(&String::from_utf8(buf).expect("utf8"));
+        assert!(
+            plain.starts_with("error[E0103]:"),
+            "expected hard-error EXXX header, got:\n{plain}"
+        );
+        assert!(plain.contains("= help:"), "missing help footer:\n{plain}");
+        assert!(plain.contains("async"), "missing snippet:\n{plain}");
+    }
+
+    #[test]
+    fn formats_syn_error_with_span() {
+        let source = "fn f( { }\n";
+        let Err(error) = syn::parse_file(source) else {
+            panic!("expected parse failure");
+        };
+        let frontend = FrontendError::from(error);
+        assert!(frontend.location().is_some());
+        let mut buf = Vec::new();
+        write_frontend_error(&mut buf, "control.rs", source, &frontend).expect("write");
+        let plain = strip_ansi(&String::from_utf8(buf).expect("utf8"));
+        assert!(
+            plain.starts_with("error[E0100]:"),
+            "expected syn EXXX header, got:\n{plain}"
+        );
+        assert!(plain.contains("= help:"), "missing help footer:\n{plain}");
     }
 
     #[test]

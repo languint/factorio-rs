@@ -209,10 +209,13 @@ fn collect_from_items(
                 } else {
                     let child_path = resolve_mod_file(source_dir, source_path, &mod_name)?;
                     let child_source = std::fs::read_to_string(&child_path).map_err(|source| {
-                        FrontendError::Syn(format!(
-                            "failed to read test module `{}`: {source}",
-                            child_path.display()
-                        ))
+                        FrontendError::Syn {
+                            message: format!(
+                                "failed to read test module `{}`: {source}",
+                                child_path.display()
+                            ),
+                            location: factorio_ir::span::SourceLoc::default(),
+                        }
                     })?;
                     let child_file = syn::parse_file(&child_source)?;
                     lower_test_module_items(
@@ -552,10 +555,13 @@ fn resolve_mod_file(
             return Ok(candidate.clone());
         }
     }
-    Err(FrontendError::Syn(format!(
-        "could not find test module file for `mod {mod_name}` (looked next to {})",
-        parent_path.display()
-    )))
+    Err(FrontendError::Syn {
+        message: format!(
+            "could not find test module file for `mod {mod_name}` (looked next to {})",
+            parent_path.display()
+        ),
+        location: factorio_ir::span::SourceLoc::default(),
+    })
 }
 
 fn parse_macro_items(tokens: proc_macro2::TokenStream) -> FrontendResult<Vec<Item>> {

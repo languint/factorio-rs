@@ -159,11 +159,8 @@ fn try_inline_closure_call(expr: &Expression) -> Option<Expression> {
     let [Statement::Return(Some(ret))] = body.statements.as_slice() else {
         return None;
     };
-    for param in params {
-        if count_ident_uses(ret, param) > 1 {
-            return None;
-        }
-    }
+    // Trivial args (idents/lits) may be rematerialized when a param is used more
+    // than once; that is cheaper than leaving a CLOSURE+CALL in Factorio Lua.
 
     let mut result = ret.clone();
     for (param, arg) in params.iter().zip(args.iter()) {
@@ -177,114 +174,6 @@ const fn is_trivial_arg(expr: &Expression) -> bool {
         expr,
         Expression::Identifier(_) | Expression::Literal(_) | Expression::QualifiedPath { .. }
     )
-}
-
-fn count_ident_uses(expr: &Expression, name: &str) -> usize {
-    match expr {
-        Expression::Identifier(id) => usize::from(id == name),
-        Expression::Literal(_) | Expression::QualifiedPath { .. } => 0,
-        Expression::FieldAccess { base, .. }
-        | Expression::Not(base)
-        | Expression::Len(base)
-        | Expression::FatPointer { data: base, .. } => count_ident_uses(base, name),
-        Expression::Call { func, args } => {
-            count_ident_uses(func, name)
-                + args
-                    .iter()
-                    .map(|a| count_ident_uses(a, name))
-                    .sum::<usize>()
-        }
-        Expression::MethodCall { receiver, args, .. }
-        | Expression::DynMethodCall { receiver, args, .. } => {
-            count_ident_uses(receiver, name)
-                + args
-                    .iter()
-                    .map(|a| count_ident_uses(a, name))
-                    .sum::<usize>()
-        }
-        Expression::StructLiteral { fields, .. } | Expression::EnumLiteral { fields, .. } => {
-            fields.iter().map(|(_, v)| count_ident_uses(v, name)).sum()
-        }
-        Expression::BinaryOp { lhs, rhs, .. } => {
-            count_ident_uses(lhs, name) + count_ident_uses(rhs, name)
-        }
-        Expression::FormatConcat { parts } | Expression::Array { elements: parts } => {
-            parts.iter().map(|p| count_ident_uses(p, name)).sum()
-        }
-        Expression::Index { base, key } => {
-            count_ident_uses(base, name) + count_ident_uses(key, name)
-        }
-        Expression::If {
-            condition,
-            then_expr,
-            else_expr,
-        } => {
-            count_ident_uses(condition, name)
-                + count_ident_uses(then_expr, name)
-                + count_ident_uses(else_expr, name)
-        }
-        Expression::Closure { body, .. } => body
-            .statements
-            .iter()
-            .map(|s| count_ident_uses_in_statement(s, name))
-            .sum(),
-    }
-}
-
-fn count_ident_uses_in_statement(statement: &Statement, name: &str) -> usize {
-    match statement {
-        Statement::VariableDecl { value, .. }
-        | Statement::Expr(value)
-        | Statement::Return(Some(value)) => count_ident_uses(value, name),
-        Statement::Assignment { target, value } => {
-            count_ident_uses(target, name) + count_ident_uses(value, name)
-        }
-        Statement::Conditional {
-            condition,
-            then_block,
-            else_block,
-        } => {
-            count_ident_uses(condition, name)
-                + then_block
-                    .iter()
-                    .map(|s| count_ident_uses_in_statement(s, name))
-                    .sum::<usize>()
-                + else_block
-                    .iter()
-                    .map(|s| count_ident_uses_in_statement(s, name))
-                    .sum::<usize>()
-        }
-        Statement::Return(None)
-        | Statement::Continue
-        | Statement::Break
-        | Statement::FunctionDecl(_)
-        | Statement::StructDecl(_)
-        | Statement::EnumDecl(_) => 0,
-        Statement::ForIn { iter, body, .. } => {
-            count_ident_uses(iter, name)
-                + body
-                    .iter()
-                    .map(|s| count_ident_uses_in_statement(s, name))
-                    .sum::<usize>()
-        }
-        Statement::ForNumeric {
-            start, limit, body, ..
-        } => {
-            count_ident_uses(start, name)
-                + count_ident_uses(limit, name)
-                + body
-                    .iter()
-                    .map(|s| count_ident_uses_in_statement(s, name))
-                    .sum::<usize>()
-        }
-        Statement::While { condition, body } => {
-            count_ident_uses(condition, name)
-                + body
-                    .iter()
-                    .map(|s| count_ident_uses_in_statement(s, name))
-                    .sum::<usize>()
-        }
-    }
 }
 
 fn substitute_ident(expr: &mut Expression, name: &str, replacement: &Expression) {

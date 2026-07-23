@@ -82,7 +82,8 @@ Create a new player (or join a map). You should see a titled frame with a label.
 - Choose-elem: `elem_value` is `ElemValue` (`Name` / `Signal` / `Prototype`);
   `elem_filters` is `Vec<PrototypeFilterEntry>` via builders such as
   `EntityPrototypeFilter::type_("furnace")` (family must match `elem_type`).
-  Nested `elem_filters` on some item filter variants are not typed yet.
+  Nested filters work the same way, for example
+  `ItemPrototypeFilter::place_result(&[EntityPrototypeFilter::name("assembling-machine-1")])`.
 - Close a custom GUI with `player.set_opened(None)` (`opened` is
   `Option<OpenedTarget>`).
 

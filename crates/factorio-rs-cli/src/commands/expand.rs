@@ -36,18 +36,21 @@ pub fn expand_crate(project_root: &Path) -> CliResult<String> {
         .arg("-Zunpretty=expanded")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        // Diagnostics on stderr; expanded source is only on stdout.
-        .stderr(Stdio::inherit());
+        // Capture stderr for better failure hints; also print it for the user.
+        .stderr(Stdio::piped());
     configure_stable_rustc_env(&mut command)?;
 
     let output = command.output().map_err(|source| CliError::CargoMetadata {
         message: format!("failed to run macro expansion (`cargo rustc`): {source}"),
     })?;
 
+    if !output.stderr.is_empty() {
+        let _ = std::io::Write::write_all(&mut std::io::stderr(), &output.stderr);
+    }
+
     if !output.status.success() {
         return Err(CliError::MacroExpandFailed {
-            message: "cargo rustc -Zunpretty=expanded failed (see rustc diagnostics above)"
-                .to_string(),
+            message: macro_expand_failure_message(&output.stderr),
         });
     }
 
@@ -57,11 +60,38 @@ pub fn expand_crate(project_root: &Path) -> CliResult<String> {
 
     if expanded.trim().is_empty() {
         return Err(CliError::MacroExpandFailed {
-            message: "rustc produced empty expansion output".to_string(),
+            message: "rustc produced empty expansion output; factorio-rs needs `-Zunpretty=expanded` via its RUSTC_WRAPPER bootstrap helper".to_string(),
         });
     }
 
     Ok(expanded)
+}
+
+fn macro_expand_failure_message(stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let lower = stderr.to_ascii_lowercase();
+    if lower.contains("unknown unstable option")
+        || lower.contains("unstable options are only allowed")
+        || lower.contains("only accepted on the nightly")
+        || lower.contains("the `-z` flag is only accepted")
+        || lower.contains("unpretty")
+    {
+        return "cargo rustc -Zunpretty=expanded failed: the toolchain rejected the expand dump. \
+factorio-rs enables `RUSTC_BOOTSTRAP=1` only for that flag through its RUSTC_WRAPPER \
+(see `~/.cache/factorio-rs/rustc-expand-wrapper.sh`); check that wrappers like sccache still \
+exec the wrapped rustc, and see rustc diagnostics above"
+            .to_string();
+    }
+    if lower.contains("could not exec")
+        || (lower.contains("no such file") && lower.contains("wrapper"))
+    {
+        return "cargo rustc -Zunpretty=expanded failed: the factorio-rs RUSTC_WRAPPER could not be executed \
+(see rustc diagnostics above)"
+            .to_string();
+    }
+    "cargo rustc -Zunpretty=expanded failed (see rustc diagnostics above); \
+factorio-rs requires that flag to lower macros after typecheck"
+        .to_string()
 }
 
 pub fn configure_stable_rustc_env(command: &mut Command) -> CliResult<()> {
@@ -150,13 +180,30 @@ const fn rustc_expand_wrapper_script() -> &'static str {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use super::{ensure_rustc_expand_wrapper, rustc_expand_wrapper_script};
+    use super::{
+        ensure_rustc_expand_wrapper, macro_expand_failure_message, rustc_expand_wrapper_script,
+    };
 
     #[test]
     fn wrapper_script_mentions_unpretty_and_bootstrap() {
         let script = rustc_expand_wrapper_script();
         assert!(script.contains("unpretty=expanded"));
         assert!(script.contains("RUSTC_BOOTSTRAP"));
+    }
+
+    #[test]
+    fn expand_failure_mentions_bootstrap_for_unstable_flag() {
+        let message = macro_expand_failure_message(
+            b"error: the option `Z` is only accepted on the nightly compiler",
+        );
+        assert!(message.contains("RUSTC_BOOTSTRAP"));
+        assert!(message.contains("-Zunpretty=expanded"));
+    }
+
+    #[test]
+    fn expand_failure_generic_still_mentions_flag() {
+        let message = macro_expand_failure_message(b"error: could not compile `demo`");
+        assert!(message.contains("-Zunpretty=expanded"));
     }
 
     #[test]

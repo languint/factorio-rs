@@ -139,6 +139,7 @@ Keep using `LuaAny` (or expect it) for truly open values:
 - `Any` / `AnyBasic` payloads (including non-string Tag values)
 - Unstructured anonymous `table` parameters
 - Prototype graphics / animation packs still skipped by the classifier
+  (`IconData` / `FluidBox` are thin typed exceptions)
 - `storage[...]` indexing and polymorphic lua stdlib helpers
 - Self-referential concept fields that must stay `Copy` (`MapLocation.position`)
 

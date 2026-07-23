@@ -32,6 +32,16 @@ fn bundled_prototype_api_generates_all_typenames() {
         factorio_api_gen::PROTOTYPE_RICH_OVERRIDES.contains(&"item"),
         "rich overrides should list item"
     );
+    assert!(
+        source.contains("crate :: prototypes :: IconData")
+            || source.contains("crate::prototypes::IconData"),
+        "icons / IconData fields should use thin IconData"
+    );
+    assert!(
+        source.contains("crate :: prototypes :: FluidBox")
+            || source.contains("crate::prototypes::FluidBox"),
+        "fluid_boxes / FluidBox fields should use thin FluidBox"
+    );
 }
 
 #[test]

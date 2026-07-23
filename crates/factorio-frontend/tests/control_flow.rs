@@ -163,7 +163,7 @@ pub fn handle(value: Option<i32>) {
 }
 
 #[test]
-fn parses_value_match_as_iife() {
+fn parses_value_match_as_statements() {
     let source = r"
 pub fn classify(flag: bool) -> i32 {
     match flag {
@@ -178,17 +178,8 @@ pub fn classify(flag: bool) -> i32 {
         panic!("expected function declaration");
     };
 
-    let Statement::Return(Some(Expression::Call { func, args })) = &function.body.statements[0]
-    else {
-        panic!("expected return of match IIFE");
-    };
-    assert!(args.is_empty());
-    let Expression::Closure { params, body } = func.as_ref() else {
-        panic!("expected closure");
-    };
-    assert!(params.is_empty());
     assert!(matches!(
-        body.statements.as_slice(),
+        function.body.statements.as_slice(),
         [
             Statement::VariableDecl { .. },
             Statement::Conditional { .. }
@@ -289,8 +280,14 @@ impl Phase {
         "ticks binding should not be repeated on guard fallthrough, got {ticks_rawgets} in:\n{lua}"
     );
     assert!(
-        lua.contains("ticks + 1 >= 60"),
-        "expected guard condition:\n{lua}"
+        lua.contains("ticks + 1 >= 60")
+            || (lua.contains("ticks = ticks + 1") && lua.contains("ticks >= 60")),
+        "expected guard as `ticks + 1 >= 60` or peephole mutate-local form:\n{lua}"
+    );
+    assert_eq!(
+        lua.matches("ticks + 1").count(),
+        1,
+        "ticks + 1 should appear once (guard or mutate), got:\n{lua}"
     );
     let mining_checks = lua.matches("== \"Mining\"").count();
     assert_eq!(
@@ -314,14 +311,8 @@ pub fn classify(n: i32) -> i32 {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    let Statement::Return(Some(Expression::Call { func, .. })) = &function.body.statements[0]
-    else {
-        panic!("expected IIFE");
-    };
-    let Expression::Closure { body, .. } = func.as_ref() else {
-        panic!("expected closure");
-    };
-    let Statement::VariableDecl { name, .. } = &body.statements[0] else {
+    let body = &function.body.statements;
+    let Statement::VariableDecl { name, .. } = &body[0] else {
         panic!("expected temp");
     };
     // `1 | 2` expands to nested arms: if == 1 then ... else if == 2 then ... else _
@@ -329,7 +320,7 @@ pub fn classify(n: i32) -> i32 {
         condition,
         else_block,
         ..
-    } = &body.statements[1]
+    } = &body[1]
     else {
         panic!("expected first or-alt");
     };
@@ -383,21 +374,15 @@ pub fn origin_x(p: Point) -> i32 {
         })
         .expect("origin_x");
 
-    let Statement::Return(Some(Expression::Call { func, .. })) = &function.body.statements[0]
-    else {
-        panic!("expected IIFE return");
-    };
-    let Expression::Closure { body, .. } = func.as_ref() else {
-        panic!("expected closure");
-    };
-    let Statement::VariableDecl { name, .. } = &body.statements[0] else {
+    let body = &function.body.statements;
+    let Statement::VariableDecl { name, .. } = &body[0] else {
         panic!("expected temp");
     };
     let Statement::Conditional {
         condition,
         then_block,
         ..
-    } = &body.statements[1]
+    } = &body[1]
     else {
         panic!("expected y: 0 arm");
     };

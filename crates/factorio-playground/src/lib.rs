@@ -262,6 +262,15 @@ pub fn on_singleplayer_init() {
             "{lua}"
         );
         assert!(lua.contains("if n == nil then"), "{lua}");
+        assert!(
+            lua.contains("n = n + 1"),
+            "repeated n + 1 should mutate local once:\n{lua}"
+        );
+        assert_eq!(
+            lua.matches("n + 1").count(),
+            1,
+            "n + 1 should appear once after peephole:\n{lua}"
+        );
     }
 
     #[test]
@@ -313,17 +322,20 @@ pub fn on_singleplayer_init() {
             serde_json::from_str(&release.files_json.expect("files")).expect("json");
         let lua = map.get("lua/control/place.lua").expect("lua");
         assert!(
-            lua.contains("if __try_")
-                && lua.contains("== nil")
-                && lua.contains("err = \"missing\""),
+            lua.contains("== nil") && lua.contains("err = \"missing\""),
             "expected fused nil -> return err:\n{lua}"
         );
         assert!(
-            !lua.contains("__try_") || !lua.contains(".ok"),
+            !lua.contains(".ok"),
             "ok_or? should not load `.ok` from a Result wrapper:\n{lua}"
         );
+        // Prefer the folded form (`local n = storage[...]`); accept a leftover
+        // `__try_` temp only if it is still bound into `n`.
         assert!(
-            lua.contains("local n = __try_") || lua.contains("local n=__try_"),
+            lua.contains("local n = storage[\"n\"]")
+                || lua.contains("local n = storage['n']")
+                || lua.contains("local n = __try_")
+                || lua.contains("local n=__try_"),
             "{lua}"
         );
     }

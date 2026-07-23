@@ -78,12 +78,12 @@ impl Parse for FormatMessage {
     }
 }
 
-/// Returns true when `mac` is an assertion / panic macro we know how to lower.
+/// Returns true when `mac` is an assertion / panic / todo macro we know how to lower.
 #[must_use]
 pub fn is_assert_macro(mac: &syn::Macro) -> bool {
     matches!(
         macro_name(&mac.path).as_str(),
-        "assert" | "assert_eq" | "assert_ne" | "panic"
+        "assert" | "assert_eq" | "assert_ne" | "panic" | "todo" | "unimplemented"
     )
 }
 
@@ -98,11 +98,41 @@ pub fn lower_assert_macro_statements(
         "assert_eq" => lower_assert_cmp(mac, ctx, self_type, true),
         "assert_ne" => lower_assert_cmp(mac, ctx, self_type, false),
         "panic" => lower_panic(mac, ctx, self_type),
+        "todo" | "unimplemented" => lower_todo_macro(mac, ctx, self_type),
         other => Err(FrontendError::UnsupportedMacro {
             name: other.to_string(),
             location: location(mac),
         }),
     }
+}
+
+fn lower_todo_macro(
+    mac: &ExprMacro,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
+    let name = macro_name(&mac.mac.path);
+    ctx.emit_lint(
+        factorio_ir::lint::LintId::TodoMacro,
+        format!("`{name}!` is not a finished Factorio code path; it lowers to `error(...)`"),
+        location(mac),
+    )?;
+    let message = if mac.mac.tokens.is_empty() {
+        string_lit(&format!("not yet implemented (`{name}!`)"))
+    } else if let Ok(message) = syn::parse2::<FormatMessage>(mac.mac.tokens.clone()) {
+        lower_message(&message, mac, ctx, self_type)?
+    } else if let Ok(lit) = syn::parse2::<LitStr>(mac.mac.tokens.clone()) {
+        string_lit(&lit.value())
+    } else {
+        return Err(FrontendError::UnsupportedMacro {
+            name,
+            location: location(mac)
+                .with_note("expected `todo!()` / `unimplemented!()` or a string message"),
+        });
+    };
+    Ok(vec![factorio_ir::statement::Statement::Expr(error_call(
+        message,
+    ))])
 }
 
 fn lower_assert(

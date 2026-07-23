@@ -184,15 +184,9 @@ fn lower_expression_statement(
             return lower_infinite_loop(loop_expr, ctx, self_type);
         }
         Expr::Match(match_expr) => {
-            // Tail value-producing `match` becomes an IIFE so arm results can be returned.
+            // Tail value-producing `match` expands to statement arms that `return`.
             if is_tail && !has_semi {
-                let mark = ctx.try_hoist_mark();
-                let value = lower_match_expression(match_expr, ctx, self_type)?;
-                let mut stmts = ctx.take_try_hoists_from(mark);
-                stmts.push(factorio_ir::statement::Statement::Return(Some(
-                    maybe_wrap_return_into(value, ctx),
-                )));
-                return Ok(stmts);
+                return lower_match_value_statements(match_expr, ctx, self_type);
             }
             return lower_match_statements(match_expr, ctx, self_type);
         }
@@ -234,15 +228,7 @@ fn lower_tail_statements(
         Expr::ForLoop(for_loop) => lower_for_loop(for_loop, ctx, self_type),
         Expr::While(while_expr) => lower_while_loop(while_expr, ctx, self_type),
         Expr::Loop(loop_expr) => lower_infinite_loop(loop_expr, ctx, self_type),
-        Expr::Match(match_expr) => {
-            let mark = ctx.try_hoist_mark();
-            let value = lower_match_expression(match_expr, ctx, self_type)?;
-            let mut stmts = ctx.take_try_hoists_from(mark);
-            stmts.push(factorio_ir::statement::Statement::Return(Some(
-                maybe_wrap_return_into(value, ctx),
-            )));
-            Ok(stmts)
-        }
+        Expr::Match(match_expr) => lower_match_value_statements(match_expr, ctx, self_type),
         Expr::Return(return_expression) => match return_expression.expr.as_deref() {
             Some(value) => {
                 let (mut stmts, value) = lower_expr(value, ctx, self_type)?;
@@ -872,56 +858,87 @@ fn lower_match_statements(
     stmts.extend(fold_match_arms(
         &tmp,
         &match_expr.arms,
-        MatchArmMode::Statement,
+        &MatchArmMode::Statement,
         ctx,
         self_type,
     )?);
     Ok(stmts)
 }
 
-/// Lower `match` as a value: `(function() ... end)()`.
+/// Lower a value-producing `match` in tail/return position (arms `return` directly).
+fn lower_match_value_statements(
+    match_expr: &ExprMatch,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
+    let tmp = match_tmp_name(match_expr);
+    let (mut stmts, scrutinee) = lower_expr(&match_expr.expr, ctx, self_type)?;
+    stmts.push(factorio_ir::statement::Statement::VariableDecl {
+        name: tmp.clone(),
+        ty: factorio_ir::r#type::Type::Void,
+        source_type: None,
+        value: scrutinee,
+    });
+    stmts.extend(fold_match_arms(
+        &tmp,
+        &match_expr.arms,
+        &MatchArmMode::Value,
+        ctx,
+        self_type,
+    )?);
+    Ok(stmts)
+}
+
+/// Lower `match` as a value: hoist statement arms that assign a result temp.
 ///
 /// Any `?` in the scrutinee leaves hoists on `ctx` for the enclosing statement
-/// (so `match foo()? { ... }` propagates from the outer function, not the IIFE).
+/// (so `match foo()? { ... }` propagates from the outer function).
 pub fn lower_match_expression(
     match_expr: &ExprMatch,
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let tmp = match_tmp_name(match_expr);
+    let result = ctx.alloc_tmp("match");
     let scrutinee = lower_expression(&match_expr.expr, ctx, self_type)?;
-    let mut body = vec![factorio_ir::statement::Statement::VariableDecl {
-        name: tmp.clone(),
-        ty: factorio_ir::r#type::Type::Void,
-        source_type: None,
-        value: scrutinee,
-    }];
-    body.extend(fold_match_arms(
+    ctx.try_hoists
+        .push(factorio_ir::statement::Statement::VariableDecl {
+            name: tmp.clone(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: scrutinee,
+        });
+    ctx.try_hoists
+        .push(factorio_ir::statement::Statement::VariableDecl {
+            name: result.clone(),
+            ty: factorio_ir::r#type::Type::Void,
+            source_type: None,
+            value: factorio_ir::expression::Expression::Literal(
+                factorio_ir::literal::Literal::Nil,
+            ),
+        });
+    let arms = fold_match_arms(
         &tmp,
         &match_expr.arms,
-        MatchArmMode::Value,
+        &MatchArmMode::Bind(result.clone()),
         ctx,
         self_type,
-    )?);
-    Ok(factorio_ir::expression::Expression::Call {
-        func: Box::new(factorio_ir::expression::Expression::Closure {
-            params: vec![],
-            body: factorio_ir::block::Block { statements: body },
-        }),
-        args: vec![],
-    })
+    )?;
+    ctx.try_hoists.extend(arms);
+    Ok(factorio_ir::expression::Expression::Identifier(result))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum MatchArmMode {
     Statement,
     Value,
+    Bind(String),
 }
 
 fn fold_match_arms(
     tmp: &str,
     arms: &[Arm],
-    mode: MatchArmMode,
+    mode: &MatchArmMode,
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
@@ -1238,7 +1255,7 @@ fn match_conditions_equiv(
 
 fn lower_match_arm_body(
     body: &Expr,
-    mode: MatchArmMode,
+    mode: &MatchArmMode,
     ctx: &mut LowerContext<'_>,
     self_type: Option<&str>,
 ) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
@@ -1251,10 +1268,77 @@ fn lower_match_arm_body(
             Expr::Block(block) => Ok(lower_block(&block.block, ctx, self_type)?.statements),
             other => {
                 let (mut stmts, value) = lower_expr(other, ctx, self_type)?;
-                stmts.push(factorio_ir::statement::Statement::Return(Some(value)));
+                stmts.push(factorio_ir::statement::Statement::Return(Some(
+                    maybe_wrap_return_into(value, ctx),
+                )));
                 Ok(stmts)
             }
         },
+        MatchArmMode::Bind(name) => lower_match_arm_bind_body(body, name, ctx, self_type),
+    }
+}
+
+fn lower_match_arm_bind_body(
+    body: &Expr,
+    name: &str,
+    ctx: &mut LowerContext<'_>,
+    self_type: Option<&str>,
+) -> FrontendResult<Vec<factorio_ir::statement::Statement>> {
+    match body {
+        Expr::Block(block) => {
+            let stmts = &block.block.stmts;
+            if stmts.is_empty() {
+                return Ok(vec![factorio_ir::statement::Statement::Assignment {
+                    target: factorio_ir::expression::Expression::Identifier(name.to_string()),
+                    value: factorio_ir::expression::Expression::Literal(
+                        factorio_ir::literal::Literal::Nil,
+                    ),
+                }]);
+            }
+            let mut out = Vec::new();
+            let last = stmts.len() - 1;
+            for (index, statement) in stmts.iter().enumerate() {
+                if index != last {
+                    out.extend(lower_statement(statement, false, ctx, self_type)?);
+                    continue;
+                }
+                match statement {
+                    Stmt::Expr(Expr::Return(_), _) => {
+                        out.extend(lower_statement(statement, false, ctx, self_type)?);
+                    }
+                    Stmt::Expr(expression, None) => {
+                        let (mut hoists, value) = lower_expr(expression, ctx, self_type)?;
+                        out.append(&mut hoists);
+                        out.push(factorio_ir::statement::Statement::Assignment {
+                            target: factorio_ir::expression::Expression::Identifier(
+                                name.to_string(),
+                            ),
+                            value,
+                        });
+                    }
+                    other => {
+                        out.extend(lower_statement(other, false, ctx, self_type)?);
+                        out.push(factorio_ir::statement::Statement::Assignment {
+                            target: factorio_ir::expression::Expression::Identifier(
+                                name.to_string(),
+                            ),
+                            value: factorio_ir::expression::Expression::Literal(
+                                factorio_ir::literal::Literal::Nil,
+                            ),
+                        });
+                    }
+                }
+            }
+            Ok(out)
+        }
+        other => {
+            let (mut stmts, value) = lower_expr(other, ctx, self_type)?;
+            stmts.push(factorio_ir::statement::Statement::Assignment {
+                target: factorio_ir::expression::Expression::Identifier(name.to_string()),
+                value,
+            });
+            Ok(stmts)
+        }
     }
 }
 
@@ -1584,13 +1668,13 @@ fn literal_from_pat_lit(
         Lit::Int(value) => {
             let parsed = value
                 .base10_parse::<i64>()
-                .map_err(|error| FrontendError::Syn(format!("invalid integer literal: {error}")))?;
+                .map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Int(parsed)
         }
         Lit::Float(value) => {
             let parsed = value
                 .base10_parse::<f64>()
-                .map_err(|error| FrontendError::Syn(format!("invalid float literal: {error}")))?;
+                .map_err(FrontendError::from)?;
             factorio_ir::literal::Literal::Float(parsed)
         }
         Lit::Str(value) => factorio_ir::literal::Literal::String(value.value()),

@@ -340,6 +340,9 @@ still fails the build as unsupported syntax when known unsafe.
 | Call/method `?` | Assumes Result; lint E0012 | Typed `Option`/`Result` binding or `.ok_or` |
 | `/` / `/=` without float operand | Lua float div; lint E0013 (warn) | Use `n as f64 / 2.0` or allow the lint |
 | `Struct { ..other }` (not Default) | Rest fields dropped; lint E0014 | Explicit fields or `..Default::default()` |
+| `n as u8` (numeric cast) | No-op in Lua; lint E0015 | Drop the cast or use explicit math |
+| `todo!` / `unimplemented!` | Lowers to `error(...)`; lint E0016 | Prefer `panic!("...")` or finish the path |
+| `storage["key"]` | Opaque `LuaAny`; lint E0017 | Prefer `storage.get` / `storage.set` |
 | Inline `mod` without `#[export]` | Contents skipped; lint E0009 | Export the mod or use a file module |
 | `arr[i]` with variable `i` | Not +1 for Lua | Use a 1-based index, or literal indices |
 | `{:.2}` / other format specs | Ignored output | Use `{}` / `{:?}` only |

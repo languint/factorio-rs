@@ -440,6 +440,166 @@ fn folds_match_tag_bool_through_temp() {
 }
 
 #[test]
+fn peephole_mutates_local_for_repeated_add() {
+    let boots_plus = Expression::BinaryOp {
+        lhs: Box::new(Expression::Identifier("boots".to_string())),
+        op: Operator::Add,
+        rhs: Box::new(Expression::Literal(Literal::Int(1))),
+    };
+    let mut module = module_with_fn(vec![
+        Statement::VariableDecl {
+            name: "boots".to_string(),
+            ty: Type::Int,
+            source_type: None,
+            value: Expression::Literal(Literal::Int(0)),
+        },
+        Statement::Assignment {
+            target: Expression::Index {
+                base: Box::new(Expression::Identifier("storage".to_string())),
+                key: Box::new(Expression::Literal(Literal::String("boots".to_string()))),
+            },
+            value: boots_plus.clone(),
+        },
+        Statement::Expr(Expression::FormatConcat {
+            parts: vec![
+                Expression::Literal(Literal::String("boot=".to_string())),
+                boots_plus,
+            ],
+        }),
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert!(
+        matches!(
+            &body[1],
+            Statement::Assignment {
+                target: Expression::Identifier(name),
+                value: Expression::BinaryOp { op: Operator::Add, .. },
+            } if name == "boots"
+        ),
+        "expected boots = boots + 1, got {body:?}"
+    );
+    assert!(
+        matches!(
+            &body[2],
+            Statement::Assignment {
+                value: Expression::Identifier(name),
+                ..
+            } if name == "boots"
+        ),
+        "storage write should reuse boots, got {body:?}"
+    );
+    assert!(
+        matches!(
+            &body[3],
+            Statement::Expr(Expression::FormatConcat { parts })
+                if parts.iter().any(|p| matches!(p, Expression::Identifier(n) if n == "boots"))
+                    && !parts.iter().any(|p| matches!(p, Expression::BinaryOp { .. }))
+        ),
+        "print should reuse boots, got {body:?}"
+    );
+}
+
+#[test]
+fn peephole_cse_temp_when_bare_local_still_needed() {
+    let x_plus = Expression::BinaryOp {
+        lhs: Box::new(Expression::Identifier("x".to_string())),
+        op: Operator::Add,
+        rhs: Box::new(Expression::Literal(Literal::Int(1))),
+    };
+    let mut module = module_with_fn(vec![
+        Statement::VariableDecl {
+            name: "x".to_string(),
+            ty: Type::Int,
+            source_type: None,
+            value: Expression::Literal(Literal::Int(0)),
+        },
+        Statement::Assignment {
+            target: Expression::Identifier("a".to_string()),
+            value: x_plus.clone(),
+        },
+        // Bare read of old `x` blocks mutate-local.
+        Statement::Expr(Expression::Identifier("x".to_string())),
+        Statement::Assignment {
+            target: Expression::Identifier("b".to_string()),
+            value: x_plus,
+        },
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert!(
+        body.iter().any(|s| matches!(
+            s,
+            Statement::VariableDecl { name, .. } if name.starts_with("__a_")
+        )),
+        "expected CSE temp when bare local is still read, got {body:?}"
+    );
+}
+
+#[test]
+fn folds_unwrap_or_hoist_temp_into_user_binding() {
+    // Frontend hoist_safe_if + let: local __h = nil; if ...; local n = __h
+    // After unwrap_or simplify: local __h = recv; if __h == nil; local n = __h
+    let mut module = module_with_fn(vec![
+        Statement::VariableDecl {
+            name: "__h_2".to_string(),
+            ty: Type::Void,
+            source_type: None,
+            value: Expression::Index {
+                base: Box::new(Expression::Identifier("storage".to_string())),
+                key: Box::new(Expression::Literal(Literal::String("boots".to_string()))),
+            },
+        },
+        Statement::Conditional {
+            condition: Expression::BinaryOp {
+                lhs: Box::new(Expression::Identifier("__h_2".to_string())),
+                op: Operator::Eq,
+                rhs: Box::new(Expression::Literal(Literal::Nil)),
+            },
+            then_block: vec![Statement::Assignment {
+                target: Expression::Identifier("__h_2".to_string()),
+                value: Expression::Literal(Literal::Int(0)),
+            }],
+            else_block: vec![],
+        },
+        Statement::VariableDecl {
+            name: "n".to_string(),
+            ty: Type::Int,
+            source_type: None,
+            value: Expression::Identifier("__h_2".to_string()),
+        },
+    ]);
+    optimize_modules(std::slice::from_mut(&mut module));
+    let body = fn_body(&module);
+    assert!(
+        matches!(
+            &body[0],
+            Statement::VariableDecl {
+                name,
+                value: Expression::Index { .. },
+                ..
+            } if name == "n"
+        ),
+        "expected unwrap_or temp renamed into `n`, got {body:?}"
+    );
+    assert!(
+        matches!(
+            &body[1],
+            Statement::Conditional {
+                condition: Expression::BinaryOp {
+                    lhs,
+                    op: Operator::Eq,
+                    ..
+                },
+                ..
+            } if matches!(lhs.as_ref(), Expression::Identifier(id) if id == "n")
+        ),
+        "expected nil-check on `n`, got {body:?}"
+    );
+    assert_eq!(body.len(), 2, "copy binding should be removed: {body:?}");
+}
+
+#[test]
 fn simplifies_hoisted_option_unwrap_or() {
     let mut module = module_with_fn(vec![Statement::VariableDecl {
         name: "n".to_string(),

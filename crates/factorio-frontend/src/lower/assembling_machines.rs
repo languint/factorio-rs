@@ -11,7 +11,7 @@ use crate::error::{FrontendError, FrontendResult};
 /// Expand `assembling_machine! { ... }` into `AssemblingMachines` + register fn.
 pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec<syn::Item>> {
     let input: AssemblingMachinesMacroInput =
-        syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
+        syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();
@@ -60,7 +60,7 @@ pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec
          impl AssemblingMachines {{ {const_defs} }} \
          pub fn register_assembling_machines() {{ data.extend([ {extend_items} ]); }}"
     );
-    let file: syn::File = syn::parse_str(&code).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let file: syn::File = syn::parse_str(&code).map_err(FrontendError::from)?;
     Ok(file.items)
 }
 

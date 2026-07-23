@@ -12,7 +12,7 @@ use crate::lower::recipes::ProtoName;
 /// Expand `technology! { ... }` into `Technologies` + `pub fn register_technologies()`.
 pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec<syn::Item>> {
     let input: TechnologiesMacroInput =
-        syn::parse2(tokens).map_err(|e| FrontendError::Syn(e.to_string()))?;
+        syn::parse2(tokens).map_err(FrontendError::from)?;
 
     let mut const_defs = String::new();
     let mut extend_items = String::new();
@@ -73,7 +73,7 @@ pub fn expand(tokens: TokenStream, mod_name: Option<&str>) -> FrontendResult<Vec
          pub fn register_technologies() {{ data.extend([ {extend_items} ]); }}"
     );
 
-    let file: syn::File = syn::parse_str(&code).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let file: syn::File = syn::parse_str(&code).map_err(FrontendError::from)?;
     Ok(file.items)
 }
 

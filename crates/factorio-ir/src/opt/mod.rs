@@ -1,6 +1,7 @@
 mod concat;
 mod hoist;
 mod inline;
+mod peephole;
 mod simplify;
 
 use crate::module::Module;
@@ -19,6 +20,8 @@ fn optimize_module(module: &mut Module) {
     // Inlining can expose shapes simplify already knows (bool if->expr, etc.).
     simplify::optimize_module(module);
     concat::optimize_module(module);
+    // After unwrap_or / concat folds, CSE repeated pure arithmetic.
+    peephole::optimize_module(module);
 }
 
 #[cfg(test)]

@@ -14,6 +14,42 @@ use factorio_ir::{
 };
 
 #[test]
+fn lowers_ok_unit() {
+    let source = r#"
+pub enum GreetError {
+    EmptyName,
+}
+
+type GreetResult<T> = Result<T, GreetError>;
+
+pub fn greet() -> GreetResult<()> {
+    Ok(())
+}
+"#;
+    let module = must_ok_parse(parse_module(source, "control.greet_unit"));
+    let greet = module
+        .symbols
+        .iter()
+        .find_map(|s| match &s.statement {
+            Statement::FunctionDecl(f) if f.name == "greet" => Some(f),
+            _ => None,
+        })
+        .expect("greet");
+    let Statement::Return(Some(Expression::StructLiteral {
+        fields,
+        struct_name,
+    })) = &greet.body.statements[0]
+    else {
+        panic!("expected Ok(()), got {:?}", greet.body.statements);
+    };
+    assert_eq!(struct_name.as_deref(), Some("Result"));
+    assert_eq!(
+        fields,
+        &vec![("ok".to_string(), Expression::Literal(Literal::Nil))]
+    );
+}
+
+#[test]
 fn lowers_ok_err_constructors() {
     let source = r#"
 pub fn ok_one() -> Result<i32, String> {
@@ -187,20 +223,14 @@ pub fn unwrap_or_zero(r: Result<i32, String>) -> i32 {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    let Statement::Return(Some(Expression::Call { func, .. })) = &function.body.statements[0]
-    else {
-        panic!("expected IIFE");
-    };
-    let Expression::Closure { body, .. } = func.as_ref() else {
-        panic!("expected closure");
-    };
+    let body = &function.body.statements;
     let Statement::Conditional {
         condition,
         then_block,
         ..
-    } = &body.statements[1]
+    } = &body[1]
     else {
-        panic!("expected Ok arm");
+        panic!("expected Ok arm, got {body:?}");
     };
     assert!(matches!(
         condition,
@@ -263,32 +293,38 @@ pub fn place(entity: Option<i32>) -> Result<i32, String> {
     let Statement::FunctionDecl(function) = &module.symbols[0].statement else {
         panic!("expected function");
     };
-    // Trivial receiver stays an if-expr (no bind IIFE).
-    let Statement::Return(Some(Expression::If {
-        condition,
-        then_expr,
-        else_expr,
-    })) = &function.body.statements[0]
+    // Hoisted to statement if + result temp (no IIFE).
+    let body = &function.body.statements;
+    assert!(
+        matches!(
+            body.last(),
+            Some(Statement::Return(Some(Expression::Identifier(_))))
+        ),
+        "expected return of result temp, got {body:?}"
+    );
+    let Some(Statement::Conditional {
+        then_block,
+        else_block,
+        ..
+    }) = body
+        .iter()
+        .find(|s| matches!(s, Statement::Conditional { .. }))
     else {
-        panic!(
-            "expected if-expr return, got {:?}",
-            function.body.statements
-        );
+        panic!("expected hoisted conditional, got {body:?}");
     };
     assert!(matches!(
-        condition.as_ref(),
-        Expression::BinaryOp {
-            op: Operator::Ne,
+        then_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::StructLiteral { fields, .. },
             ..
-        }
+        }] if fields[0].0 == "ok"
     ));
     assert!(matches!(
-        then_expr.as_ref(),
-        Expression::StructLiteral { fields, .. } if fields[0].0 == "ok"
-    ));
-    assert!(matches!(
-        else_expr.as_ref(),
-        Expression::StructLiteral { fields, .. } if fields[0].0 == "err"
+        else_block.as_slice(),
+        [Statement::Assignment {
+            value: Expression::StructLiteral { fields, .. },
+            ..
+        }] if fields[0].0 == "err"
     ));
 }
 
@@ -349,7 +385,7 @@ pub fn try_place(surface: LuaSurface, params: i32) -> Result<i32, String> {
         "create_entity should be evaluated once, lua was:\n{lua}"
     );
     assert!(
-        lua.contains("local __o =") || lua.contains("local __o="),
-        "expected bound temp, lua was:\n{lua}"
+        lua.contains("local __o_"),
+        "expected bound temp `__o_N`, lua was:\n{lua}"
     );
 }

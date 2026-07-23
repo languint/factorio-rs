@@ -637,9 +637,19 @@ fn lower_known_macro(
             .extend(locale::parse_pending(tokens)?);
         None
     } else {
+        let name = mac
+            .mac
+            .path
+            .segments
+            .iter()
+            .map(|seg| seg.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::");
         return Err(FrontendError::UnsupportedItem {
-            item: "macro".to_string(),
-            location: location(mac),
+            item: format!("macro `{name}`"),
+            location: location(mac).with_note(
+                "macro must expand to supported Rust, or be a known factorio_rs dual-path macro",
+            ),
         });
     };
 

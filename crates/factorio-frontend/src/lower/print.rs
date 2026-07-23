@@ -48,7 +48,7 @@ pub fn lower_macro_expression(
         "println" => lower_println_macro(mac, ctx, self_type),
         "format" | "format_args" => lower_format_macro(mac, ctx, self_type),
         "matches" => super::statements::lower_matches_macro(mac, ctx, self_type),
-        "assert" | "assert_eq" | "assert_ne" | "panic" => {
+        "assert" | "assert_eq" | "assert_ne" | "panic" | "todo" | "unimplemented" => {
             let stmts = super::assert_macros::lower_assert_macro_statements(mac, ctx, self_type)?;
             ctx.try_hoists.extend(stmts);
             Ok(factorio_ir::expression::Expression::Literal(
@@ -595,10 +595,12 @@ fn lower_format_macro_message(
     self_type: Option<&str>,
 ) -> FrontendResult<factorio_ir::expression::Expression> {
     let input = syn::parse2::<FormatMacroInput>(mac.mac.tokens.clone()).map_err(|error| {
-        FrontendError::Syn(format!(
-            "unsupported format/tracing macro input at {}: {error} (format-string style only; structured fields are not supported)",
-            location(mac)
-        ))
+        FrontendError::Syn {
+            message: format!(
+                "unsupported format/tracing macro input: {error} (format-string style only; structured fields are not supported)"
+            ),
+            location: location(mac),
+        }
     })?;
     let template = input.format.value();
     let lowered_args = input

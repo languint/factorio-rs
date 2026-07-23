@@ -90,6 +90,6 @@ pub fn emit_names_module(
          impl {names_struct} {{ {const_defs} }} \
          pub fn {register_fn}() {{ data.extend([ {extend_items} ]); }}"
     );
-    let file: syn::File = syn::parse_str(&code).map_err(|e| FrontendError::Syn(e.to_string()))?;
+    let file: syn::File = syn::parse_str(&code).map_err(FrontendError::from)?;
     Ok(file.items)
 }
