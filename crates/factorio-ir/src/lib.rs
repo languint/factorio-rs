@@ -11,10 +11,10 @@ pub mod module;
 pub mod opt;
 pub mod prune;
 
+#[doc(inline)]
+pub use ast::r#type;
 pub use ast::{
     block, enumeration, expression, function, literal, operator, scope, statement, structure,
 };
-#[doc(inline)]
-pub use ast::r#type;
 pub use meta::{debug, span};
 pub use module::{locale, stage};
