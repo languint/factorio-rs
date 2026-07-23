@@ -1,31 +1,16 @@
-//! Emit Factorio mod packaging files from IR modules (`control.lua`, stage
-//! entries, locale, `info.json`).
-
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use factorio_ir::{locale::LocaleFile, module::Module, stage::Stage, statement::Statement};
 use heck::AsLowerCamelCase;
 
-use crate::generator::LuaGenerator;
+use crate::{
+    generator::LuaGenerator,
+    pack::events::{EventRegistration, collect_event_registrations},
+};
 
-/// Control-stage event handler registration for `control.lua`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct EventRegistration {
-    pub module: String,
-    pub handler: String,
-    pub event: String,
-    pub filter: Option<factorio_ir::expression::Expression>,
-}
-
-/// A control-stage function published via `#[factorio_rs::export]` for `remote.call`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteExport {
-    pub module: String,
-    pub function: String,
-    pub interface: String,
-    pub params: Vec<(String, Option<String>)>,
-}
+pub mod events;
+pub mod exports;
 
 /// A stage module and the public functions that should run when it is loaded.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,69 +49,6 @@ impl<'a> EmitModOptions<'a> {
             debug_level: None,
         }
     }
-}
-
-/// Collect control-stage event handlers.
-#[must_use]
-pub fn collect_event_registrations(module: &Module) -> Vec<EventRegistration> {
-    if module.stage != Stage::Control {
-        return Vec::new();
-    }
-
-    module
-        .symbols
-        .iter()
-        .filter_map(|symbol| {
-            let Statement::FunctionDecl(function) = &symbol.statement else {
-                return None;
-            };
-            let event_name = function.event.as_ref()?;
-            Some(EventRegistration {
-                module: module.name.clone(),
-                handler: function.name.clone(),
-                event: event_name.clone(),
-                filter: function.event_filter.clone(),
-            })
-        })
-        .collect()
-}
-
-/// Collect control-stage `#[factorio_rs::export]` functions (skips event handlers).
-#[must_use]
-pub fn collect_remote_exports(module: &Module, default_interface: &str) -> Vec<RemoteExport> {
-    if module.stage != Stage::Control {
-        return Vec::new();
-    }
-
-    module
-        .symbols
-        .iter()
-        .filter_map(|symbol| {
-            let Statement::FunctionDecl(function) = &symbol.statement else {
-                return None;
-            };
-            if function.event.is_some() {
-                return None;
-            }
-            let export = function.export.as_ref()?;
-            if function.inline {
-                return None;
-            }
-            Some(RemoteExport {
-                module: module.name.clone(),
-                function: function.name.clone(),
-                interface: export
-                    .interface
-                    .clone()
-                    .unwrap_or_else(|| default_interface.to_string()),
-                params: function
-                    .params
-                    .iter()
-                    .map(|param| (param.name.clone(), param.source_type.clone()))
-                    .collect(),
-            })
-        })
-        .collect()
 }
 
 /// Returns module metadata if this module belongs to the given stage.
@@ -212,7 +134,7 @@ pub fn generate_stage_entry_lua(
 pub fn generate_control_lua(
     mod_name: &str,
     events: &[EventRegistration],
-    remote_exports: &[RemoteExport],
+    remote_exports: &[exports::RemoteExport],
     module_prefix: &str,
     profile: &str,
 ) -> String {
@@ -250,7 +172,7 @@ pub fn generate_control_lua(
         output.push('\n');
     }
 
-    let mut by_interface: BTreeMap<String, Vec<&RemoteExport>> = BTreeMap::new();
+    let mut by_interface: BTreeMap<String, Vec<&exports::RemoteExport>> = BTreeMap::new();
     for export in remote_exports {
         emit_module_require(
             &mut output,
@@ -408,9 +330,9 @@ pub fn emit_mod_tree(
         .iter()
         .flat_map(collect_event_registrations)
         .collect();
-    let remotes: Vec<RemoteExport> = modules
+    let remotes: Vec<exports::RemoteExport> = modules
         .iter()
-        .flat_map(|module| collect_remote_exports(module, options.mod_name))
+        .flat_map(|module| exports::collect_remote_exports(module, options.mod_name))
         .collect();
     out.insert(
         "control.lua".to_string(),
