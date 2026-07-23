@@ -301,7 +301,7 @@ pub fn generate_attribute_setter_lookup(api: &RuntimeApi) -> String {
     use std::collections::BTreeMap;
 
     let by_name: HashMap<&str, &Class> = api.classes.iter().map(|c| (c.name.as_str(), c)).collect();
-    let mut method_names: HashSet<String> = HashSet::new();
+    let mut method_names: BTreeSet<String> = BTreeSet::new();
     for class in &api.classes {
         for method in &class.methods {
             method_names.insert(method.name.clone());
@@ -310,9 +310,13 @@ pub fn generate_attribute_setter_lookup(api: &RuntimeApi) -> String {
 
     // setter_method -> property (stable order)
     let mut map: BTreeMap<String, String> = BTreeMap::new();
+    let mut readable_attrs: BTreeSet<String> = BTreeSet::new();
     for class in &api.classes {
         let (attrs, _) = inherited_members(class, &by_name);
         for (attribute, _) in attrs {
+            if attribute.read_type.is_some() {
+                readable_attrs.insert(attribute.name.clone());
+            }
             let Some(_) = attribute.write_type.as_ref() else {
                 continue;
             };
@@ -331,6 +335,14 @@ pub fn generate_attribute_setter_lookup(api: &RuntimeApi) -> String {
         let prop_lit = prop.as_str();
         quote! { #setter_lit => Some(#prop_lit), }
     });
+    let attr_arms = readable_attrs.iter().map(|name| {
+        let lit = name.as_str();
+        quote! { #lit => true, }
+    });
+    let method_arms = method_names.iter().map(|name| {
+        let lit = name.as_str();
+        quote! { #lit => true, }
+    });
 
     let tokens = quote! {
         /// Map Factorio attribute setter stubs (`set_caption`, `write_driving`, ...)
@@ -341,6 +353,26 @@ pub fn generate_attribute_setter_lookup(api: &RuntimeApi) -> String {
             match method {
                 #( #arms )*
                 _ => None,
+            }
+        }
+
+        /// Readable Factorio attributes (`entity.surface`, `game.tick`, ...).
+        /// Zero-arg Rust calls with these names emit property reads, not invocations.
+        #[must_use]
+        pub fn is_factorio_attribute_read(method: &str) -> bool {
+            match method {
+                #( #attr_arms )*
+                _ => false,
+            }
+        }
+
+        /// Factorio `LuaObject` methods (`die`, `clear`, ...). Unknown names are treated
+        /// as user metatable methods and use `:` so `self` is passed.
+        #[must_use]
+        pub fn is_factorio_method(method: &str) -> bool {
+            match method {
+                #( #method_arms )*
+                _ => false,
             }
         }
     };

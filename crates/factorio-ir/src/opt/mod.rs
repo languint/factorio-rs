@@ -210,6 +210,145 @@ mod tests {
     }
 
     #[test]
+    fn folds_bool_return_conditional() {
+        let mut module = module_with_fn(vec![Statement::Conditional {
+            condition: Expression::BinaryOp {
+                lhs: Box::new(Expression::FieldAccess {
+                    base: Box::new(Expression::Identifier("phase".to_string())),
+                    field: "tag".to_string(),
+                }),
+                op: Operator::Eq,
+                rhs: Box::new(Expression::Literal(Literal::String("Running".to_string()))),
+            },
+            then_block: vec![Statement::Return(Some(Expression::Literal(Literal::Bool(
+                true,
+            ))))],
+            else_block: vec![Statement::Return(Some(Expression::Literal(Literal::Bool(
+                false,
+            ))))],
+        }]);
+        optimize_modules(std::slice::from_mut(&mut module));
+        let body = fn_body(&module);
+        assert_eq!(
+            body,
+            &[Statement::Return(Some(Expression::BinaryOp {
+                lhs: Box::new(Expression::FieldAccess {
+                    base: Box::new(Expression::Identifier("phase".to_string())),
+                    field: "tag".to_string(),
+                }),
+                op: Operator::Eq,
+                rhs: Box::new(Expression::Literal(Literal::String("Running".to_string(),))),
+            }))]
+        );
+    }
+
+    #[test]
+    fn folds_match_iife_in_if_condition() {
+        let mut module = module_with_fn(vec![Statement::Conditional {
+            condition: Expression::Call {
+                func: Box::new(Expression::Closure {
+                    params: vec![],
+                    body: Block {
+                        statements: vec![
+                            Statement::VariableDecl {
+                                name: "__match_0".to_string(),
+                                ty: Type::Void,
+                                source_type: None,
+                                value: Expression::Identifier("phase".to_string()),
+                            },
+                            Statement::Conditional {
+                                condition: Expression::BinaryOp {
+                                    lhs: Box::new(Expression::FieldAccess {
+                                        base: Box::new(Expression::Identifier(
+                                            "__match_0".to_string(),
+                                        )),
+                                        field: "tag".to_string(),
+                                    }),
+                                    op: Operator::Eq,
+                                    rhs: Box::new(Expression::Literal(Literal::String(
+                                        "Mining".to_string(),
+                                    ))),
+                                },
+                                then_block: vec![Statement::Return(Some(Expression::Literal(
+                                    Literal::Bool(true),
+                                )))],
+                                else_block: vec![Statement::Return(Some(Expression::Literal(
+                                    Literal::Bool(false),
+                                )))],
+                            },
+                        ],
+                    },
+                }),
+                args: vec![],
+            },
+            then_block: vec![Statement::Expr(Expression::Call {
+                func: Box::new(Expression::Identifier("print".to_string())),
+                args: vec![Expression::Literal(Literal::String(
+                    "mining started".to_string(),
+                ))],
+            })],
+            else_block: vec![],
+        }]);
+        optimize_modules(std::slice::from_mut(&mut module));
+        let body = fn_body(&module);
+        let Statement::Conditional { condition, .. } = &body[0] else {
+            panic!("{body:?}");
+        };
+        assert_eq!(
+            condition,
+            &Expression::BinaryOp {
+                lhs: Box::new(Expression::FieldAccess {
+                    base: Box::new(Expression::Identifier("phase".to_string())),
+                    field: "tag".to_string(),
+                }),
+                op: Operator::Eq,
+                rhs: Box::new(Expression::Literal(Literal::String("Mining".to_string(),))),
+            }
+        );
+    }
+
+    #[test]
+    fn folds_match_tag_bool_through_temp() {
+        let mut module = module_with_fn(vec![
+            Statement::VariableDecl {
+                name: "__match_0".to_string(),
+                ty: Type::Void,
+                source_type: None,
+                value: Expression::Identifier("phase".to_string()),
+            },
+            Statement::Conditional {
+                condition: Expression::BinaryOp {
+                    lhs: Box::new(Expression::FieldAccess {
+                        base: Box::new(Expression::Identifier("__match_0".to_string())),
+                        field: "tag".to_string(),
+                    }),
+                    op: Operator::Eq,
+                    rhs: Box::new(Expression::Literal(Literal::String("Running".to_string()))),
+                },
+                then_block: vec![Statement::Return(Some(Expression::Literal(Literal::Bool(
+                    true,
+                ))))],
+                else_block: vec![Statement::Return(Some(Expression::Literal(Literal::Bool(
+                    false,
+                ))))],
+            },
+        ]);
+        optimize_modules(std::slice::from_mut(&mut module));
+        let body = fn_body(&module);
+        assert_eq!(
+            body,
+            &[Statement::Return(Some(Expression::BinaryOp {
+                lhs: Box::new(Expression::FieldAccess {
+                    base: Box::new(Expression::Identifier("phase".to_string())),
+                    field: "tag".to_string(),
+                }),
+                op: Operator::Eq,
+                rhs: Box::new(Expression::Literal(Literal::String("Running".to_string(),))),
+            }))]
+        );
+    }
+
+    #[test]
     fn simplifies_hoisted_option_unwrap_or() {
         let mut module = module_with_fn(vec![Statement::VariableDecl {
             name: "n".to_string(),

@@ -1544,8 +1544,76 @@ fn bind_let_local_type(
         ctx.bind_type(name.to_string(), enum_name.clone());
         return;
     }
+    // `let x = opt.unwrap_or(Phase::Idle)` / `storage.get::<Phase>(…)` — keep the
+    // concrete type so later `x.tick()` lowers as `Phase.tick(x)`, not a property read.
+    if let Some(key) = type_key_from_rust_expr(init_expr, ctx) {
+        ctx.bind_type(name.to_string(), key);
+        return;
+    }
     if let Some(key) = infer_debug_type_key(value, ctx) {
         ctx.bind_type(name.to_string(), key);
+    }
+}
+
+fn type_key_from_rust_expr(expr: &Expr, ctx: &LowerContext<'_>) -> Option<String> {
+    match strip_expr_parens(expr) {
+        Expr::MethodCall(call) => {
+            let method = call.method.to_string();
+            if matches!(method.as_str(), "unwrap_or" | "or") && call.args.len() == 1 {
+                return type_key_from_rust_expr(&call.args[0], ctx)
+                    .or_else(|| type_key_from_method_turbofish(call, ctx))
+                    .or_else(|| type_key_from_rust_expr(&call.receiver, ctx));
+            }
+            if method == "get" {
+                return type_key_from_method_turbofish(call, ctx);
+            }
+            None
+        }
+        Expr::Path(path) => user_type_owner_from_path(&path.path, ctx),
+        Expr::Call(call) => match call.func.as_ref() {
+            Expr::Path(path) => user_type_owner_from_path(&path.path, ctx),
+            _ => None,
+        },
+        Expr::Struct(item) => {
+            let name = item.path.segments.last()?.ident.to_string();
+            ctx.is_user_struct(&name).then_some(name)
+        }
+        _ => None,
+    }
+}
+
+fn type_key_from_method_turbofish(
+    call: &syn::ExprMethodCall,
+    ctx: &LowerContext<'_>,
+) -> Option<String> {
+    let turbofish = call.turbofish.as_ref()?;
+    for arg in &turbofish.args {
+        if let syn::GenericArgument::Type(ty) = arg
+            && let Some(key) = rust_type_key(ty, &ctx.type_aliases, &ctx.assoc_bindings)
+            && ctx.is_user_struct(&key)
+        {
+            return Some(key);
+        }
+    }
+    None
+}
+
+fn user_type_owner_from_path(path: &syn::Path, ctx: &LowerContext<'_>) -> Option<String> {
+    if path.segments.len() >= 2 {
+        let owner = path.segments[path.segments.len() - 2].ident.to_string();
+        if ctx.is_user_struct(&owner) {
+            return Some(owner);
+        }
+    }
+    let name = path.segments.last()?.ident.to_string();
+    ctx.is_user_struct(&name).then_some(name)
+}
+
+fn strip_expr_parens(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Paren(paren) => strip_expr_parens(&paren.expr),
+        Expr::Group(group) => strip_expr_parens(&group.expr),
+        other => other,
     }
 }
 

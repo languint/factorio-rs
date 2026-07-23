@@ -2,28 +2,14 @@ use std::fmt::Write as _;
 
 use factorio_ir::expression::Expression;
 
-use crate::{LuaGenerator, attribute_property_for_setter, prototype_lua_typename};
-
-/// Zero-arg methods that must be invoked (not read as properties).
-const ZERO_ARG_METHOD_CALLS: &[&str] = &[
-    "clear",
-    "destroy",
-    "focus",
-    "bring_to_front",
-    "scroll_to_top",
-    "scroll_to_bottom",
-    "scroll_to_left",
-    "scroll_to_right",
-    "get",
-    "die",
-    "centered",
-    "force_auto_center",
-    "into",
-];
+use crate::{
+    LuaGenerator, attribute_property_for_setter, is_factorio_attribute_read, is_factorio_method,
+    prototype_lua_typename,
+};
 
 /// User-struct / metatable methods need `:method(...)` so Lua passes `self`.
-/// Everything else uses `.method(...)` (Factorio `LuaObject` style - colon would
-/// pass an extra argument and error at runtime).
+/// Factorio `LuaObject` methods use `.method(...)` (colon would pass an extra
+/// argument and error at runtime). Unknown names default to `:`.
 const USER_COLON_METHODS: &[&str] = &[
     "get",
     "set",
@@ -74,7 +60,7 @@ const USER_COLON_METHODS: &[&str] = &[
 ];
 
 fn method_call_sep(method: &str) -> &'static str {
-    if USER_COLON_METHODS.contains(&method) {
+    if USER_COLON_METHODS.contains(&method) || !is_factorio_method(method) {
         ":"
     } else {
         "."
@@ -331,13 +317,9 @@ impl LuaGenerator {
         if trimmed.is_empty() {
             let receiver = self.generate_expression(receiver);
             // Zero-arg API *attributes* are property reads (`entity.surface`).
-            // Zero-arg *actions* still need a call (`element:clear()`).
-            // Calls that only passed trailing `None`s stay invocations (`entity.die()`).
-            if args.is_empty() {
-                if ZERO_ARG_METHOD_CALLS.contains(&method) {
-                    let sep = method_call_sep(method);
-                    return format!("{receiver}{sep}{method}()");
-                }
+            // Everything else is an invocation. Trailing-`None`-only calls stay
+            // invocations (`entity.die()`). User / unknown names use `:`.
+            if args.is_empty() && is_factorio_attribute_read(method) {
                 return format!("{receiver}.{method}");
             }
             let sep = method_call_sep(method);

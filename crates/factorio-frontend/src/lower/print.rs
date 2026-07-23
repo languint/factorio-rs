@@ -732,6 +732,28 @@ pub fn infer_debug_type_key(
         factorio_ir::expression::Expression::FatPointer { data, .. } => {
             infer_debug_type_key(data, ctx)
         }
+        factorio_ir::expression::Expression::If {
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            let then_key = infer_debug_type_key(then_expr, ctx)?;
+            let else_key = infer_debug_type_key(else_expr, ctx)?;
+            (then_key == else_key).then_some(then_key)
+        }
+        factorio_ir::expression::Expression::Call { func, args }
+            if args.is_empty()
+                && let factorio_ir::expression::Expression::Closure { body, .. } =
+                    func.as_ref() =>
+        {
+            body.statements.iter().rev().find_map(|statement| {
+                if let factorio_ir::statement::Statement::Return(Some(value)) = statement {
+                    infer_debug_type_key(value, ctx)
+                } else {
+                    None
+                }
+            })
+        }
         factorio_ir::expression::Expression::StructLiteral {
             struct_name: None, ..
         }

@@ -199,13 +199,13 @@ pub fn on_singleplayer_init() {
     #[test]
     fn transpile_files_release_runs_optimize() {
         let files = serde_json::json!({
-                            "control/pick.rs": r"
+                                                                                                    "control/pick.rs": r"
 pub fn pick(c: bool) -> i32 {
     let x = if c { 1 } else { 0 };
     x
 }
 ",
-                        });
+                                                                                                });
         let debug = transpile_files(&files.to_string(), "debug");
         assert!(debug.ok, "{:?}", debug.message);
         let release = transpile_files(&files.to_string(), "release");
@@ -259,6 +259,128 @@ pub fn on_singleplayer_init() {
             "{lua}"
         );
         assert!(lua.contains("if n == nil then"), "{lua}");
+    }
+
+    #[test]
+    fn transpile_files_release_calls_enum_tick_method() {
+        let files = serde_json::json!({
+            "shared/phase.rs": r#"
+pub enum Phase {
+    Idle,
+    Mining { ticks: i64 },
+}
+
+impl Phase {
+    pub fn tick(self) -> Phase {
+        match self {
+            Phase::Idle => Phase::Mining { ticks: 0 },
+            Phase::Mining { ticks } => Phase::Mining { ticks: ticks + 1 },
+        }
+    }
+}
+"#,
+            "control/tick.rs": r#"
+use crate::shared::phase::Phase;
+
+#[factorio_rs::event(OnSingleplayerInit)]
+pub fn on_singleplayer_init() {
+    let mut phase = storage.get::<Phase>("phase").unwrap_or(Phase::Idle);
+    phase = phase.tick();
+    storage.set("phase", phase);
+}
+"#,
+        });
+        let release = transpile_files(&files.to_string(), "release");
+        assert!(release.ok, "{:?}", release.message);
+        let map: BTreeMap<String, String> =
+            serde_json::from_str(&release.files_json.expect("files")).expect("json");
+        let lua = map.get("lua/control/tick.lua").expect("lua");
+        assert!(
+            lua.contains("Phase.tick(phase)") || lua.contains("phase:tick()"),
+            "enum method must be invoked with self, got:\n{lua}"
+        );
+        assert!(
+            !lua.contains("phase = phase.tick\n") && !lua.contains("phase = phase.tick\r"),
+            "must not emit property read for tick():\n{lua}"
+        );
+    }
+
+    #[test]
+    fn transpile_files_release_folds_match_in_if_condition() {
+        let files = serde_json::json!({
+            "control/tick.rs": r#"
+pub enum Phase {
+    Idle,
+    Mining,
+}
+
+#[factorio_rs::event(OnSingleplayerInit)]
+pub fn on_singleplayer_init() {
+    let phase = Phase::Mining;
+    if matches!(phase, Phase::Mining) {
+        println!("mining started");
+    }
+}
+"#,
+        });
+        let release = transpile_files(&files.to_string(), "release");
+        assert!(release.ok, "{:?}", release.message);
+        let map: BTreeMap<String, String> =
+            serde_json::from_str(&release.files_json.expect("files")).expect("json");
+        let lua = map.get("lua/control/tick.lua").expect("lua");
+        assert!(
+            !lua.contains("(function()"),
+            "match IIFE in if-condition should collapse:\n{lua}"
+        );
+        assert!(
+            !lua.contains("__match_"),
+            "match temp should be folded away:\n{lua}"
+        );
+        assert!(
+            lua.contains("phase.tag == \"Mining\"") || lua.contains("phase.tag == 'Mining'"),
+            "{lua}"
+        );
+    }
+
+    #[test]
+    fn transpile_files_release_folds_enum_tag_match() {
+        let files = serde_json::json!({
+            "control/phase.rs": r#"
+pub enum Phase {
+    Idle,
+    Running,
+}
+
+fn is_running(phase: Phase) -> bool {
+    match phase {
+        Phase::Running => true,
+        _ => false,
+    }
+}
+
+#[factorio_rs::event(OnSingleplayerInit)]
+pub fn on_singleplayer_init() {
+    let phase = Phase::Running;
+    if is_running(phase) {
+        println!("running");
+    }
+}
+"#,
+        });
+        let release = transpile_files(&files.to_string(), "release");
+        assert!(release.ok, "{:?}", release.message);
+        let map: BTreeMap<String, String> =
+            serde_json::from_str(&release.files_json.expect("files")).expect("json");
+        let lua = map.get("lua/control/phase.lua").expect("lua");
+        assert!(
+            !lua.contains("__match_"),
+            "match temp should be folded away:\n{lua}"
+        );
+        assert!(
+            lua.contains("return phase.tag == \"Running\"")
+                || lua.contains("return phase.tag == 'Running'"),
+            "{lua}"
+        );
     }
 
     #[test]

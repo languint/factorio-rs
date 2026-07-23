@@ -193,6 +193,19 @@ fn emits_attribute_setters_without_write_only_getters() {
         lookup.contains("\"set_caption\"=>Some(\"caption\")"),
         "attribute setter lookup should map set_caption"
     );
+    assert!(
+        lookup.contains("isfactorio_attribute_read")
+            || lookup.contains("is_factorio_attribute_read"),
+        "attribute read helper missing"
+    );
+    assert!(
+        lookup.contains("\"surface\"=>true") || lookup.contains("\"surface\" => true"),
+        "surface should be a readable attribute"
+    );
+    assert!(
+        lookup.contains("\"clear\"=>true") || lookup.contains("\"clear\" => true"),
+        "clear should be classified as a Factorio method"
+    );
 }
 
 #[test]

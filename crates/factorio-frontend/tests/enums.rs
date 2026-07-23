@@ -77,3 +77,60 @@ fn lowers_enum_variants_constructors_matches_and_methods() {
             if enum_name == "Msg" && variant == "Move" && fields.len() == 2
     ));
 }
+
+#[test]
+fn enum_method_after_unwrap_or_lowers_to_type_call() {
+    let module = must_ok_parse(parse_module(
+        r#"
+        pub enum Phase {
+            Idle,
+            Mining { ticks: i64 },
+        }
+
+        impl Phase {
+            pub fn tick(self) -> Phase {
+                Phase::Idle
+            }
+        }
+
+        pub fn step(opt: Option<Phase>) -> Phase {
+            let mut phase = opt.unwrap_or(Phase::Idle);
+            phase = phase.tick();
+            phase
+        }
+        "#,
+        "shared.phase_tick",
+    ));
+
+    let Some(Statement::FunctionDecl(step)) = module
+        .symbols
+        .iter()
+        .map(|symbol| &symbol.statement)
+        .find(|statement| {
+            matches!(statement, Statement::FunctionDecl(function) if function.name == "step")
+        })
+    else {
+        panic!("expected step function");
+    };
+    let saw_phase_tick = step.body.statements.iter().any(|statement| {
+        matches!(
+            statement,
+            Statement::Assignment {
+                value: Expression::Call {
+                    func,
+                    ..
+                },
+                ..
+            } if matches!(
+                func.as_ref(),
+                Expression::QualifiedPath { segments }
+                    if segments.as_slice() == ["Phase", "tick"]
+            )
+        )
+    });
+    assert!(
+        saw_phase_tick,
+        "expected Phase.tick(phase), got {:?}",
+        step.body.statements
+    );
+}

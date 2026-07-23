@@ -31,6 +31,9 @@ After optional pruning, release builds run IR passes that:
 
 - Expand statement-context `if` expressions and empty IIFEs into real `if`/`else`
   (keeps IIFEs only in mid-expression positions so falsey `Option` arms stay correct)
+- Simplify locals: Option `unwrap_or`, `if c then return true else return false` ->
+  `return c`, copy-prop of read-only `__...` temps (e.g. enum `match` scrutinees),
+  and collapse mid-expression IIFEs that reduce to a single `return`
 - Inline trivial single-use closures (e.g. `|n| n + 1` in `.map`)
 - Flatten nested string concatenations from `format!` / asserts
 
