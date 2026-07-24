@@ -167,7 +167,7 @@ mod tests {
             [workspace]
             members = ["examples/demo"]
             [workspace.package]
-            version = "0.3.2"
+            version = "0.4.0"
             "#,
         );
         let member = dir.path().join("examples/demo");
@@ -181,7 +181,7 @@ mod tests {
         );
         let package = CargoPackage::load(&member).unwrap();
         assert_eq!(package.name, "demo");
-        assert_eq!(package.version, "0.3.2");
+        assert_eq!(package.version, "0.4.0");
     }
 
     #[test]

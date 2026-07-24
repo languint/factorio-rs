@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-24
+
+### Added
+
+- **IR optimization layer** (`optimize_ir`, enabled by default on the `release`
+  profile): expands statement- and mid-expression `if`/IIFE shapes, simplifies
+  locals (Option/Result unwrap folds, copy-prop, nil-init collapse, ...), inlines
+  trivial single-use closures, flattens nested `format!` concatenations, hoists
+  repeated pure subexpressions, and applies peephole rewrites for common
+  mutations (including `v.push(x)` / `table.insert` -> `v[#v + 1] = x`). See
+  [Profiles](docs/src/content/docs/guides/profiles.md).
+- **`#[factorio_rs::bench]`** and **`factorio-rs bench`**: discover benches, run
+  them in Factorio with `LuaProfiler`, and print Criterion-style
+  `[min mean max] ±stddev` (time unit scales with the mean). Docs:
+  [Benchmarking](docs/src/content/docs/guides/benchmarking.md); example:
+  `examples/benchmarking`.
+- **`lua! { ... }`**: emit raw Lua from an `unsafe` function or block (escape hatch
+  for idiom comparisons; not parsed or typechecked).
+- **`From<LuaProfiler> for LocalisedString`**: Factorio expands profiler values
+  to `Duration: ...ms` when printed as a localised string.
+- Codegen snapshot tests; frontend coverage for benches and `lua!`.
+
+### Fixed
+
+- Private Lua helpers are emitted before use so out-of-order and mutually
+  recursive definitions work.
+- Playground WASM: large prototype / full-mod examples no longer hit function
+  size limits.
+
+### Changed
+
+- Iterator / collect lowering trims extra temporary bindings when a user local
+  can own the collected table.
+- Internal module splits for IR opts, macros, and codegen expression emission
+  (same CLI / SDK surface aside from the new opt and bench APIs).
+
 ## [0.3.2] - 2026-07-22
 
 ### Changed
@@ -392,7 +428,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mod_settings!`, `locale!`, events and filters, build profiles, dead-code prune.
 - `format!` / `println!`, thumbnails, documentation site.
 
-[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/languint/factorio-rs/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/languint/factorio-rs/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/languint/factorio-rs/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/languint/factorio-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/languint/factorio-rs/compare/v0.2.1...v0.3.0

@@ -27,7 +27,7 @@ members = [
 opt-level = "z"
 
 [workspace.package]
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -39,13 +39,13 @@ keywords = ["factorio", "lua", "modding", "gamedev", "transpile"]
 categories = ["game-development"]
 
 [workspace.dependencies]
-factorio-rs = { version = "0.3.2", path = "./crates/factorio-rs" }
-factorio-api = { version = "0.3.2", path = "./crates/factorio-api" }
-factorio-api-gen = { version = "0.3.2", path = "./crates/factorio-api-gen" }
-factorio-macros = { version = "0.3.2", path = "./crates/factorio-macros" }
-factorio-codegen = { version = "0.3.2", path = "./crates/factorio-codegen" }
-factorio-frontend = { version = "0.3.2", path = "./crates/factorio-frontend" }
-factorio-ir = { version = "0.3.2", path = "./crates/factorio-ir" }
+factorio-rs = { version = "0.4.0", path = "./crates/factorio-rs" }
+factorio-api = { version = "0.4.0", path = "./crates/factorio-api" }
+factorio-api-gen = { version = "0.4.0", path = "./crates/factorio-api-gen" }
+factorio-macros = { version = "0.4.0", path = "./crates/factorio-macros" }
+factorio-codegen = { version = "0.4.0", path = "./crates/factorio-codegen" }
+factorio-frontend = { version = "0.4.0", path = "./crates/factorio-frontend" }
+factorio-ir = { version = "0.4.0", path = "./crates/factorio-ir" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"

@@ -11,7 +11,7 @@ homepage = "https://factorio-rs.dev/"
 documentation = "https://factorio-rs.dev/"
 
 [workspace.dependencies]
-factorio-rs = { version = "0.3.2", path = "../crates/factorio-rs" }
+factorio-rs = { version = "0.4.0", path = "../crates/factorio-rs" }
 
 [workspace.lints.clippy]
 pedantic = { level = "deny", priority = -1 }

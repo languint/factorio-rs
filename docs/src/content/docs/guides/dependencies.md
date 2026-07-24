@@ -130,7 +130,7 @@ factorio_version = "2.0"
 dependencies = ["? space-age"]
 ```
 
-`factorio-rs add` appends entries like `provider >= 0.3.2` from Cargo metadata.
+`factorio-rs add` appends entries like `provider >= 0.4.0` from Cargo metadata.
 A `base >= ...` line is added automatically when missing.
 
 ## Lua-only mods (flib, etc.)
