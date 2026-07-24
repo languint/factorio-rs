@@ -38,6 +38,35 @@ macro_rules! proto_fns {
     };
 }
 
+/// Marks a function as a Factorio-RS benchmark.
+///
+/// The annotated function is kept with `#[allow(dead_code)]` and a hidden
+/// const marker is emitted so the frontend can discover the bench and its
+/// iteration count without re-invoking the macro.
+///
+/// # Syntax
+///
+/// ```ignore
+/// // Default: 1 iteration.
+/// #[factorio_rs::bench]
+/// pub fn my_bench() {
+///     // benchmark body
+/// }
+///
+/// // Explicit iteration count (must be >= 1).
+/// #[factorio_rs::bench(iterations = 100)]
+/// pub fn heavy_bench() {
+///     // body run 100 times per measurement
+/// }
+/// ```
+///
+/// Bench functions may be placed next to control code or inside
+/// `#[cfg(test)]` modules; the frontend discovers them in both locations.
+#[proc_macro_attribute]
+pub fn bench(args: TokenStream, input: TokenStream) -> TokenStream {
+    macros::bench::bench(args, input)
+}
+
 /// Marks a control-stage function as a Factorio event handler.
 ///
 /// The event is inferred from the handler name and first parameter type
@@ -78,6 +107,33 @@ stage_attrs!(
 #[proc_macro_attribute]
 pub fn shared(args: TokenStream, input: TokenStream) -> TokenStream {
     macros::stage::shared(args, input)
+}
+
+/// Embeds a verbatim Lua source block inside a Factorio mod function.
+///
+/// This macro must be used inside an `unsafe fn` or an `unsafe { }` block -
+/// the transpiler enforces this requirement and emits a clear error if violated.
+///
+/// At the Rust level the macro expands to `()` so it is type-safe; the
+/// actual code extraction happens in the frontend lowering phase.
+///
+/// # Example
+///
+/// ```ignore
+/// use factorio_rs::prelude::*;
+///
+/// pub unsafe fn patch_globals() {
+///     lua! {
+///         local old_print = print
+///         print = function(...)
+///             old_print("[patched]", ...)
+///         end
+///     }
+/// }
+/// ```
+#[proc_macro]
+pub fn lua(input: TokenStream) -> TokenStream {
+    macros::lua::lua(input)
 }
 
 /// Publishes a function (or every `pub fn` in a module) as part of this mod's

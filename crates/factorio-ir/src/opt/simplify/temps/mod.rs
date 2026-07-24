@@ -129,7 +129,7 @@ fn fold_temp_into_single_copy(mut stmts: Vec<Statement>) -> Vec<Statement> {
         }
 
         if let Statement::VariableDecl { name, .. } = &mut stmts[i] {
-            *name = dest.clone();
+            name.clone_from(&dest);
         }
         let dest_expr = Expression::Identifier(dest.clone());
         for statement in &mut stmts[i + 1..copy_idx] {
@@ -181,7 +181,7 @@ fn try_fold_nil_then_temp_assign(stmts: &mut Vec<Statement>, nil_idx: usize) -> 
         ..
     } = &mut stmts[tmp_decl_idx]
     {
-        *name = dest.clone();
+        name.clone_from(&dest);
         *tmp_ty = ty;
         *tmp_source = source_type;
     }

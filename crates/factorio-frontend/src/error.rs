@@ -73,6 +73,9 @@ pub enum FrontendError {
     )]
     ItemIconNeedsModName { path: String },
 
+    #[error("`lua!` may only be used inside an `unsafe fn` or `unsafe {{ }}` block")]
+    LuaOutsideUnsafe { location: SourceLoc },
+
     #[error("{0}")]
     Lint(factorio_ir::lint::Diagnostic),
 }
@@ -117,6 +120,7 @@ impl FrontendError {
             Self::LocaleKeyUnresolved { .. } => Some("E0116"),
             Self::InvalidLocale { .. } => Some("E0117"),
             Self::ItemIconNeedsModName { .. } => Some("E0118"),
+            Self::LuaOutsideUnsafe { .. } => Some("E0119"),
         }
     }
 
@@ -181,6 +185,9 @@ impl FrontendError {
             Self::ItemIconNeedsModName { .. } => Some(
                 "use `__mod-name__/path.png` or build with factorio-rs so the package mod name is known",
             ),
+            Self::LuaOutsideUnsafe { .. } => {
+                Some("wrap the lua! call in an `unsafe { }` block or mark the function `unsafe fn`")
+            }
         }
     }
 
@@ -200,7 +207,8 @@ impl FrontendError {
             | Self::UnsupportedMacro { location, .. }
             | Self::FormatArgumentMismatch { location, .. }
             | Self::InvalidEventFilter { location }
-            | Self::UnsupportedEventFilterMethod { location, .. } => Some(location),
+            | Self::UnsupportedEventFilterMethod { location, .. }
+            | Self::LuaOutsideUnsafe { location } => Some(location),
             Self::Lint(diagnostic) => Some(&diagnostic.loc),
             Self::InvalidModuleStage { .. }
             | Self::EventOutsideControlStage { .. }
@@ -260,6 +268,9 @@ impl FrontendError {
             Self::ItemIconNeedsModName { path } => format!(
                 "item! relative icon `{path}` needs the package mod name; use a full `__mod__/...` path or build with factorio-rs"
             ),
+            Self::LuaOutsideUnsafe { .. } => {
+                "`lua!` may only be used inside an `unsafe fn` or `unsafe { }` block".to_string()
+            }
             Self::Lint(diagnostic) => diagnostic.message.clone(),
         }
     }

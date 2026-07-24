@@ -1,5 +1,5 @@
 use syn::{
-    Attribute, Expr, Meta, Path, Token,
+    Attribute, Expr, LitInt, Meta, Path, Token,
     parse::{Parse, ParseStream},
 };
 
@@ -100,6 +100,70 @@ pub fn parse_factorio_export_attribute(
 /// Parses `#[factorio_rs::inline]` (shared-stage require hot path; implies export).
 pub fn parse_factorio_inline_attribute(attr: &Attribute) -> bool {
     is_factorio_path_segment(attr.path(), "inline")
+}
+
+/// Arguments parsed from `#[factorio_rs::bench]` or `#[factorio_rs::bench(iterations = N)]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchAttributeArgs {
+    /// Number of times the bench body should run per measurement (>= 1, default 1).
+    pub iterations: u32,
+}
+
+/// Parses `#[factorio_rs::bench]` / `#[factorio_rs::bench(iterations = N)]`.
+///
+/// Returns `None` if `attr` is not a `factorio_rs::bench` attribute or if its
+/// argument list cannot be parsed.
+pub fn parse_factorio_bench_attribute(attr: &Attribute) -> Option<BenchAttributeArgs> {
+    let path = attr.path();
+    if !is_factorio_path_segment(path, "bench") {
+        return None;
+    }
+    match &attr.meta {
+        Meta::Path(_) => Some(BenchAttributeArgs { iterations: 1 }),
+        Meta::List(meta_list) => syn::parse2::<BenchArgs>(meta_list.tokens.clone())
+            .ok()
+            .map(|a| BenchAttributeArgs {
+                iterations: a.iterations,
+            }),
+        Meta::NameValue(_) => None,
+    }
+}
+
+/// Returns `true` when `attrs` contain a `#[factorio_rs::bench]` attribute.
+#[must_use]
+pub fn is_bench_fn(attrs: &[Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| parse_factorio_bench_attribute(attr).is_some())
+}
+
+struct BenchArgs {
+    iterations: u32,
+}
+
+impl Parse for BenchArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        if input.is_empty() {
+            return Ok(Self { iterations: 1 });
+        }
+        let keyword: syn::Ident = input.parse()?;
+        if keyword != "iterations" {
+            return Err(syn::Error::new(
+                keyword.span(),
+                "expected `iterations = <n>` in #[factorio_rs::bench(...)]",
+            ));
+        }
+        input.parse::<Token![=]>()?;
+        let lit: LitInt = input.parse()?;
+        let iterations: u32 = lit.base10_parse()?;
+        if iterations == 0 {
+            return Err(syn::Error::new(
+                lit.span(),
+                "`iterations` must be at least 1",
+            ));
+        }
+        Ok(Self { iterations })
+    }
 }
 
 struct ExportAttributeArgs {

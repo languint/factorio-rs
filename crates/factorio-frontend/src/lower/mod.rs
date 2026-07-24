@@ -12,6 +12,7 @@ use crate::{
 mod assembling_machines;
 pub mod assert_macros;
 pub mod attrs;
+pub mod benches;
 pub mod context;
 pub mod convert;
 pub mod event_filter;
@@ -286,6 +287,7 @@ pub fn lower_items(
         from_conversions: std::collections::HashMap::new(),
         into_params: std::collections::HashSet::new(),
         return_into: false,
+        in_unsafe: false,
         assoc_bindings: std::collections::HashMap::new(),
         vtables: Vec::new(),
         lints,
@@ -430,6 +432,11 @@ fn lower_top_level_fn(
     module_state: &mut ModuleLowerState<'_>,
     ctx: &mut LowerContext<'_>,
 ) -> FrontendResult<()> {
+    // Bench fns are lowered separately by `discover_benches`; skip them here
+    // so they don't appear in the normal control-stage output.
+    if attrs::is_bench_fn(&function.attrs) {
+        return Ok(());
+    }
     let mut lowered = lower_function(function, ctx)?;
     apply_default_export(
         &mut lowered,

@@ -290,6 +290,7 @@ can inspect leftover entities. Close the window to finish the CLI. Increase
 
 ## See also
 
+- [Benchmarking](/guides/benchmarking/) - `#[factorio_rs::bench]` + `factorio-rs bench`
 - [CLI reference](/reference/cli/) - full `factorio-rs test` flags
 - [Hot reload with Bacon](/recipes/hot-reload-bacon/) - watch + `--rerun`
 - [hello_world](/examples/hello-world/) - minimal smoke tests

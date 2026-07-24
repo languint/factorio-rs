@@ -58,7 +58,8 @@ pub(super) fn extract_mid_expr_hoists(
         | Statement::EnumDecl(_)
         | Statement::Return(None)
         | Statement::Continue
-        | Statement::Break => {}
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 

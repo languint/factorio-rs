@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           BIN=./target/debug/factorio-rs
-          for example in hello_world gui_basics locale_test tracing_test traits_demo provider mandatory_spaghetti; do
+          for example in hello_world benchmarking gui_basics locale_test tracing_test traits_demo provider mandatory_spaghetti; do
             echo "::group::factorio-rs check examples/${example}"
             "$BIN" check --manifest-path "examples/${example}"
             echo "::endgroup::"

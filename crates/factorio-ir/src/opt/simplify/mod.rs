@@ -78,7 +78,10 @@ fn optimize_statement(statement: &mut Statement) {
             fold_bool_if_expr(target);
             fold_bool_if_expr(value);
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 

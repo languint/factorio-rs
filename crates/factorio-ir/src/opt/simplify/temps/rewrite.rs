@@ -71,7 +71,10 @@ pub(super) fn replace_ident_in_statement(statement: &mut Statement, name: &str, 
                 }
             }
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 

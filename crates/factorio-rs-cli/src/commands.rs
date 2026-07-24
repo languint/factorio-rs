@@ -1,4 +1,5 @@
 pub mod add;
+pub mod bench;
 pub mod build;
 pub mod deploy;
 pub mod expand;

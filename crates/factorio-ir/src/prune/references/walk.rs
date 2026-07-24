@@ -181,7 +181,8 @@ fn collect_references_from_statement(
         Statement::StructDecl(_)
         | Statement::EnumDecl(_)
         | Statement::Continue
-        | Statement::Break => {}
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 

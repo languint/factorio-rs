@@ -93,7 +93,8 @@ pub enum CliError {
     FactorioNotFound { hint: String },
 
     #[error(
-        "Factorio binary required for `factorio-rs test` (Steam protocol launch cannot pass server args). \
+        "Factorio binary required for `factorio-rs test` / `factorio-rs bench` \
+         (Steam protocol launch cannot pass server args). \
          Set FACTORIO_PATH to the Factorio executable."
     )]
     FactorioBinaryRequired,
@@ -101,11 +102,20 @@ pub enum CliError {
     #[error("no `#[test]` functions found under `#[cfg(test)]` modules")]
     NoTests,
 
+    #[error("no `#[factorio_rs::bench]` functions found")]
+    NoBenches,
+
     #[error("Factorio test suite timed out after {timeout_secs}s")]
     TestTimeout { timeout_secs: u64 },
 
     #[error("Factorio test suite failed")]
     TestsFailed,
+
+    #[error("Factorio bench suite timed out after {timeout_secs}s")]
+    BenchTimeout { timeout_secs: u64 },
+
+    #[error("Factorio bench suite failed")]
+    BenchesFailed,
 
     #[error("failed to launch Factorio (`{target}`)")]
     LaunchFactorio {

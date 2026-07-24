@@ -27,7 +27,8 @@ fn count_straight_line_reads_in_statement(statement: &Statement, name: &str) -> 
         | Statement::EnumDecl(_)
         | Statement::Return(None)
         | Statement::Continue
-        | Statement::Break => 0,
+        | Statement::Break
+        | Statement::RawLua { .. } => 0,
     }
 }
 
@@ -137,7 +138,10 @@ pub(super) fn is_written(name: &str, stmts: &[Statement]) -> bool {
                     return true;
                 }
             }
-            Statement::Return(None) | Statement::Continue | Statement::Break => {}
+            Statement::Return(None)
+            | Statement::Continue
+            | Statement::Break
+            | Statement::RawLua { .. } => {}
         }
     }
     false
@@ -256,7 +260,10 @@ fn count_reads_in_statement(statement: &Statement, name: &str) -> usize {
                 }
             })
             .sum(),
-        Statement::Return(None) | Statement::Continue | Statement::Break => 0,
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => 0,
     }
 }
 

@@ -50,4 +50,11 @@ pub enum Statement {
     Continue,
     /// Lua `break` (exits the innermost loop).
     Break,
+    /// Verbatim Lua source emitted as-is (from `lua! { ... }` in unsafe context).
+    ///
+    /// Each line of `code` is emitted with the current generator indent prefix.
+    /// The optimizer and pruner treat this variant as fully opaque.
+    RawLua {
+        code: String,
+    },
 }

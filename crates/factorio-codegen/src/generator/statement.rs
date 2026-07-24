@@ -185,6 +185,11 @@ impl LuaGenerator {
             Statement::Break => {
                 self.write_line("break");
             }
+            Statement::RawLua { code } => {
+                for line in code.lines() {
+                    self.write_line(line);
+                }
+            }
         }
 
         Ok(())

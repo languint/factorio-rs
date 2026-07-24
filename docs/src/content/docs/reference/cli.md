@@ -119,3 +119,23 @@ process if none is running (Bacon-friendly). Recipe:
 
 Requires a Factorio binary (`FACTORIO_PATH` recommended). Steam protocol-only
 installs are not supported for testing.
+
+### `factorio-rs bench`
+
+Build the mod, discover `#[factorio_rs::bench]` functions, launch Factorio
+(headless by default), time each bench with `LuaProfiler`, and print a sample
+report.
+
+See [Benchmarking](/guides/benchmarking/).
+
+| Flag | Description |
+| --- | --- |
+| `--manifest-path <PATH>` | Project directory or `Factorio.toml` |
+| `--profile <NAME>` | Default: `release` |
+| `--debug-level <N>` | Override profile debug comments |
+| `[FILTER]` | Only run benches whose name contains this substring |
+| `--skip-typecheck` | Skip `cargo check --tests` |
+| `--gui` | Open a Factorio window; stays open after the suite |
+| `--timeout <SECS>` | Kill Factorio if the suite does not finish (default: 120) |
+
+Requires a Factorio binary (`FACTORIO_PATH` recommended), same as `test`.

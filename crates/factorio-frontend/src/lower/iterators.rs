@@ -26,6 +26,7 @@ enum Adapter<'a> {
 ///
 /// Returns `None` for ordinary method calls so Option/Result lowering retains
 /// ownership of their overlapping adapter names.
+#[allow(clippy::too_many_lines)]
 pub fn try_lower_iterator_chain(
     call: &ExprMethodCall,
     ctx: &mut LowerContext<'_>,

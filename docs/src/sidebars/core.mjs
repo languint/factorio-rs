@@ -11,6 +11,7 @@ export const coreSidebar = [
       { label: "Introduction", slug: "intro" },
       { label: "Installation", slug: "installation" },
       { label: "Getting started", slug: "guides/getting-started" },
+      { label: "Benchmarking", slug: "guides/benchmarking" },
       {
         label: "Changelog",
         link: "https://github.com/languint/factorio-rs/blob/main/CHANGELOG.md",
@@ -122,6 +123,7 @@ export const coreSidebar = [
       },
       { label: "tracing_test", slug: "examples/tracing-test" },
       { label: "traits_demo", slug: "examples/traits-demo" },
+      { label: "benchmarking", slug: "examples/benchmarking" },
       { label: "provider / consumer", slug: "examples/dependencies" },
     ],
   },

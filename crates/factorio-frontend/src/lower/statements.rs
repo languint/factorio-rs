@@ -15,6 +15,59 @@ use super::{
     util::{item_name, location},
 };
 
+/// Returns true when `mac` is a `lua!` or `factorio_rs::lua!` invocation.
+fn is_lua_macro(mac: &syn::Macro) -> bool {
+    let segments = &mac.path.segments;
+    match segments.len() {
+        1 => segments[0].ident == "lua",
+        2 => segments[0].ident == "factorio_rs" && segments[1].ident == "lua",
+        _ => false,
+    }
+}
+
+/// Extract the raw Lua source from a `lua! { ... }` macro invocation.
+///
+/// Prefers `Span::source_text()` to preserve the original whitespace and
+/// newlines. Falls back to the token stream display string if the span
+/// source is unavailable (e.g., in macro-generated code).
+fn extract_lua_code(mac: &syn::Macro) -> String {
+    let tokens: Vec<proc_macro2::TokenTree> = mac.tokens.clone().into_iter().collect();
+    if let (Some(first), Some(last)) = (tokens.first(), tokens.last())
+        && let Some(joined) = first.span().join(last.span())
+        && let Some(text) = joined.source_text()
+    {
+        return trim_blank_edges(&text);
+    }
+
+    // Fallback: token stream display (loses newlines and original spacing).
+    trim_blank_edges(&mac.tokens.to_string())
+}
+
+/// Remove leading and trailing blank lines from a multi-line string.
+fn trim_blank_edges(s: &str) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    let start = lines.iter().position(|l| !l.trim().is_empty()).unwrap_or(0);
+    let end = lines
+        .iter()
+        .rposition(|l| !l.trim().is_empty())
+        .map_or(lines.len(), |i| i + 1);
+    lines[start..end].join("\n")
+}
+
+/// Lower a `lua! { ... }` macro to `Statement::RawLua`, enforcing unsafe context.
+fn lower_lua_macro(
+    mac: &syn::Macro,
+    ctx: &LowerContext<'_>,
+) -> FrontendResult<factorio_ir::statement::Statement> {
+    if !ctx.in_unsafe {
+        return Err(FrontendError::LuaOutsideUnsafe {
+            location: location(mac),
+        });
+    }
+    let code = extract_lua_code(mac);
+    Ok(factorio_ir::statement::Statement::RawLua { code })
+}
+
 /// Lower an expression and collect any `?` early-return hoists it emitted.
 fn lower_expr(
     expression: &Expr,
@@ -151,6 +204,9 @@ fn lower_statement(
                 };
                 return lower_assert_macro_statements(&expression, ctx, self_type);
             }
+            if is_lua_macro(&mac.mac) {
+                return Ok(vec![lower_lua_macro(&mac.mac, ctx)?]);
+            }
             let expression = Expr::Macro(syn::ExprMacro {
                 mac: mac.mac.clone(),
                 attrs: mac.attrs.clone(),
@@ -201,6 +257,13 @@ fn lower_expression_statement(
                 return result;
             }
             return lower_block_statements(&block.block.stmts, ctx, self_type);
+        }
+        Expr::Unsafe(unsafe_expr) => {
+            let prev = ctx.in_unsafe;
+            ctx.in_unsafe = true;
+            let result = lower_block_statements(&unsafe_expr.block.stmts, ctx, self_type);
+            ctx.in_unsafe = prev;
+            return result;
         }
         _ => {}
     }
@@ -290,6 +353,9 @@ fn lower_semicolon_statements(
         Expr::Macro(mac) => {
             if is_assert_macro(&mac.mac) {
                 return lower_assert_macro_statements(mac, ctx, self_type);
+            }
+            if is_lua_macro(&mac.mac) {
+                return Ok(vec![lower_lua_macro(&mac.mac, ctx)?]);
             }
             let (mut stmts, value) = lower_expr(expression, ctx, self_type)?;
             stmts.push(factorio_ir::statement::Statement::Expr(value));
@@ -1134,7 +1200,8 @@ fn hoist_scrutinee_tag_in_statement(
         | factorio_ir::statement::Statement::EnumDecl(_)
         | factorio_ir::statement::Statement::Return(None)
         | factorio_ir::statement::Statement::Continue
-        | factorio_ir::statement::Statement::Break => false,
+        | factorio_ir::statement::Statement::Break
+        | factorio_ir::statement::Statement::RawLua { .. } => false,
     }
 }
 

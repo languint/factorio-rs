@@ -11,6 +11,7 @@ members = [
     "crates/factorio-ir",
     "crates/factorio-playground",
     "examples/hello_world",
+    "examples/benchmarking",
     "examples/gui_basics",
     "examples/gui_counter",
     "examples/gui_widgets",

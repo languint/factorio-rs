@@ -43,7 +43,10 @@ fn optimize_statement(statement: &mut Statement, counter: &mut usize) {
                 optimize_block(body, counter);
             }
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 
@@ -72,7 +75,7 @@ fn fold_one_repeat(stmts: &mut Vec<Statement>, counter: &mut usize) -> bool {
         });
     }
     counts.retain(|(_, n)| *n >= 2);
-    counts.sort_by(|(a, _), (b, _)| expr_weight(b).cmp(&expr_weight(a)));
+    counts.sort_by_key(|(b, _)| std::cmp::Reverse(expr_weight(b)));
 
     for (expr, _) in counts {
         if try_fold_expr(stmts, &expr, counter) {
@@ -129,7 +132,7 @@ fn is_field_load_candidate(expr: &Expression) -> bool {
     )
 }
 
-fn is_atom(expr: &Expression) -> bool {
+const fn is_atom(expr: &Expression) -> bool {
     matches!(
         expr,
         Expression::Identifier(_) | Expression::Literal(_) | Expression::QualifiedPath { .. }
@@ -277,8 +280,8 @@ fn statement_writes(statement: &Statement, name: &str) -> bool {
         Statement::Assignment {
             target: Expression::Identifier(n),
             ..
-        } => n == name,
-        Statement::VariableDecl { name: n, .. } => n == name,
+        }
+        | Statement::VariableDecl { name: n, .. } => n == name,
         Statement::Conditional {
             then_block,
             else_block,
@@ -542,7 +545,10 @@ fn for_each_expr_in_statement(statement: &Statement, f: &mut impl FnMut(&Express
                 }
             }
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 
@@ -664,7 +670,10 @@ fn replace_expr_in_statement(statement: &mut Statement, from: &Expression, to: &
                 }
             }
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
     }
 }
 

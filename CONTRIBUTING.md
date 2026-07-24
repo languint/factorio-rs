@@ -20,8 +20,9 @@ For questions that are not bug reports, prefer the
 Requirements:
 
 - **Rust 1.88+** (edition 2024; MSRV is `1.88` - let-chains in `if` / `while`)
-- Optional: Factorio (for `factorio-rs test`) - see
-  [Testing](https://factorio-rs.dev/guides/testing/)
+- Optional: Factorio (for `factorio-rs test` / `factorio-rs bench`) - see
+  [Testing](https://factorio-rs.dev/guides/testing/) and
+  [Benchmarking](https://factorio-rs.dev/guides/benchmarking/)
 - Optional: Node/pnpm for the docs site under `docs/`
 
 Clone and verify:
@@ -39,6 +40,7 @@ Build example mods with the CLI:
 ```bash
 cargo run -p factorio-rs-cli -- check --manifest-path examples/hello_world/Cargo.toml
 cargo run -p factorio-rs-cli -- build --manifest-path examples/hello_world/Cargo.toml
+cargo run -p factorio-rs-cli -- bench --manifest-path examples/benchmarking/Cargo.toml
 ```
 
 Docs preview:

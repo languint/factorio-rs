@@ -62,4 +62,5 @@ factorio-rs test             # requires Factorio binary; see Testing
 Mod id: Cargo package name `hello_world`.
 
 See also: [First hour](/recipes/first-hour/), [Testing](/guides/testing/),
+[benchmarking](/examples/benchmarking/) (dedicated microbench suite),
 [Option and Result](/guides/option-and-result/), [Events](/guides/events/).

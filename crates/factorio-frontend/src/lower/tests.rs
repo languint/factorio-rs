@@ -302,6 +302,8 @@ fn include_parent_item_for_tests(item: &Item) -> bool {
     match item {
         Item::Mod(item_mod) if attrs::is_cfg_test(&item_mod.attrs) => false,
         Item::Fn(function) if attrs::is_test_fn(&function.attrs) => false,
+        // Bench fns are collected by `discover_benches`, not the test suite.
+        Item::Fn(function) if attrs::is_bench_fn(&function.attrs) => false,
         Item::Fn(function) if super::event_handler::resolve_event_handler(function).is_some() => {
             false
         }
@@ -443,6 +445,7 @@ fn lower_test_module_items(
         from_conversions: HashMap::new(),
         into_params: HashSet::new(),
         return_into: false,
+        in_unsafe: false,
         assoc_bindings: HashMap::new(),
         vtables: Vec::new(),
         lints: options.lints,

@@ -60,7 +60,10 @@ fn optimize_statement_inplace(statement: &mut Statement) {
             *then_block = optimize_statements(std::mem::take(then_block));
             *else_block = optimize_statements(std::mem::take(else_block));
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
         Statement::ForIn { iter, body, .. } => {
             optimize_expression(iter);
             *body = optimize_statements(std::mem::take(body));

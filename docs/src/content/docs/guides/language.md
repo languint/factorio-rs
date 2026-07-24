@@ -306,6 +306,7 @@ their rustc-expanded forms:
 | `assert!(cond)` / `assert!(cond, "...")` | `if not (cond) then error(...) end` |
 | `assert_eq!` / `assert_ne!` | compare temps, `error` with left/right |
 | `panic!("...")` | `error(...)` |
+| `lua! { … }` | Raw Lua emit (only in `unsafe fn` / `unsafe { }`; see [Benchmarking](/guides/benchmarking/)) |
 | `tracing::info!` / `warn!` / `error!` / `debug!` / `trace!` | `game.print` with `[LEVEL]` prefix + color |
 
 `{:?}` / `{:#?}` (and `{name:?}`) dump values for Factorio using the static Rust

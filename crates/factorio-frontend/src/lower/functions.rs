@@ -127,7 +127,11 @@ fn lower_function_parts(
     let dyn_snapshot = ctx.dyn_locals.clone();
     let into_snapshot = ctx.into_params.clone();
     let return_into_snapshot = ctx.return_into;
+    let in_unsafe_snapshot = ctx.in_unsafe;
     ctx.return_into = matches!(&function.sig.output, syn::ReturnType::Type(_, ty) if super::convert::into_target_type(ty).is_some());
+    if function.sig.unsafety.is_some() {
+        ctx.in_unsafe = true;
+    }
     let params = lower_parameters(&function.sig, ctx)?;
     let body = lower_block(&function.block, ctx, self_type)?;
     ctx.binding_types = binding_snapshot;
@@ -135,6 +139,7 @@ fn lower_function_parts(
     ctx.dyn_locals = dyn_snapshot;
     ctx.into_params = into_snapshot;
     ctx.return_into = return_into_snapshot;
+    ctx.in_unsafe = in_unsafe_snapshot;
     Ok(factorio_ir::function::Function {
         name: function.sig.ident.to_string(),
         params,

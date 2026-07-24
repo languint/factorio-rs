@@ -53,7 +53,10 @@ fn optimize_statement(statement: &mut Statement) {
                 optimize_statement(stmt);
             }
         }
-        Statement::Return(None) | Statement::Continue | Statement::Break => {}
+        Statement::Return(None)
+        | Statement::Continue
+        | Statement::Break
+        | Statement::RawLua { .. } => {}
         Statement::ForIn { iter, body, .. } => {
             optimize_expression(iter);
             for stmt in body {
@@ -288,6 +291,7 @@ fn substitute_ident_in_statement(statement: &mut Statement, name: &str, replacem
         | Statement::Break
         | Statement::FunctionDecl(_)
         | Statement::StructDecl(_)
-        | Statement::EnumDecl(_) => {}
+        | Statement::EnumDecl(_)
+        | Statement::RawLua { .. } => {}
     }
 }

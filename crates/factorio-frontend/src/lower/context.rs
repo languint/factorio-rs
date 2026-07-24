@@ -74,6 +74,11 @@ pub struct LowerContext<'a> {
     pub from_conversions: HashMap<String, super::convert::FromConversion>,
     pub into_params: HashSet<String>,
     pub return_into: bool,
+    /// True when the current function signature or enclosing block is `unsafe`.
+    ///
+    /// `lua! { ... }` is only allowed inside an unsafe context; this flag gates
+    /// the lowering so misuse outside unsafe produces a clear error.
+    pub in_unsafe: bool,
     /// Associated type bindings for the trait impl currently being lowered
     /// (`Self::Output` -> concrete type). Empty outside trait impl method lowering.
     pub assoc_bindings: HashMap<String, syn::Type>,

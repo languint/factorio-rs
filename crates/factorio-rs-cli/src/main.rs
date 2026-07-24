@@ -20,9 +20,10 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use cli::{
-    AddArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs, SyncArgs,
-    TestArgs,
+    AddArgs, BenchArgs, BuildArgs, CheckArgs, Cli, Command, InitArgs, InstallArgs, PackageArgs,
+    SyncArgs, TestArgs,
 };
+use commands::bench::BenchOptions;
 use commands::build::BuildOptions;
 use commands::sync::{SyncOptions, SyncTarget};
 use commands::test::TestOptions;
@@ -51,14 +52,19 @@ fn run(cli: Cli) -> Result<(), CliError> {
         Command::Add(args) => run_add(&args),
         Command::Open => run_open(),
         Command::Test(args) => run_test(&args),
+        Command::Bench(args) => run_bench(&args),
     }
 }
 
 fn report_error(err: &CliError) {
-    // Diagnostics / cargo / the test report already spoke for these.
+    // Diagnostics / cargo / the test/bench report already spoke for these.
     if matches!(
         err,
-        CliError::Reported | CliError::TypecheckFailed | CliError::TestsFailed
+        CliError::Reported
+            | CliError::TypecheckFailed
+            | CliError::TestsFailed
+            | CliError::BenchesFailed
+            | CliError::BenchTimeout { .. }
     ) {
         return;
     }
@@ -213,6 +219,20 @@ fn run_test(args: &TestArgs) -> Result<(), CliError> {
         mode,
     };
     commands::test::run_tests(&project_root, &options)?;
+    Ok(())
+}
+
+fn run_bench(args: &BenchArgs) -> Result<(), CliError> {
+    let project_root = project_root(args.manifest_path.as_deref())?;
+    let options = BenchOptions {
+        build: BuildOptions::new(&args.profile)
+            .with_debug_level(args.debug_level)
+            .with_skip_typecheck(args.skip_typecheck),
+        filter: args.filter.clone(),
+        timeout_secs: args.timeout,
+        gui: args.gui,
+    };
+    commands::bench::run_benches(&project_root, &options)?;
     Ok(())
 }
 
